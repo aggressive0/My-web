@@ -1,0 +1,3286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评论区 - 游戏玩家流失-召回-留存闭环分析系统</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts - 未来感字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@700;800;900&family=Share+Tech+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* 全局样式 */
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #1a1a3a;
+            color: #ffffff;
+            background-image: url('../images/ppp.png');
+            background-size: cover;
+            background-position: center;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            overflow: auto;
+        }
+        
+        /* 标题样式 */
+        .hero-title-container {
+            position: relative;
+            display: inline-block;
+            font-family: 'Orbitron', 'Rajdhani', 'Share Tech Mono', sans-serif;
+            font-weight: 700;
+            font-size: 2rem;
+            text-align: center;
+            margin: 0;
+            background: #0a0a15;
+            padding: 0 20px;
+        }
+        
+        .hero-title {
+            position: relative;
+            display: inline-block;
+            z-index: 2;
+            will-change: transform, opacity;
+            background: linear-gradient(90deg, #00f2fe 0%, #a855f7 60%, #ff1493 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="%2300f2fe" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="%23ec4899" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="%23ffffff"/></svg>'), auto;
+            transition: all 0.3s ease;
+        }
+        
+        .hover-effect {
+            display: inline-block;
+            transition: transform 0.3s ease, text-shadow 0.3s ease;
+        }
+        
+        .hover-effect:hover {
+            transform: scale(1.1);
+            text-shadow: 0 0 2px rgba(0, 242, 254, 1), 0 0 4px rgba(168, 85, 247, 0.8), 0 0 6px rgba(255, 20, 147, 0.6);
+        }
+        
+        .hero-title:hover {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="%2300f2fe" stroke-width="2"/><circle cx="16" cy="16" r="8" fill="none" stroke="%23ec4899" stroke-width="2"/><circle cx="16" cy="16" r="3" fill="%23ffffff"/></svg>'), auto;
+        }
+        
+
+        
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.3);
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        /* 粒子效果 */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(100, 200, 255, 0.9);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
+            animation: float 4s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-80px) rotate(180deg);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 0 0 30px rgba(255, 0, 255, 0.6);
+            }
+            to {
+                text-shadow: 0 0 25px rgba(0, 240, 255, 1), 0 0 40px rgba(255, 0, 255, 0.8), 0 0 50px rgba(0, 240, 255, 0.6);
+            }
+        }
+        
+        /* 主色调 */
+        :root {
+            --primary-color: #00f0ff;
+            --secondary-color: #ff00ff;
+            --danger-color: #ff3366;
+            --success-color: #00ff9d;
+            --neutral-color: #86909C;
+            --ai-purple: #722ED1;
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            background-color: rgba(10, 10, 26, 0.95);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid transparent;
+            border-image: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color)) 1;
+            padding: 1rem;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            position: relative;
+            z-index: 100;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+            position: relative;
+        }
+        
+        .navbar-brand::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -10px;
+            right: -10px;
+            bottom: 0;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            z-index: -1;
+            filter: blur(10px);
+            opacity: 0.3;
+        }
+        
+        .nav-link {
+            font-weight: 500;
+            color: #ffffff;
+            margin-right: 15px;
+            position: relative;
+            font-size: 0.9rem;
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after,
+        .nav-link.active::after {
+            width: 100%;
+        }
+        
+        .nav-link.active {
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+        }
+        
+        /* 页面容器 */
+        .page-container {
+            min-height: 80vh;
+            padding: 40px 0;
+            position: relative;
+            z-index: 10;
+        }
+        
+        /* 标题样式 */
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(0, 240, 255, 0.8);
+            position: relative;
+        }
+        
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+        }
+        
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+            margin-bottom: 40px;
+            text-shadow: 0 0 8px rgba(135, 206, 235, 0.6);
+        }
+        
+        /* 评论区样式 */
+        .comment-section {
+            background: linear-gradient(135deg, rgba(40, 40, 60, 0.9), rgba(60, 60, 80, 0.9));
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(100, 100, 120, 0.5);
+            box-shadow: 
+                0 0 20px rgba(100, 100, 200, 0.3),
+                inset 0 0 30px rgba(100, 100, 200, 0.1),
+                0 0 40px rgba(0, 240, 255, 0.2);
+        }
+        
+        .comment-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(90deg, 
+                    transparent 0%, 
+                    rgba(100, 100, 200, 0.1) 50%, 
+                    transparent 100%),
+                repeating-linear-gradient(0deg, 
+                    transparent, 
+                    transparent 20px, 
+                    rgba(100, 100, 200, 0.05) 20px, 
+                    rgba(100, 100, 200, 0.05) 21px);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .comment-section::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                rgba(100, 100, 200, 0.3), 
+                rgba(0, 240, 255, 0.3), 
+                rgba(100, 100, 200, 0.3));
+            border-radius: 8px;
+            z-index: -1;
+            filter: blur(10px);
+            opacity: 0.7;
+        }
+        
+        .comment-form {
+            margin-bottom: 30px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .form-label {
+            color: #00f0ff;
+            font-weight: 500;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+            font-size: 1rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .form-control {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(100, 100, 200, 0.3);
+            color: #ffffff;
+            backdrop-filter: blur(15px);
+            transition: all 0.3s ease;
+            border-radius: 4px;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            box-shadow: inset 0 0 10px rgba(100, 100, 200, 0.1);
+        }
+        
+        .form-control:focus {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: #00f0ff;
+            box-shadow: 
+                0 0 20px rgba(0, 240, 255, 0.6),
+                inset 0 0 15px rgba(0, 240, 255, 0.2);
+            outline: none;
+        }
+        
+        .comment-form textarea {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(100, 100, 200, 0.3);
+            color: #ffffff;
+            resize: none;
+            backdrop-filter: blur(15px);
+            transition: all 0.3s ease;
+            border-radius: 4px;
+            padding: 15px;
+            font-size: 0.9rem;
+            box-shadow: inset 0 0 10px rgba(100, 100, 200, 0.1);
+            min-height: 120px;
+        }
+        
+        .comment-form textarea:focus {
+            border-color: #00f0ff;
+            box-shadow: 
+                0 0 20px rgba(0, 240, 255, 0.6),
+                inset 0 0 15px rgba(0, 240, 255, 0.2);
+            outline: none;
+        }
+        
+        .comment-card {
+            background: linear-gradient(135deg, rgba(40, 40, 60, 0.8), rgba(50, 50, 70, 0.8));
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(100, 100, 200, 0.3);
+            box-shadow: 
+                0 0 15px rgba(100, 100, 200, 0.2),
+                inset 0 0 20px rgba(100, 100, 200, 0.05);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+            backdrop-filter: blur(10px);
+        }
+        
+        .comment-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(0deg, 
+                transparent, 
+                transparent 15px, 
+                rgba(100, 100, 200, 0.03) 15px, 
+                rgba(100, 100, 200, 0.03) 16px);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .comment-card:hover {
+            box-shadow: 
+                0 0 25px rgba(0, 240, 255, 0.4),
+                0 0 40px rgba(100, 100, 200, 0.3),
+                inset 0 0 20px rgba(0, 240, 255, 0.1);
+            transform: translateY(-2px) scale(1.01);
+            border-color: #00f0ff;
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .comment-author {
+            font-weight: 600;
+            color: #00f0ff;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+            font-size: 1.1rem;
+        }
+        
+        .comment-time {
+            font-size: 0.85rem;
+            color: #86909C;
+            text-shadow: 0 0 5px rgba(134, 144, 156, 0.3);
+        }
+        
+        .comment-content {
+            line-height: 1.6;
+            color: #ffffff;
+            position: relative;
+            z-index: 2;
+            font-size: 0.95rem;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .section-title {
+                font-size: 2rem;
+            }
+        }
+        
+        /* 加载动画 */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 按钮样式 */
+        .btn-primary {
+            background: linear-gradient(90deg, rgba(100, 100, 200, 0.8), rgba(0, 240, 255, 0.8));
+            border: 1px solid rgba(100, 100, 200, 0.5);
+            box-shadow: 
+                0 0 20px rgba(0, 240, 255, 0.6),
+                0 0 30px rgba(100, 100, 200, 0.4);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            padding: 10px 25px;
+            font-weight: 500;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 
+                0 0 25px rgba(0, 240, 255, 0.8),
+                0 0 40px rgba(100, 100, 200, 0.6),
+                inset 0 0 10px rgba(0, 240, 255, 0.3);
+            transform: translateY(-2px) scale(1.05);
+            border-color: #00f0ff;
+        }
+        
+        /* 页脚 */
+        footer {
+            background: linear-gradient(135deg, rgba(40, 40, 60, 0.9), rgba(60, 60, 80, 0.9));
+            border-top: 1px solid rgba(100, 100, 200, 0.5);
+            padding: 20px 0;
+            margin-top: 40px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 
+                0 -5px 20px rgba(100, 100, 200, 0.3),
+                inset 0 1px 0 rgba(0, 240, 255, 0.2);
+        }
+        
+        footer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(0, 240, 255, 0.5), 
+                transparent);
+        }
+        
+        /* 时间显示 */
+        .time-display {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            color: var(--neutral-color);
+            font-size: 0.9rem;
+        }
+        
+        /* 粒子效果 */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(100, 200, 255, 0.9);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
+            animation: float 4s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-80px) rotate(180deg);
+                opacity: 1;
+            }
+        }
+        
+        /* 精灵胶囊样式 */
+        .sprite-container {
+            position: absolute;
+            top: 0;
+            left: 200px;
+            z-index: 1000;
+            width: 150px;
+            height: 150px;
+        }
+        
+        .capsule {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            animation: pokeballFloat 2s ease-in-out infinite, pokeballRotate 5s ease-in-out infinite;
+        }
+        
+        /* 精灵球外壳 */
+        .pokeball {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid rgba(0, 240, 255, 0.8);
+        }
+        
+        /* 环绕光环效果 */
+        .pokeball::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, transparent, rgba(0, 240, 255, 0.3), transparent);
+            animation: ringRotate 3s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes ringRotate {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* 上半部分（红色） */
+        .pokeball-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(135deg, #ff3333, #ff6666);
+            overflow: hidden;
+        }
+        
+        /* 下半部分（白色） */
+        .pokeball-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(135deg, #ffffff, #f0f0f0);
+            overflow: hidden;
+        }
+        
+        /* 分隔线 */
+        .pokeball-separator {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: #000000;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+            animation: separatorGlow 2s ease-in-out infinite;
+            z-index: 2;
+        }
+        
+        /* 中间按钮 */
+        .pokeball-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: #c0c0c0;
+            border-radius: 50%;
+            border: 2px solid #333333;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
+            z-index: 3;
+        }
+        
+        /* 按钮内环 */
+        .button-inner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: #00f0ff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0, 240, 255, 1);
+            animation: buttonPulse 2s ease-in-out infinite;
+        }
+        
+        /* 电路纹 */
+        .circuit-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        /* 红色区域电路纹 */
+        .red-circuit {
+            background: 
+                linear-gradient(90deg, transparent 49%, rgba(0, 240, 255, 0.5) 50%, transparent 51%),
+                linear-gradient(0deg, transparent 49%, rgba(255, 0, 0, 0.5) 50%, transparent 51%);
+            background-size: 15px 15px;
+            animation: redCircuitFlow 3s linear infinite;
+        }
+        
+        /* 白色区域电路纹 */
+        .white-circuit {
+            background: 
+                linear-gradient(90deg, transparent 49%, rgba(147, 51, 234, 0.5) 50%, transparent 51%),
+                linear-gradient(0deg, transparent 49%, rgba(0, 240, 255, 0.5) 50%, transparent 51%);
+            background-size: 15px 15px;
+            animation: whiteCircuitFlow 3s linear infinite reverse;
+        }
+        
+        /* Q版精灵剪影 */
+        .sprite-silhouette {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.8);
+            clip-path: polygon(
+                50% 0%, 
+                100% 25%, 
+                100% 75%, 
+                50% 100%, 
+                0% 75%, 
+                0% 25%
+            );
+            opacity: 0;
+            animation: spriteReveal 8s ease-in-out infinite;
+            z-index: 1;
+        }
+        
+        /* 粒子效果 */
+        .capsule-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 4;
+        }
+        
+        /* 精灵球悬浮动画 */
+        @keyframes pokeballFloat {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+        
+        /* 精灵球旋转动画 */
+        @keyframes pokeballRotate {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(15deg);
+            }
+            75% {
+                transform: rotate(-15deg);
+            }
+        }
+        
+        /* 红色电路纹流动动画 */
+        @keyframes redCircuitFlow {
+            0% {
+                background-position: 0 0;
+            }
+            100% {
+                background-position: 30px 30px;
+            }
+        }
+        
+        /* 白色电路纹流动动画 */
+        @keyframes whiteCircuitFlow {
+            0% {
+                background-position: 0 0;
+            }
+            100% {
+                background-position: 30px 30px;
+            }
+        }
+        
+        /* 分隔线闪光动画 */
+        @keyframes separatorGlow {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 30px rgba(255, 0, 0, 0.8);
+            }
+        }
+        
+        /* 按钮脉冲动画 */
+        @keyframes buttonPulse {
+            0%, 100% {
+                box-shadow: 0 0 8px rgba(0, 240, 255, 1);
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                box-shadow: 0 0 15px rgba(0, 240, 255, 1), 0 0 25px rgba(0, 240, 255, 0.8);
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+        
+        /* Q版精灵剪影显现动画 */
+        @keyframes spriteReveal {
+            0%, 85%, 100% {
+                opacity: 0;
+            }
+            90% {
+                opacity: 1;
+                box-shadow: 0 0 20px rgba(255, 255, 255, 1);
+            }
+        }
+        
+        /* 精灵球悬停效果 */
+        .capsule:hover {
+            transform: scale(1.1) translateY(-5px);
+            animation: pokeballHover 0.5s ease-out forwards, pokeballRotate 5s ease-in-out infinite;
+        }
+        
+        @keyframes pokeballHover {
+            0% {
+                transform: scale(1) translateY(0px);
+            }
+            50% {
+                transform: scale(1.15) translateY(-8px);
+            }
+            100% {
+                transform: scale(1.1) translateY(-5px);
+            }
+        }
+        
+        /* 精灵球点击动画 */
+        .capsule.cracked {
+            animation: pokeballClick 1s ease-out forwards;
+        }
+        
+        @keyframes pokeballClick {
+            0% {
+                transform: scale(1.1) translateY(-5px);
+            }
+            50% {
+                transform: scale(1.2) translateY(-10px);
+            }
+            100% {
+                transform: scale(0);
+                opacity: 0;
+            }
+        }
+        
+        /* 精灵球打开动画 - 上半部分 */
+        @keyframes pokeballOpenTop {
+            0% {
+                transform: translateY(0);
+            }
+            100% {
+                transform: translateY(-100%);
+            }
+        }
+        
+        /* 精灵球打开动画 - 下半部分 */
+        @keyframes pokeballOpenBottom {
+            0% {
+                transform: translateY(0);
+            }
+            100% {
+                transform: translateY(100%);
+            }
+        }
+        
+        /* 光粒汇聚动画 */
+        .light-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+            animation: lightConverge 1s ease-out forwards;
+        }
+        
+        @keyframes lightConverge {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0);
+                opacity: 0;
+            }
+        }
+        
+        /* 粒子旋转动画 */
+        @keyframes particleRotate {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg) translateX(40px);
+            }
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg) translateX(40px);
+            }
+        }
+        
+        /* 能量充能特效 */
+        @keyframes energyCharge {
+            0%, 95% {
+                opacity: 0.7;
+                transform: scale(1);
+            }
+            98% {
+                opacity: 1;
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 0 0 60px rgba(0, 240, 255, 0.6);
+            }
+            100% {
+                opacity: 0.7;
+                transform: scale(1);
+            }
+        }
+        
+        /* 精灵样式 */
+        .sprite {
+            position: absolute;
+            top: 80px;
+            left: 0;
+            width: 80px;
+            height: 100px;
+            transform: scale(0);
+            transition: all 0.5s ease;
+        }
+        
+        .sprite-body {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 精灵身体 */
+        .sprite-body::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 15px;
+            width: 50px;
+            height: 60px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
+            border-radius: 50% 50% 40% 40%;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+            animation: dataFlow 3s ease-in-out infinite;
+        }
+        
+        /* 天线 */
+        .antenna {
+            position: absolute;
+            top: 5px;
+            width: 3px;
+            height: 15px;
+            background: linear-gradient(to top, rgba(59, 130, 246, 0.8), rgba(255, 255, 255, 0.8));
+            border-radius: 3px;
+            animation: antennaMove 2s ease-in-out infinite;
+        }
+        
+        .antenna.left {
+            left: 30px;
+        }
+        
+        .antenna.right {
+            right: 30px;
+        }
+        
+        /* 眼睛 */
+        .eyes {
+            position: absolute;
+            top: 35px;
+            left: 20px;
+            width: 40px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .eye {
+            width: 15px;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .eye::before {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 9px;
+            height: 9px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 50%;
+            animation: eyeBlink 3s ease-in-out infinite;
+        }
+        
+        /* 嘴巴 */
+        .mouth {
+            position: absolute;
+            top: 55px;
+            left: 35px;
+            width: 10px;
+            height: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+        }
+        
+        /* 翅膀 */
+        .wings {
+            position: absolute;
+            top: 30px;
+            left: 0;
+            width: 100%;
+            height: 40px;
+            z-index: -1;
+        }
+        
+        .wing {
+            position: absolute;
+            top: 0;
+            width: 30px;
+            height: 20px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
+            border-radius: 50% 50% 0 0;
+            transition: all 0.3s ease;
+        }
+        
+        .wing.left {
+            left: 5px;
+            transform: rotate(-30deg);
+        }
+        
+        .wing.right {
+            right: 5px;
+            transform: rotate(30deg);
+        }
+        
+        /* 四肢 */
+        .arms {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            width: 60px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .arm {
+            width: 10px;
+            height: 20px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
+            border-radius: 5px;
+        }
+        
+        .legs {
+            position: absolute;
+            bottom: 10px;
+            left: 25px;
+            width: 30px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .leg {
+            width: 10px;
+            height: 20px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
+            border-radius: 5px;
+        }
+        
+        /* 尾巴 */
+        .tail {
+            position: absolute;
+            bottom: 15px;
+            right: 10px;
+            width: 15px;
+            height: 20px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
+            border-radius: 0 0 10px 10px;
+            opacity: 0.8;
+        }
+        
+        /* 尾巴摇摆动画 */
+        @keyframes tailWag {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            50% {
+                transform: rotate(15deg);
+            }
+        }
+        
+        /* 粒子效果 */
+        .particles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .sprite .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(59, 130, 246, 0.9);
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(59, 130, 246, 0.8);
+            animation: spriteParticle 3s ease-in-out infinite;
+        }
+        
+        /* 对话气泡 */
+        .speech-bubble {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid rgba(255, 255, 255, 0.9);
+        }
+        
+        /* 服饰样式 */
+        .costume {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: all 0.5s ease;
+        }
+        
+        /* 首页服饰 */
+        .costume-home {
+            position: relative;
+        }
+        
+        .costume-home::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 15px;
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.8), rgba(255, 255, 255, 0.8));
+            border-radius: 5px;
+        }
+        
+        .costume-home::after {
+            content: '📈';
+            position: absolute;
+            top: 35px;
+            right: 15px;
+            font-size: 14px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .data-board {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            width: 40px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 3px;
+            color: #00f0ff;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        .floating-boots {
+            position: absolute;
+            bottom: 10px;
+            left: 25px;
+            width: 30px;
+            height: 15px;
+        }
+        
+        .floating-boots::before,
+        .floating-boots::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 15px;
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.8), rgba(255, 255, 255, 0.8));
+            border-radius: 3px;
+        }
+        
+        .floating-boots::before {
+            left: 0;
+        }
+        
+        .floating-boots::after {
+            right: 0;
+        }
+        
+        .particle-ring {
+            position: absolute;
+            bottom: 5px;
+            left: 25px;
+            width: 30px;
+            height: 10px;
+            border: 2px solid rgba(0, 240, 255, 0.8);
+            border-radius: 5px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* 问题分析服饰 */
+        .costume-analysis {
+            position: relative;
+        }
+        
+        .detective-cape {
+            position: absolute;
+            top: 30px;
+            left: 5px;
+            width: 70px;
+            height: 40px;
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.8), rgba(79, 70, 229, 0.8));
+            border-radius: 50% 50% 0 0;
+            z-index: -1;
+        }
+        
+        .magnifying-glass {
+            position: absolute;
+            top: 40px;
+            right: 10px;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .magnifying-glass::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 10px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.8);
+            transform: rotate(45deg);
+        }
+        
+        .question-badge {
+            position: absolute;
+            top: 35px;
+            left: 15px;
+            width: 15px;
+            height: 15px;
+            background: rgba(0, 255, 0, 0.8);
+            border-radius: 50%;
+            color: #000;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* 召回策略服饰 */
+        .costume-solution {
+            position: relative;
+        }
+        
+        .tactical-vest {
+            position: absolute;
+            top: 40px;
+            left: 15px;
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.8), rgba(38, 198, 218, 0.8));
+            border-radius: 5px;
+        }
+        
+        .strategy-cards {
+            position: absolute;
+            top: 45px;
+            left: 20px;
+            width: 40px;
+            height: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .strategy-card {
+            width: 8px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 2px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .energy-bracelet {
+            position: absolute;
+            top: 55px;
+            right: 10px;
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(255, 215, 0, 0.8);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .roi-bar {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            width: 15px;
+            height: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .roi-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 70%;
+            height: 100%;
+            background: rgba(255, 215, 0, 0.8);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .thruster-boots {
+            position: absolute;
+            bottom: 10px;
+            left: 25px;
+            width: 30px;
+            height: 15px;
+        }
+        
+        .thruster-boots::before,
+        .thruster-boots::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 15px;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.8), rgba(38, 198, 218, 0.8));
+            border-radius: 3px;
+        }
+        
+        .thruster-boots::before {
+            left: 0;
+        }
+        
+        .thruster-boots::after {
+            right: 0;
+        }
+        
+        .thruster-flame {
+            position: absolute;
+            bottom: -5px;
+            left: 25px;
+            width: 30px;
+            height: 10px;
+            background: linear-gradient(180deg, rgba(59, 130, 246, 0.8), rgba(0, 240, 255, 0.8));
+            border-radius: 5px;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        
+        /* 留存追踪服饰 */
+        .costume-retention {
+            position: relative;
+        }
+        
+        .blue-glasses {
+            position: absolute;
+            top: 35px;
+            left: 15px;
+            width: 50px;
+            height: 15px;
+            border: 2px solid rgba(59, 130, 246, 0.8);
+            border-radius: 10px;
+        }
+        
+        .blue-glasses::before,
+        .blue-glasses::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            width: 15px;
+            height: 10px;
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 5px;
+        }
+        
+        .blue-glasses::before {
+            left: 5px;
+        }
+        
+        .blue-glasses::after {
+            right: 5px;
+        }
+        
+        .chart-pen {
+            position: absolute;
+            top: 55px;
+            right: 10px;
+            width: 15px;
+            height: 5px;
+            background: rgba(59, 130, 246, 0.8);
+            border-radius: 2px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .retention-badge {
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            width: 20px;
+            height: 20px;
+            background: rgba(59, 130, 246, 0.8);
+            border-radius: 50%;
+            color: #fff;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* 评论区服饰 */
+        .costume-comments {
+            position: relative;
+        }
+        
+        .pink-hoodie {
+            position: absolute;
+            top: 40px;
+            left: 15px;
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.8), rgba(255, 105, 180, 0.8));
+            border-radius: 5px;
+        }
+        
+        .pink-hoodie::after {
+            content: '💬';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 12px;
+        }
+        
+        .speech-backpack {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            width: 40px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            color: #333;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .emotion-bracelet {
+            position: absolute;
+            top: 55px;
+            right: 10px;
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(236, 72, 153, 0.8);
+            border-radius: 50%;
+            animation: colorChange 3s ease-in-out infinite;
+        }
+        
+        @keyframes colorChange {
+            0% {
+                border-color: rgba(236, 72, 153, 0.8);
+            }
+            33% {
+                border-color: rgba(59, 130, 246, 0.8);
+            }
+            66% {
+                border-color: rgba(255, 215, 0, 0.8);
+            }
+            100% {
+                border-color: rgba(236, 72, 153, 0.8);
+            }
+        }
+        
+        /* 精灵相关动画 */
+        @keyframes dataFlow {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+        
+        @keyframes antennaMove {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                transform: translateY(-3px) rotate(5deg);
+            }
+        }
+        
+        @keyframes eyeBlink {
+            0%, 95%, 100% {
+                transform: scaleY(1);
+            }
+            98% {
+                transform: scaleY(0.1);
+            }
+        }
+        
+        @keyframes spriteParticle {
+            0% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-30px) scale(0);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes capsuleCrack {
+            0% {
+                transform: translateX(0) rotate(0deg);
+            }
+            100% {
+                transform: translateX(-20px) rotate(-15deg);
+            }
+        }
+        
+        @keyframes capsuleCrackRight {
+            0% {
+                transform: translateX(0) rotate(0deg);
+            }
+            100% {
+                transform: translateX(20px) rotate(15deg);
+            }
+        }
+        
+        @keyframes spriteAppear {
+            0% {
+                transform: scale(0) translate(0, 0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) translate(10px, -10px);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes wingFlap {
+            0%, 100% {
+                transform: rotate(-30deg);
+            }
+            50% {
+                transform: rotate(-45deg);
+            }
+        }
+        
+        @keyframes wingFlapRight {
+            0%, 100% {
+                transform: rotate(30deg);
+            }
+            50% {
+                transform: rotate(45deg);
+            }
+        }
+        
+        /* 精灵对话气泡 */
+        .sprite-dialogue {
+            position: absolute;
+            top: -30px;
+            left: 80px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            z-index: 1002;
+        }
+        
+        .sprite-dialogue.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .sprite-dialogue::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -5px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-right: 10px solid rgba(255, 255, 255, 0.9);
+            border-bottom: 5px solid transparent;
+        }
+        /* 小E 2.0 主题精灵升级 */
+        .sprite { width: 80px; height: 100px; will-change: transform, opacity, filter; filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.35)); --theme-color: #34d9ff; }
+        .sprite-body::before { background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.5), rgba(59,130,246,.28) 30%, rgba(147,51,234,.38) 72%); border: 1px solid rgba(255,255,255,.25); backdrop-filter: blur(1px); }
+        .sprite.theme-home { --theme-color: #34d9ff; } .sprite.theme-analysis { --theme-color: #b76dff; } .sprite.theme-solution { --theme-color: #38f7a4; } .sprite.theme-retention { --theme-color: #4ec8ff; } .sprite.theme-comments { --theme-color: #ff75c8; }
+        .sprite .antenna { box-shadow: 0 0 8px var(--theme-color); }
+        .costume { opacity: 1; transform: scale(1); transition: opacity .35s ease, transform .35s ease; }
+        .theme-tag{position:absolute;top:-12px;left:8px;padding:1px 6px;border-radius:10px;font-size:8px;color:#fff;background:color-mix(in srgb,var(--theme-color) 75%,#000 25%);box-shadow:0 0 10px var(--theme-color);}
+        .armor-core,.detective-cape,.tactical-vest,.data-robe,.social-hoodie{position:absolute;left:16px;top:38px;width:48px;height:34px;border-radius:10px;}
+        .armor-core{background:linear-gradient(145deg,#cfd8e3,#8da5c6);box-shadow:inset 0 0 12px rgba(255,255,255,.6),0 0 10px #4ec8ff;}
+        .holo-board{position:absolute;left:4px;top:64px;width:72px;height:14px;font-size:8px;line-height:14px;text-align:center;color:#7ef6ff;background:rgba(8,18,36,.8);border:1px solid #4ec8ff;border-radius:8px;animation:boardJump 2s linear infinite;}
+        .heatmap-grid{position:absolute;left:8px;top:66px;width:64px;height:10px;border-radius:6px;background:repeating-linear-gradient(90deg,rgba(255,0,80,.35) 0 6px,rgba(0,220,255,.3) 6px 12px);opacity:.7;}
+        .mag-boots{position:absolute;left:21px;top:86px;width:38px;display:flex;justify-content:space-between;}
+        .mag-boots span{width:12px;height:6px;border-radius:8px;background:#a7f3ff;box-shadow:0 0 8px #34d9ff;animation:bootPulse 1.6s ease-in-out infinite;}
+        .mag-boots span:last-child{animation-delay:.3s;}
+        .detective-cape{background:linear-gradient(160deg,rgba(119,40,230,.85),rgba(185,120,255,.45));}
+        .prism-lens{position:absolute;right:2px;top:46px;width:18px;height:18px;border:2px solid #77f7ff;border-radius:50%;background:conic-gradient(from 0deg,#7affff,#d19cff,#7affff);animation:spin 3.2s linear infinite;}
+        .clue-flow{position:absolute;left:14px;top:74px;width:52px;height:2px;background:linear-gradient(90deg,transparent,#a0ff7b,transparent);animation:clueFlow 1.8s linear infinite;}
+        .question-badge{position:absolute;right:1px;top:23px;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;line-height:14px;text-align:center;color:#091520;background:#7fff5f;box-shadow:0 0 8px #7fff5f;}
+        .tactical-vest{background:linear-gradient(145deg,rgba(0,255,170,.75),rgba(22,140,88,.65));}
+        .strategy-cards{position:absolute;left:8px;top:63px;display:flex;gap:2px;}
+        .strategy-cards span{font-size:7px;color:#032a1d;background:#88ffcf;padding:0 3px;border-radius:3px;}
+        .energy-band{position:absolute;right:4px;top:55px;width:18px;height:7px;border:1px solid #8fffd4;border-radius:5px;overflow:hidden;}
+        .energy-band i{display:block;height:100%;background:linear-gradient(90deg,#44ffa8,#d5ffed);animation:progressGrow 2.2s ease-in-out infinite;}
+        .thruster-boots{position:absolute;left:20px;top:86px;display:flex;gap:13px;}
+        .thruster-boots b{display:block;width:12px;height:5px;border-radius:8px;background:#c4fff1;position:relative;}
+        .thruster-boots b::after{content:'';position:absolute;left:3px;top:5px;width:6px;height:9px;background:linear-gradient(#50d7ff,transparent);animation:flameJet .8s ease-in-out infinite;}
+        .data-robe{background:linear-gradient(150deg,rgba(89,225,255,.45),rgba(116,132,255,.35));border:1px solid rgba(94,245,255,.4);}
+        .ar-glasses{position:absolute;left:18px;top:33px;width:44px;height:12px;border:1px solid #84f3ff;border-radius:6px;background:rgba(16,34,64,.7);}
+        .retention-badge{position:absolute;left:10px;top:74px;padding:0 5px;height:13px;line-height:13px;font-size:8px;color:#fff;background:rgba(70,200,255,.45);border:1px solid #6ef6ff;border-radius:8px;animation:boardJump 1.8s ease-in-out infinite;}
+        .trend-line{position:absolute;left:16px;top:50px;width:40px;height:18px;border-bottom:1px solid rgba(130,255,255,.4);border-left:1px solid rgba(130,255,255,.4);}
+        .trend-line::after{content:'';position:absolute;left:2px;top:12px;width:32px;height:2px;background:linear-gradient(90deg,#7ff8ff,#ffffff);transform:skewY(-28deg);animation:trendMove 1.6s ease-in-out infinite;}
+        .social-hoodie{background:linear-gradient(140deg,rgba(255,115,196,.85),rgba(255,175,220,.5));}
+        .bubble-pack{position:absolute;left:2px;top:62px;width:76px;height:14px;border-radius:9px;background:rgba(255,255,255,.84);font-size:7px;line-height:14px;text-align:center;color:#5f2149;overflow:hidden;white-space:nowrap;animation:marqueeMsg 5s linear infinite;}
+        .emotion-band{position:absolute;right:6px;top:58px;width:13px;height:13px;border-radius:50%;border:2px solid #6dff9d;animation:sentimentShift 2.6s ease-in-out infinite;}
+        .wifi-signal{position:absolute;left:28px;top:28px;width:22px;height:12px;border-top:2px solid rgba(255,255,255,.75);border-radius:12px 12px 0 0;animation:wifiPulse 1.3s ease-in-out infinite;}
+        @keyframes boardJump{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}} @keyframes bootPulse{0%,100%{box-shadow:0 0 8px #34d9ff}50%{box-shadow:0 0 8px #ff5166}} @keyframes clueFlow{0%{transform:translateX(-8px)}100%{transform:translateX(8px)}} @keyframes progressGrow{0%,100%{width:28%}50%{width:88%}} @keyframes flameJet{0%,100%{opacity:.35;transform:scaleY(.8)}50%{opacity:1;transform:scaleY(1.2)}} @keyframes trendMove{0%,100%{transform:translateX(0) skewY(-28deg)}50%{transform:translateX(4px) skewY(-28deg)}} @keyframes marqueeMsg{0%{text-indent:2px}50%{text-indent:-32px}100%{text-indent:2px}} @keyframes sentimentShift{0%,100%{border-color:#6dff9d}50%{border-color:#ff5c6a}} @keyframes wifiPulse{0%,100%{opacity:.35}50%{opacity:1}}
+        .sprite.cinema-break .costume{animation:cinemaBreak .45s ease forwards}.sprite.cinema-rebuild .costume{animation:cinemaRebuild .55s ease forwards}.sprite.cinema-born .costume{animation:cinemaBorn .5s ease forwards}.sprite-stage-fx{position:absolute;inset:-10px;pointer-events:none;border-radius:14px;opacity:0;z-index:4}.sprite-stage-fx.active{opacity:1}.sprite-stage-fx.break{background:radial-gradient(circle,rgba(255,255,255,.2),transparent 70%);animation:fxShake .45s linear}.sprite-stage-fx.rebuild{background:conic-gradient(from 0deg,transparent,var(--theme-color),transparent);animation:fxSpin .55s linear}.sprite-stage-fx.born{background:radial-gradient(circle,color-mix(in srgb,var(--theme-color) 45%,#fff 55%),transparent 65%);animation:fxPulse .5s ease}.easter-hotspot{position:absolute;z-index:8;cursor:pointer}.hotspot-antenna{top:0;left:24px;width:30px;height:15px}.hotspot-body{top:22px;left:12px;width:56px;height:62px;border-radius:20px}.hotspot-particle{top:16px;right:-6px;width:22px;height:22px;border-radius:50%}@keyframes cinemaBreak{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(8px) scale(.72) rotate(-12deg)}}@keyframes cinemaRebuild{0%{opacity:0;transform:scale(.55) rotate(20deg)}100%{opacity:1;transform:scale(1) rotate(0)}}@keyframes cinemaBorn{0%{filter:brightness(1)}50%{filter:brightness(1.8)}100%{filter:brightness(1)}}@keyframes fxShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}@keyframes fxSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes fxPulse{0%{transform:scale(.7)}100%{transform:scale(1.15);opacity:0}}
+    </style>
+</head>
+<body>
+    <!-- 粒子效果 -->
+    <div class="particles" id="particles"></div>
+    
+
+
+    <!-- 导航栏 -->
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <!-- 胶囊和精灵 -->
+        <div class="sprite-container">
+            <!-- 精灵球胶囊 -->
+            <div class="capsule" id="capsule">
+                <!-- 精灵球外壳 -->
+                <div class="pokeball">
+                    <!-- 上半部分（红色） -->
+                    <div class="pokeball-top">
+                        <div class="circuit-pattern red-circuit"></div>
+                    </div>
+                    <!-- 下半部分（白色） -->
+                    <div class="pokeball-bottom">
+                        <div class="circuit-pattern white-circuit"></div>
+                    </div>
+                    <!-- 分隔线 -->
+                    <div class="pokeball-separator"></div>
+                    <!-- 中间按钮 -->
+                    <div class="pokeball-button">
+                        <div class="button-inner"></div>
+                    </div>
+                    <!-- 精灵剪影 -->
+                    <div class="sprite-silhouette"></div>
+                    <!-- 粒子效果 -->
+                    <div class="capsule-particles"></div>
+                </div>
+            </div>
+            
+            <!-- 精灵 -->
+            <div class="sprite" id="sprite">
+                <div class="sprite-body">
+                    <!-- 天线 -->
+                    <div class="antenna left"></div>
+                    <div class="antenna right"></div>
+                    
+                    <!-- 眼睛 -->
+                    <div class="eyes">
+                        <div class="eye left"></div>
+                        <div class="eye right"></div>
+                    </div>
+                    
+                    <!-- 嘴巴 -->
+                    <div class="mouth"></div>
+                    
+                    <!-- 翅膀 -->
+                    <div class="wings">
+                        <div class="wing left"></div>
+                        <div class="wing right"></div>
+                    </div>
+                    
+                    <!-- 四肢 -->
+                    <div class="arms">
+                        <div class="arm left"></div>
+                        <div class="arm right"></div>
+                    </div>
+                    
+                    <div class="legs">
+                        <div class="leg left"></div>
+                        <div class="leg right"></div>
+                    </div>
+                    
+                    <!-- 尾巴 -->
+                    <div class="tail"></div>
+                    
+                    <!-- 粒子效果 -->
+                    <div class="particles-container">
+                        <div class="particle"></div>
+                        <div class="particle"></div>
+                        <div class="particle"></div>
+                        <div class="particle"></div>
+                        <div class="particle"></div>
+                    </div>
+                    
+                    <!-- 服饰 -->
+                    <div class="costume" id="costume">
+                        <!-- 服饰内容将通过JS动态添加 -->
+                    </div>
+                </div>
+                
+                <!-- 对话气泡 -->
+                <div class="speech-bubble" id="speechBubble">你好！我是数据之灵小E~</div>
+            </div>
+        </div>
+        
+        <div class="container-fluid d-flex flex-column align-items-center">
+            <div class="w-100 d-flex align-items-center justify-content-between mb-2">
+                <div class="system-status d-flex align-items-center">
+                    <div class="status-indicator"></div>
+                    <span style="color: var(--success-color); font-size: 0.9rem; margin-right: 20px;">系统运行中</span>
+                </div>
+                <div class="time-display" id="timeDisplay"></div>
+            </div>
+            <div class="w-100 text-center mb-3">
+                <div class="hero-title-container">
+                    <h1 class="hero-title" id="animatedTitle">
+                        基于热点情感的玩家流失阻断与精准召回方案
+                    </h1>
+                </div>
+            </div>
+            <div class="w-100">
+                <ul class="navbar-nav d-flex flex-row justify-content-center gap-4">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html" data-page="home">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="solution.html" data-page="solution">召回策略</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="validation.html" data-page="retention">留存追踪</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="implementation.html" data-page="comments">评论区</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 评论区页面 -->
+    <section class="page-container">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12 text-center mb-4">
+                    <h1 class="section-title">玩家评论区</h1>
+                    <p class="section-subtitle">分享您的游戏体验和建议，帮助我们改进系统</p>
+                </div>
+            </div>
+            
+            <!-- 评论表单 -->
+            <div class="row">
+                <div class="col-lg-8 offset-lg-2">
+                    <div class="comment-section">
+                        <h3>发表评论</h3>
+                        <form class="comment-form" id="commentForm">
+                            <div class="mb-3">
+                                <label for="author" class="form-label">昵称</label>
+                                <input type="text" class="form-control" id="author" placeholder="请输入您的昵称" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="comment" class="form-label">评论内容</label>
+                                <textarea class="form-control" id="comment" rows="4" placeholder="请输入您的评论..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">提交评论</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 评论列表 -->
+            <div class="row">
+                <div class="col-lg-8 offset-lg-2">
+                    <div class="comment-section">
+                        <h3>评论列表</h3>
+                        <div id="commentList">
+                            <!-- 评论将通过JavaScript动态添加 -->
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">游戏达人</span>
+                                    <span class="comment-time">2026-03-26 10:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    这个系统的AI游戏伴侣功能非常有趣，我的游戏体验得到了很大提升，现在每天都会上线和AI伴侣一起玩游戏。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">流失玩家</span>
+                                    <span class="comment-time">2026-03-25 15:45</span>
+                                </div>
+                                <div class="comment-content">
+                                    感谢系统的召回策略，我收到了个性化的游戏建议和奖励，让我重新回到了游戏中，现在游戏体验比以前更好了。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">游戏开发者</span>
+                                    <span class="comment-time">2026-03-24 09:15</span>
+                                </div>
+                                <div class="comment-content">
+                                    这个系统的数据分析功能非常强大，帮助我们更好地了解玩家需求，优化游戏设计，提高玩家留存率。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">秋</span>
+                                    <span class="comment-time">2026-04-04 12:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    玩不下去了，这游戏回馈也没有，被踢就是被踢，没有什么为什么，连解释的功能都是扯淡，机器码有问题我玩的好好的在网吧玩，一直都是这个机子，网吧还有开提示，不然开，明明没有开挂，今天被踢不知道多少次了，莫名奇妙，刚开始玩的时候杀的人多，段段续续封我一个月，我刚上号打不了几天又给我封一个月，这样的情况持续了半年，现在莫名奇妙的踢老子，玩你家m
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Gx</span>
+                                    <span class="comment-time">2026-04-04 11:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    北京时间3/28  23:47  内部（两位作者）针对此问题讨论完毕，因游戏内未在门派显著位置显示此机制内容，未能及时通知到门派创建者及相关成员，故制定出补偿方案，及游戏内优化方案。但此时已注意到相关玩家已清空游戏内道具（退游），并给出相关差评内容。在处理完毕后，通过游戏内聊天频道，就门派解散原因对全部玩家进行告知。同时翻查聊天记录，在此门派相关玩家使用过激言论或退游行为来宣泄情绪的时候，大部分在线讨论的玩家都是告知"作者在查了，肯定会给你处理的，可以等一下"或安抚相关玩家情绪的，但事实证明，并无作用。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">cbw0314</span>
+                                    <span class="comment-time">2026-04-04 10:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    准备卖号不玩了，外挂越来越暴力猖狂
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">暴龙汗味者</span>
+                                    <span class="comment-time">2026-04-04 10:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    通行证只是玩家退游的导火索，以前无论多逆天的改动玩家都能忍受，甚至在这样的改动下苦中作乐，但是你改了最不应该改的地方--通行证
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">苏州唯一老实人</span>
+                                    <span class="comment-time">2026-04-04 09:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    蓝洞公司寄刀片 昨天什么也没干 就没开加速器 封了100年  ！！！！误封，官方有什么解释？ 理由？？ 没有充钱？？？？？？？
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">小人物</span>
+                                    <span class="comment-time">2026-04-04 09:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    这游戏全尼玛是挂，举报还只封八天。垃圾游戏祝早日凉凉。退游退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">ttii88</span>
+                                    <span class="comment-time">2026-04-04 08:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    反你妈的批挂!越反越多,全你妈你挂,操你妈的挂逼全家死绝.♥♥♥,傻逼才继续玩这个游戏,去你妈的批!
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">毛九</span>
+                                    <span class="comment-time">2026-04-04 08:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    不怪毛子  会经营苏联也不会解体 老传统
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">CLOVE</span>
+                                    <span class="comment-time">2026-04-04 07:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    认真的吗，张鲁都城攻破三次了，居然越打越多；设置能不能合理点，一个自由城池可以直接被张鲁逃亡的时候迁做都城；曹操女儿曹宪/曹节在张鲁手下做事，擒获之后居然没法招降！张鲁被斩首两次居然都没死。神啊！！！！！！！！！！！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Nice</span>
+                                    <span class="comment-time">2026-04-04 07:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    扯淡的改动，退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Tycode</span>
+                                    <span class="comment-time">2026-04-04 06:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    上线房子就不见了一半 屋顶也没了退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">1012897889</span>
+                                    <span class="comment-time">2026-04-04 06:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    草你吗的赚黑心钱连骨头（卖内部挂）都不放过.
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">林</span>
+                                    <span class="comment-time">2026-04-04 05:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    我在[转转]发现一件不错的宝贝，只要1100元：绝地求生账号，点击查看https://i.zhuanzhuan.com/5tiMe
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">woligiaogiao</span>
+                                    <span class="comment-time">2026-04-04 05:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    ...
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">zxyaaa</span>
+                                    <span class="comment-time">2026-04-04 04:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    什么服务器啊。刚进去就炸服。这服务器后台能不能解决了。解决不了 赶紧换个代理吧。还都是花钱买的。这样还不如免费的游戏了。赶紧解决问题吧。不行就退游。退款 玩个鸡儿
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">大帝</span>
+                                    <span class="comment-time">2026-04-04 04:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    没啥好说的，天天被一帮SB恶心，不管你怎么努力好好玩，总有故意恶心你的人恶心你。再见吧
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Cc</span>
+                                    <span class="comment-time">2026-04-04 03:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    123
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">我不会玩</span>
+                                    <span class="comment-time">2026-04-04 03:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    更新各种红字，妈的取消mod也没用，下次再不买半成品游戏！！！！！！！！！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">185迷人美式giegie</span>
+                                    <span class="comment-time">2026-04-04 02:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    我也是，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">老群子-BJD</span>
+                                    <span class="comment-time">2026-04-04 02:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">清風徐來</span>
+                                    <span class="comment-time">2026-04-04 01:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    我已卸載，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">太荒蠢B**</span>
+                                    <span class="comment-time">2026-04-04 01:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    退款。退游垃圾游戏 把钱退了 你爹给路边的野狗买点吃的 也不想喂你们这6个蠢B吃一口饭
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">AC冬白墨雪</span>
+                                    <span class="comment-time">2026-04-04 00:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游!玩个屁
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">( ︶︿︶) ∩ YOU</span>
+                                    <span class="comment-time">2026-04-04 00:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">xu</span>
+                                    <span class="comment-time">2026-04-03 23:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">NIMINGZHE L</span>
+                                    <span class="comment-time">2026-04-03 23:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">76561199187848177</span>
+                                    <span class="comment-time">2026-04-03 22:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    和史一样狗都不玩，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">别用我号开挂</span>
+                                    <span class="comment-time">2026-04-03 22:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    我的号也没了，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">458299193</span>
+                                    <span class="comment-time">2026-04-03 21:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    越来越拉退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Air-Momo</span>
+                                    <span class="comment-time">2026-04-03 21:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    草拟吗，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">嗯嗯侠</span>
+                                    <span class="comment-time">2026-04-03 20:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    日你妈，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">吴琼</span>
+                                    <span class="comment-time">2026-04-03 20:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    都是外挂，退游。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">39672667</span>
+                                    <span class="comment-time">2026-04-03 19:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    一样，退游，不玩了
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">斯内克</span>
+                                    <span class="comment-time">2026-04-03 19:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    做个中文公告和翻译后台会死？细节都没做到位，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">皇天之下</span>
+                                    <span class="comment-time">2026-04-03 18:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    这个赛季ｂｕｇ和狗shi一样多，玩ｎｍ，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">FLY paladin</span>
+                                    <span class="comment-time">2026-04-03 18:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游！Quit the game
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">xiaozhui12</span>
+                                    <span class="comment-time">2026-04-03 17:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    这游戏无缘无故封号，凉了，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">WS_Wsheng</span>
+                                    <span class="comment-time">2026-04-03 16:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    同样   决定退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">大碗加蛋微辣</span>
+                                    <span class="comment-time">2026-04-03 16:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    全是G没法玩，建议退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Pozëmka</span>
+                                    <span class="comment-time">2026-04-03 15:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    每当家建好以后就会坏档。联机模式就进不去了，都两次了~退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Michael</span>
+                                    <span class="comment-time">2026-04-03 15:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    昨天留言了很多帖子报了ID，今天早上全他妈删了，看来是不准备给我解封了。退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">76561198420884531</span>
+                                    <span class="comment-time">2026-04-03 14:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    我也是这样根本没法玩。什么破游戏，垃圾，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">1179437449</span>
+                                    <span class="comment-time">2026-04-03 14:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    我菜没开挂没干麻就封我号??????天天玩.你就封我>>>?????退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">kwon0082</span>
+                                    <span class="comment-time">2026-04-03 13:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    退游兄弟们！   这游戏玩不了了 ！  全是挂
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">cedric</span>
+                                    <span class="comment-time">2026-04-03 13:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    你这改动纯纯垃圾，音效和那个切枪切刀，简直就是shit，给我改回来！！！对得起我们吗，退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">夜深在網易雲</span>
+                                    <span class="comment-time">2026-04-03 12:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    被盗号开挂，证据提供了，还解封不了，自认倒霉，退游。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">酒少</span>
+                                    <span class="comment-time">2026-04-03 12:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    搞什么鬼，不能玩了？那我走？退游，特么的
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Sc_ToT</span>
+                                    <span class="comment-time">2026-04-03 11:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    可吧可呀 好好优化服务器   咋办好好优化  我们中国退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Qianyi</span>
+                                    <span class="comment-time">2026-04-03 11:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    我也无辜被封，申请回复的都是同样的内容，这个垃圾游戏，我绝望了，退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">FLY paladin</span>
+                                    <span class="comment-time">2026-04-03 10:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    垃圾平衡，退游！！！Trashy balancing, quit the F* game
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">禅心</span>
+                                    <span class="comment-time">2026-04-03 10:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    Originally posted by清澈:我也是这样根本没法玩。什么破游戏，垃圾，退游唉，真的是烦啊。中午还在玩。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">伴佑by</span>
+                                    <span class="comment-time">2026-04-03 09:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    官方还能不能再狗一点，求求你做个人吧，用了的人物皮肤都有了，没领的在邮箱也有了，就领了没用的被收回了。什么逻辑，，退游，曹了
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">动力小子</span>
+                                    <span class="comment-time">2026-04-03 08:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    日尼玛，4w外面免费十连。老子一个都没出，你出尼玛的活动呢？？？爬吧爷不陪，退游。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">So1eMemory</span>
+                                    <span class="comment-time">2026-04-03 08:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    本身这游戏没热度，一大堆问题不说，玩是因为他有可玩性，但是你把玩家当傻子就是你这个资本傻逼了，不得不说，你摆烂起来钱没赚到，还整的一大批人退游！退游！！！来个平替的游戏~！~！！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">525736304</span>
+                                    <span class="comment-time">2026-04-03 07:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    不想让人炼丹直接就不要开这个选项，是不是有病，一直炼丹，成功率这么低？气死人了，还花了钱买的，想着支持游戏，能发展好一点，这个样子看来是没得好了，不玩了，退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">TK、半分哭</span>
+                                    <span class="comment-time">2026-04-03 07:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    h1z1坑比，退游，连个G34都不发怎么解决，坑比游戏，快退钱
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">赤红的祝福</span>
+                                    <span class="comment-time">2026-04-03 06:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    整天在那扯淡，冠军宝藏我特么匹配了5把，把把输，我匹配时间都特地错开了，还是那帮家伙。打了三天，一把没赢，玩毛线，退游！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">1034188681</span>
+                                    <span class="comment-time">2026-04-03 06:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    腊鸡游戏，系统强制安排，一点都不好玩，守护机制，就给你返还3个魂玉，双倍机制都是给的二三十万的小红，大红都是装出来的，2个赛季一条龙没见，鼠勾跟个蚯蚓一样，匹配市场三四分钟以上，你起好装备脸上就给你刷一队猛攻，没出勾就被灭了，把把匹配到外挂透视，假账挂，透视挂。举报都没用下局照样给你安排。垃圾垃圾，，，退游
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">MetaPublishing</span>
+                                    <span class="comment-time">2026-04-03 05:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    Originally posted by铭:每当家建好以后就会坏档。联机模式就进不去了，都两次了~退游你好冒险家我们很抱歉您遇到了那里的错误。 能否提供一下房子的详细信息？ 你建造了什么样的房子，它发生了什么？至于在线 COOP - 我们已经在修复它了。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">DDAYU</span>
+                                    <span class="comment-time">2026-04-03 05:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    为什么别人的号可以解封了，我的号不能解封啊。吗的。不玩了。垃圾游戏，什么都没做就 封了我的号，滚你丫的。退游。垃圾游戏。游戏那些开挂的不封号，封我们这些小白？
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Tz</span>
+                                    <span class="comment-time">2026-04-03 04:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    最近一个月莫名其妙的被封禁24 小时。刚刚一解封就又给续上。 你说我杀人多了被举报了那还好说。老子人都没杀一个就被封号了。很多用外挂的反而没被封、垃圾游戏、退款、退游。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">391743167</span>
+                                    <span class="comment-time">2026-04-03 04:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    ~脚本太多了，用的加速器跟我们一个节点，所以直接封了，好好的游戏在韩国2年没什么脚本，到了国际服第二天就出来脚本，不怪人家封号，昨天我也给封了，退游！~不抱怨，什么游戏能赚钱到中国人手里都没号下场！~
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">76561198437307667</span>
+                                    <span class="comment-time">2026-04-03 03:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    莫名其妙误封 游戏是不是做的好了就可以不顾玩家体验了？垃圾游戏退游谢谢   自己看我战绩 这么垃圾的战绩，我借给我哥玩了一把就被封了？ 去你的咯， 什么玩意。。 账号534685333 拜拜~
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">2271859643</span>
+                                    <span class="comment-time">2026-04-03 03:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    70抽连个金都不给，再来30抽我都出保底了！！没见过你们这样恶心人的！！你这个游戏还有热度就靠肝佬给你顶着等活动，你出个活动还要这样恶心人，你就等着凉吧！！！退游！！！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">菊一文字</span>
+                                    <span class="comment-time">2026-04-03 02:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    等于白玩快一个月，你补偿28W星币，考虑过玩家的感受？看来策划真的打算公测一月就凉凉，打的一手好牌的，殿堂级策划。坐落人间的玩家给你拜服了，退游。退款。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Jack51shy</span>
+                                    <span class="comment-time">2026-04-03 02:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    垃圾游戏，不值得入手，这游戏搞死你，买了福马包就只给了三个福马，造了金土豆放不到战甲里，买了也是一样，白金扣了东西呢！这游戏也就这样了，这游戏公司迟早倒闭，差评！！退游，玩家撑起你，你就这样回馈玩家的？？？smwy，带着这游戏一起入坟吧！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">爽快主要突出爽</span>
+                                    <span class="comment-time">2026-04-03 01:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    那些板子哥，50几KD我视频上传小黑盒举报，都不封号！有小号我都提不起继续玩儿下去的兴趣了，我严重怀疑游戏要跑路了，朋友叫我去隔壁三角洲。2025/6/19退游。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">一只骚猪的逆袭</span>
+                                    <span class="comment-time">2026-04-03 01:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    找客服申请鸡毛用没有，你平台和工作室要是缺钱，老子天天烧给你们。学蓝洞误封圈钱是真的下贱。新人不要 入坑，24工作室不要丢中国人的脸，**********************退游*****************！！！
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">太荒蠢B**</span>
+                                    <span class="comment-time">2026-04-03 00:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    操他吗我们10几个人玩了3天 一直在更新 一直维护 还一直在等能上去玩会了 你吗个臭B 又更新 你在更新什么 啊？ 就那点B玩意儿 你要他吗一直频繁更新别整这个机制 我们都一起玩的 现在怎么搞"？退游？ 你吗B 15号开服到现在 一直都是在等你 顶你是不是有点过分了？操你吗  之前还挺你跟别人互喷 真是撒B行为   猪脑子一样 搞不了游戏 就趁早你吗B关服 臭撒BN
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">Rambo</span>
+                                    <span class="comment-time">2026-04-03 00:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    副本怪物伤害设计到跟屎一样基本2/3下就秒了 匹配35 等输吧还想要0.03掉率的S装 慢慢等吧充值了V7 投入在冰法 削弱说成BUG弄到现在没人组冰法打35要重新投入火法后面是不是在削？哪个职业玩家多就削弱盾奶/游侠 等死吧PAY 2 WIN的机制PAY了就等重新PAY过游戏已死退游坐等新MMORPG
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">huya-kemo-90313</span>
+                                    <span class="comment-time">2026-04-02 23:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    我已经为这个游戏带去太多的人气和人流，但是我不知道值不值得，因为这个游戏使我人气大幅度倒退了。开挂的孤儿。你们真的占领了这个游戏，我有很多的水友，因为外挂，心态爆炸。退游。丢人丢到了国外了。你们真的很强。当你发现一个连东西都捡不利索的人，抬枪就能一枪右键爆头。一个刷车点都找不到，却能跑的比你开车还快的人。一个一枪也打不中你，你枪枪打他身上怎么也打不死的人。你会发现，这个游戏奥无乐趣。坚持了这么久，索然无味。元月，最后一个月，蓝洞再无作为。
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">1784217208</span>
+                                    <span class="comment-time">2026-04-02 23:00</span>
+                                </div>
+                                <div class="comment-content">
+                                    1300时长+  衣服能翻5页  武器2页  误封还有什么说的   自己的第一个号   不想爆粗  一天没玩 晚上去网吧玩  永久封禁   内心真的难受 第一个号  这个赛季单排双排4排  打了快2000把  去年10月份开始 迷恋这个游戏 刚开始 只是借朋友号玩  后来自己买了个  后来出皮肤  啥的   冲了也没多少前 1000不到   1300+   直接给我误封   对这个游戏没有一点感觉了  所有时长2000+退游再见  绝地求生
+                                </div>
+                            </div>
+                            <div class="comment-card">
+                                <div class="comment-header">
+                                    <span class="comment-author">76561198860263326</span>
+                                    <span class="comment-time">2026-04-02 22:30</span>
+                                </div>
+                                <div class="comment-content">
+                                    2   枪械后坐力的问题，玩家才是一切的基础，那么玩家不可能全是职业玩家，当拥有了更多的玩家，才会诞生出高玩职业玩家，那么普通玩家大部分都是要上班的，没有谁有时间天天适应肌肉记忆，如果俩天有事没玩枪马了压不住，后坐力劝退百分之10-20（根据游戏热度不同下降）3   策划，至关重要的一门艺术，吃鸡游戏，五花八门，开花，但终将凉凉，凉凉的其实只是一个游戏机制的问题，想出大逃杀这个想法的创造者很好，但是烂 "尾"了 导致游戏的核心就是钢枪=去人多的地方=击毙还好被击毙就自闭=自闭就无限自闭=退游，大逃杀如何才能玩出逃  与  杀？ 普通玩家如何才能打出堪比职业赛场的风范？ 如何避免自闭怪落地钢枪满地图找人杀？或者有比钢枪更刺激的事情？有的。决定了百分之40 的人走或留。4   外挂，这个b的问题就不需要多赘述了，一种人人自带的小系统，记录击中的位置重复性，空枪性，瞄准平滑性，一种直接封，一种怕误封就监控警告，警告了你我就是50几率要封你了，封你ID封你电话号码封你支付宝。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-4">
+        <div class="container text-center">
+            <p>© 2026 游戏玩家流失-召回-留存闭环分析系统</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 更新时间显示
+        function updateTime() {
+            const now = new Date();
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const dayName = dayNames[now.getDay()];
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            
+            document.getElementById('timeDisplay').textContent = `${dayName} ${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+        
+        // 初始化时间显示并每秒更新
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // 评论表单提交
+        document.getElementById('commentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const author = document.getElementById('author').value;
+            const comment = document.getElementById('comment').value;
+            
+            // 获取当前时间
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const timeString = `${year}-${month}-${day} ${hours}:${minutes}`;
+            
+            // 创建评论卡片
+            const commentCard = document.createElement('div');
+            commentCard.className = 'comment-card';
+            commentCard.innerHTML = `
+                <div class="comment-header">
+                    <span class="comment-author">${author}</span>
+                    <span class="comment-time">${timeString}</span>
+                </div>
+                <div class="comment-content">
+                    ${comment}
+                </div>
+            `;
+            
+            // 添加到评论列表
+            const commentList = document.getElementById('commentList');
+            commentList.insertBefore(commentCard, commentList.firstChild);
+            
+            // 清空表单
+            document.getElementById('author').value = '';
+            document.getElementById('comment').value = '';
+            
+            // 显示成功提示
+            alert('评论提交成功！');
+        });
+        
+        // 生成粒子效果
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 100;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 4 + 's';
+                particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+        
+        // 全息投影动态字符
+        function createHologramText() {
+            const text = 'GAME CHURN ANALYSIS SYSTEM';
+            const letters = text.split('');
+            
+            // 可以在适当的位置添加全息文字效果
+            // 这里我们可以在页面加载时在控制台输出一些动态效果
+            console.log('%c' + text, 'color: #00f0ff; text-shadow: 0 0 10px #00f0ff, 0 0 20px #00f0ff, 0 0 30px #00f0ff; font-size: 18px;');
+        }
+        
+        // 评论区精灵动态表现
+        function initCommentSprite() {
+            // 模拟评论数据
+            const comments = [
+                { content: '太好玩了！', nickname: 'A', likes: 128, sentiment: 'positive' },
+                { content: '画面很精美', nickname: 'B', likes: 96, sentiment: 'positive' },
+                { content: '剧情吸引人', nickname: 'C', likes: 85, sentiment: 'positive' },
+                { content: '音效很棒', nickname: 'D', likes: 72, sentiment: 'positive' },
+                { content: '期待更新', nickname: 'E', likes: 64, sentiment: 'neutral' },
+                { content: '有点难', nickname: 'F', likes: 45, sentiment: 'negative' },
+                { content: '希望优化一下', nickname: 'G', likes: 38, sentiment: 'negative' },
+                { content: '还可以', nickname: 'H', likes: 52, sentiment: 'neutral' }
+            ];
+            
+            // 情感色彩映射
+            const sentimentColors = {
+                positive: {
+                    bubble: 'rgba(255, 150, 200, 0.3)',
+                    border: 'rgba(255, 100, 200, 0.5)',
+                    shadow: 'rgba(255, 100, 200, 0.5)',
+                    emoji: '😊'
+                },
+                negative: {
+                    bubble: 'rgba(150, 200, 255, 0.3)',
+                    border: 'rgba(100, 150, 255, 0.5)',
+                    shadow: 'rgba(100, 150, 255, 0.5)',
+                    emoji: '😢'
+                },
+                neutral: {
+                    bubble: 'rgba(200, 200, 255, 0.3)',
+                    border: 'rgba(150, 150, 255, 0.5)',
+                    shadow: 'rgba(150, 150, 255, 0.5)',
+                    emoji: '😐'
+                }
+            };
+            
+            // 更新评论关键词
+            function updateCommentKeywords() {
+                const keywords = comments
+                    .sort((a, b) => b.likes - a.likes)
+                    .slice(0, 3)
+                    .map(comment => `${comment.content}(${comment.likes}赞)`)
+                    .join(' | ');
+                
+                const commentKeywords = document.getElementById('commentKeywords');
+                if (commentKeywords) {
+                    commentKeywords.textContent = keywords;
+                }
+            }
+            
+            // 更新情感色彩
+            function updateSentimentColor() {
+                // 计算整体情感
+                const sentimentScores = comments.reduce((acc, comment) => {
+                    switch (comment.sentiment) {
+                        case 'positive':
+                            acc.positive++;
+                            break;
+                        case 'negative':
+                            acc.negative++;
+                            break;
+                        case 'neutral':
+                            acc.neutral++;
+                            break;
+                    }
+                    return acc;
+                }, { positive: 0, negative: 0, neutral: 0 });
+                
+                // 确定主导情感
+                let dominantSentiment = 'neutral';
+                if (sentimentScores.positive > sentimentScores.negative && sentimentScores.positive > sentimentScores.neutral) {
+                    dominantSentiment = 'positive';
+                } else if (sentimentScores.negative > sentimentScores.positive && sentimentScores.negative > sentimentScores.neutral) {
+                    dominantSentiment = 'negative';
+                }
+                
+                // 更新气泡云颜色
+                const bubbleCloud = document.querySelector('.bubble-cloud');
+                if (bubbleCloud) {
+                    const color = sentimentColors[dominantSentiment];
+                    bubbleCloud.style.background = color.bubble;
+                    bubbleCloud.style.border = `2px solid ${color.border}`;
+                    bubbleCloud.style.boxShadow = `0 0 20px ${color.shadow}`;
+                }
+            }
+            
+            // 生成新评论
+            function generateNewComment() {
+                const contents = [
+                    '太好玩了！', '画面很精美', '剧情吸引人', '音效很棒', '期待更新',
+                    '有点难', '希望优化一下', '还可以', '推荐给朋友了', '超喜欢这个游戏！'
+                ];
+                const nicknames = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const sentiments = ['positive', 'negative', 'neutral'];
+                
+                const newComment = {
+                    content: contents[Math.floor(Math.random() * contents.length)],
+                    nickname: nicknames[Math.floor(Math.random() * nicknames.length)],
+                    likes: Math.floor(Math.random() * 100) + 10,
+                    sentiment: sentiments[Math.floor(Math.random() * sentiments.length)]
+                };
+                
+                // 添加到评论列表
+                comments.unshift(newComment);
+                if (comments.length > 10) {
+                    comments.pop();
+                }
+                
+                // 更新评论关键词
+                updateCommentKeywords();
+                
+                // 更新情感色彩
+                updateSentimentColor();
+                
+                // 更新新评论提示
+                const newCommentIndicator = document.getElementById('newCommentIndicator');
+                if (newCommentIndicator) {
+                    newCommentIndicator.textContent = `新评论: ${newComment.nickname}: ${newComment.content}`;
+                }
+            }
+            
+            // 初始化
+            updateCommentKeywords();
+            updateSentimentColor();
+            
+            // 每5秒生成新评论
+            setInterval(generateNewComment, 5000);
+        }
+        
+        // 音效系统
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioContext;
+        
+        function playSound(frequency, duration, type = 'sine') {
+            if (!audioContext) {
+                audioContext = new AudioContext();
+            }
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        // 胶囊点击事件
+        const capsules = document.querySelectorAll('.capsule');
+        const capsule = capsules[0]; // 导航栏部分的精灵球
+        const sprite = document.getElementById('sprite');
+        const leftCrack = document.querySelector('.capsule-crack.left');
+        const rightCrack = document.querySelector('.capsule-crack.right');
+        const speechBubble = document.getElementById('speechBubble');
+        const costume = document.getElementById('costume');
+        
+        let isHatched = false;
+        
+        // 胶囊悬停效果
+        capsules.forEach(c => {
+            c.addEventListener('mouseenter', function() {
+                if (!isHatched) {
+                    // 生成3-5个旋转粒子
+                    const particlesContainer = this.querySelector('.capsule-particles');
+                    particlesContainer.innerHTML = '';
+                    
+                    const particleCount = Math.floor(Math.random() * 3) + 3; // 3-5个粒子
+                    for (let i = 0; i < particleCount; i++) {
+                        const particle = document.createElement('div');
+                        particle.style.position = 'absolute';
+                        particle.style.width = '4px';
+                        particle.style.height = '4px';
+                        particle.style.background = 'rgba(0, 240, 255, 0.8)';
+                        particle.style.borderRadius = '50%';
+                        particle.style.boxShadow = '0 0 10px rgba(0, 240, 255, 0.8)';
+                        particle.style.top = '50%';
+                        particle.style.left = '50%';
+                        particle.style.transform = 'translate(-50%, -50%)';
+                        particle.style.animation = `particleRotate ${2 + i}s linear infinite`;
+                        particlesContainer.appendChild(particle);
+                    }
+                    
+                    // 播放嗡鸣音效（频率随放大升高）
+                    playSound(440, 0.3, 'sine', 0.5);
+                }
+            });
+            
+            // 胶囊鼠标离开效果
+            c.addEventListener('mouseleave', function() {
+                if (!isHatched) {
+                    // 清除粒子
+                    const particlesContainer = this.querySelector('.capsule-particles');
+                    particlesContainer.innerHTML = '';
+                }
+            });
+        });
+        
+        // 精灵球点击事件
+        capsule.addEventListener('click', function() {
+            if (!isHatched) {
+                // 播放hover嗡鸣音效
+                playSound(440, 0.5, 'sine');
+                
+                // 1. 捕捉锁定
+                const pokeball = document.querySelector('.pokeball');
+                const pokeballTop = document.querySelector('.pokeball-top');
+                const pokeballBottom = document.querySelector('.pokeball-bottom');
+                const pokeballButton = document.querySelector('.pokeball-button');
+                const buttonInner = document.querySelector('.button-inner');
+                const redCircuit = document.querySelector('.red-circuit');
+                const whiteCircuit = document.querySelector('.white-circuit');
+                const spriteSilhouette = document.querySelector('.sprite-silhouette');
+                
+                // 按钮红光全亮
+                buttonInner.style.background = '#ff0000';
+                buttonInner.style.boxShadow = '0 0 20px rgba(255, 0, 0, 1), 0 0 30px rgba(255, 0, 0, 0.8)';
+                
+                // 电路纹逆向流动
+                redCircuit.style.animation = 'redCircuitFlow 0.5s linear infinite reverse';
+                whiteCircuit.style.animation = 'whiteCircuitFlow 0.5s linear infinite';
+                
+                // 球内光团显精灵剪影
+                spriteSilhouette.style.opacity = '1';
+                spriteSilhouette.style.boxShadow = '0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(0, 240, 255, 0.8)';
+                
+                // 播放捕捉音效
+                playSound(1000, 0.8, 'sawtooth');
+                
+                // 2. 开球释放
+                setTimeout(() => {
+                    // 播放开球音效
+                    playSound(1200, 0.5, 'sine');
+                    
+                    // 两半向两侧滑开
+                    pokeballTop.style.animation = 'pokeballOpenTop 0.5s ease-out forwards';
+                    pokeballBottom.style.animation = 'pokeballOpenBottom 0.5s ease-out forwards';
+                    
+                    // 光团爆发强光
+                    spriteSilhouette.style.boxShadow = '0 0 40px rgba(255, 255, 255, 1), 0 0 60px rgba(0, 240, 255, 1), 0 0 80px rgba(147, 51, 234, 0.8)';
+                    
+                    // 生成光粒效果
+                    for (let i = 0; i < 20; i++) {
+                        const particle = document.createElement('div');
+                        particle.className = 'light-particle';
+                        particle.style.top = Math.random() * 100 + '%';
+                        particle.style.left = Math.random() * 100 + '%';
+                        pokeball.appendChild(particle);
+                    }
+                }, 800);
+                
+                // 3. 精灵栖息
+                setTimeout(() => {
+                    // 播放孵化啾声（啾~）
+                    playSound(1500, 0.3, 'sine');
+                    
+                    // 精灵出现动画
+                    sprite.style.animation = 'spriteAppear 0.5s ease forwards';
+                    
+                    // 翅膀扇动动画
+                    const leftWing = document.querySelector('.wing.left');
+                    const rightWing = document.querySelector('.wing.right');
+                    leftWing.style.animation = 'wingFlap 1s ease-in-out infinite';
+                    rightWing.style.animation = 'wingFlapRight 1s ease-in-out infinite';
+                    
+                    // 播放翅膀“哗啦”音效
+                    setTimeout(() => {
+                        playSound(800, 0.3, 'square');
+                    }, 100);
+                    
+                    // 播放磁吸“咔哒”音效
+                    setTimeout(() => {
+                        playSound(400, 0.2, 'square');
+                    }, 300);
+                    
+                    // 隐藏精灵球
+                    capsules.forEach(c => {
+                        c.style.opacity = '0';
+                        c.style.pointerEvents = 'none';
+                    });
+                    
+                    // 设置精灵为已孵化状态
+                    isHatched = true;
+                    
+                    // 存储孵化状态到localStorage，确保在其他页面也能保持状态
+                    localStorage.setItem('spriteHatched', 'true');
+                    
+                    // 显示初始服饰（评论区）
+                    updateCostume('comments');
+                }, 1800);
+            }
+        });
+        
+        // 精灵点击事件
+        sprite.addEventListener('click', function() {
+            if (isHatched) {
+                // 精灵转身面向用户
+                sprite.style.transform = 'scale(1) rotateY(180deg)';
+                
+                // 眼睛显示文字
+                const eyes = document.querySelectorAll('.eye');
+                eyes.forEach(eye => {
+                    eye.style.background = 'rgba(0, 0, 0, 0.8)';
+                    eye.innerHTML = '<span style="position: absolute; top: 2px; left: 1px; font-size: 8px; color: #00f0ff;">你好！</span>';
+                });
+                
+                // 翅膀展开
+                const wings = document.querySelectorAll('.wing');
+                wings.forEach(wing => {
+                    wing.style.transform = wing.classList.contains('left') ? 'rotate(-60deg)' : 'rotate(60deg)';
+                });
+                
+                // 播放翅膀展开音效
+                playSound(800, 0.3, 'square');
+                
+                // 显示对话气泡
+                speechBubble.textContent = '你好！我是小E~';
+                speechBubble.style.opacity = '1';
+                speechBubble.style.transform = 'translateX(-50%) translateY(-10px)';
+                if ('speechSynthesis' in window) {
+                    const utter = new SpeechSynthesisUtterance('你好，我是数据之灵小E。');
+                    utter.lang = 'zh-CN';
+                    utter.rate = 1.05;
+                    utter.pitch = 1.2;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(utter);
+                }
+                
+                // 3秒后恢复正常状态
+                setTimeout(() => {
+                    sprite.style.transform = 'scale(1) rotateY(0deg)';
+                    eyes.forEach(eye => {
+                        eye.style.background = 'rgba(255, 255, 255, 0.9)';
+                        eye.innerHTML = '';
+                    });
+                    wings.forEach(wing => {
+                        wing.style.transform = wing.classList.contains('left') ? 'rotate(-30deg)' : 'rotate(30deg)';
+                    });
+                    speechBubble.style.opacity = '0';
+                    speechBubble.style.transform = 'translateX(-50%) translateY(0)';
+                }, 3000);
+            }
+        });
+        
+        // 精灵双击事件
+        sprite.addEventListener('dblclick', function() {
+            if (isHatched) {
+                // 创建对话框
+                const dialog = document.createElement('div');
+                dialog.className = 'sprite-dialog';
+                dialog.innerHTML = `
+                    <div class="dialog-content">
+                        <p>你想让我回到胶囊里去嘛？</p>
+                        <div class="dialog-buttons">
+                            <button id="yesBtn">是的</button>
+                            <button id="noBtn">不是</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+                
+                // 添加对话框样式
+                const style = document.createElement('style');
+                style.textContent = `
+                    .sprite-dialog {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.5);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10000;
+                    }
+                    .dialog-content {
+                        background: rgba(0, 240, 255, 0.9);
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
+                        text-align: center;
+                        min-width: 300px;
+                    }
+                    .dialog-content p {
+                        font-size: 16px;
+                        margin-bottom: 20px;
+                        color: #000;
+                    }
+                    .dialog-buttons {
+                        display: flex;
+                        justify-content: space-around;
+                    }
+                    .dialog-buttons button {
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        background: rgba(147, 51, 234, 0.8);
+                        color: white;
+                        transition: all 0.3s ease;
+                    }
+                    .dialog-buttons button:hover {
+                        background: rgba(147, 51, 234, 1);
+                        transform: scale(1.05);
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // 是的按钮点击事件
+                document.getElementById('yesBtn').addEventListener('click', function() {
+                    // 精灵回到胶囊动画
+                    sprite.style.animation = 'spriteDisappear 0.5s ease forwards';
+                    
+                    // 播放精灵消失音效
+                    playSound(800, 0.3, 'square');
+                    
+                    // 延迟显示精灵球
+                    setTimeout(() => {
+                        // 重置精灵球状态
+                        const pokeball = document.querySelector('.pokeball');
+                        const pokeballTop = document.querySelector('.pokeball-top');
+                        const pokeballBottom = document.querySelector('.pokeball-bottom');
+                        const buttonInner = document.querySelector('.button-inner');
+                        const redCircuit = document.querySelector('.red-circuit');
+                        const whiteCircuit = document.querySelector('.white-circuit');
+                        const spriteSilhouette = document.querySelector('.sprite-silhouette');
+                        
+                        // 重置精灵球各部分
+                        pokeballTop.style.animation = '';
+                        pokeballBottom.style.animation = '';
+                        
+                        // 重置按钮颜色
+                        buttonInner.style.background = '#00f0ff';
+                        buttonInner.style.boxShadow = '0 0 8px rgba(0, 240, 255, 1)';
+                        
+                        // 重置电路纹动画
+                        redCircuit.style.animation = 'redCircuitFlow 3s linear infinite';
+                        whiteCircuit.style.animation = 'whiteCircuitFlow 3s linear infinite reverse';
+                        
+                        // 重置精灵剪影
+                        spriteSilhouette.style.opacity = '0';
+                        spriteSilhouette.style.boxShadow = '';
+                        
+                        // 显示精灵球
+                        capsules.forEach(c => {
+                            c.style.opacity = '1';
+                            c.style.pointerEvents = 'auto';
+                        });
+                        
+                        // 清除光粒子
+                        const lightParticles = document.querySelectorAll('.light-particle');
+                        lightParticles.forEach(particle => particle.remove());
+                        
+                        // 重置精灵状态
+                        sprite.style.opacity = '0';
+                        sprite.style.transform = 'scale(0) rotate(-45deg)';
+                        sprite.style.animation = '';
+                        
+                        // 设置精灵为未孵化状态
+                        isHatched = false;
+                        
+                        // 清除孵化状态到localStorage
+                        localStorage.removeItem('spriteHatched');
+                        
+                        // 移除对话框
+                        document.body.removeChild(dialog);
+                        document.head.removeChild(style);
+                    }, 500);
+                });
+                
+                // 不是按钮点击事件
+                document.getElementById('noBtn').addEventListener('click', function() {
+                    // 移除对话框
+                    document.body.removeChild(dialog);
+                    document.head.removeChild(style);
+                });
+            }
+        });
+        
+        function stageFx(type){const fx=document.createElement('div');fx.className=`sprite-stage-fx ${type} active`;sprite.appendChild(fx);setTimeout(()=>fx.remove(),620);}
+        function cinematicTransform(fromPage,toPage){if(!isHatched||fromPage===toPage)return;const chain=[()=>{sprite.classList.add('cinema-break');stageFx('break');createDissipationParticles();playSound(680,.14,'sawtooth');},()=>{sprite.classList.remove('cinema-break');sprite.classList.add('cinema-rebuild');stageFx('rebuild');createLoadingParticles();playSound(1080,.16,'triangle');},()=>{sprite.classList.remove('cinema-rebuild');updateCostume(toPage);sprite.classList.add('cinema-born');stageFx('born');playSound(1480,.2,'sine');setTimeout(()=>sprite.classList.remove('cinema-born'),600);}];let i=0;const run=()=>{if(i>=chain.length)return;chain[i++]();requestAnimationFrame(()=>setTimeout(run,260));};run();}
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => link.addEventListener('click', function(){if(!isHatched)return;const toPage=this.getAttribute('data-page');const fromPage=Array.from(sprite.classList).find(c=>c.startsWith('theme-'))?.replace('theme-','')||'comments';cinematicTransform(fromPage,toPage);}));
+        
+        // 更新服饰函数
+        function updateCostume(page) {
+            costume.className = `costume costume-${page}`;
+            sprite.classList.remove('theme-home', 'theme-analysis', 'theme-solution', 'theme-retention', 'theme-comments');
+            sprite.classList.add(`theme-${page}`);
+            const themeColorMap = { home: '#34d9ff', analysis: '#b76dff', solution: '#38f7a4', retention: '#4ec8ff', comments: '#ff75c8' };
+            sprite.style.setProperty('--theme-color', themeColorMap[page] || '#34d9ff');
+            switch(page) {
+                case 'home':
+                    costume.innerHTML = '<div class="theme-tag">数据指挥官</div><div class="armor-core"></div><div class="holo-board">全球玩家 12.8亿</div><div class="heatmap-grid"></div><div class="mag-boots"><span></span><span></span></div>';
+                    break;
+                case 'analysis':
+                    costume.innerHTML = '<div class="theme-tag">逻辑侦探</div><div class="detective-cape"></div><div class="prism-lens"></div><div class="question-badge">?</div><div class="clue-flow"></div>';
+                    break;
+                case 'solution':
+                    costume.innerHTML = '<div class="theme-tag">行动特工</div><div class="tactical-vest"></div><div class="strategy-cards"><span>联动</span><span>补偿</span><span>UGC</span></div><div class="energy-band"><i></i></div><div class="thruster-boots"><b></b><b></b></div>';
+                    break;
+                case 'retention':
+                    costume.innerHTML = '<div class="theme-tag">数据分析师</div><div class="data-robe"></div><div class="ar-glasses"></div><div class="retention-badge">留存↑ 82.6%</div><div class="trend-line"></div>';
+                    break;
+                case 'comments':
+                    costume.innerHTML = '<div class="theme-tag">社交官</div><div class="social-hoodie"></div><div class="bubble-pack">高赞: 角色建模超酷</div><div class="emotion-band"></div><div class="wifi-signal"></div>';
+                    break;
+            }
+            sprite.style.transform = 'scale(1) rotate(360deg)';
+            setTimeout(() => { sprite.style.transform = 'scale(1) rotate(0deg)'; }, 500);
+        }
+        
+        // 创建数据消散粒子效果
+        function createDissipationParticles() {
+            const particlesContainer = document.createElement('div');
+            particlesContainer.className = 'particles-container';
+            sprite.appendChild(particlesContainer);
+            
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 80 + 'px';
+                particle.style.top = Math.random() * 100 + 'px';
+                particle.style.background = 'rgba(255, 255, 255, 0.8)';
+                particle.style.boxShadow = '0 0 5px rgba(255, 255, 255, 0.8)';
+                particle.style.animation = 'particleSplash 1s ease-out forwards';
+                particlesContainer.appendChild(particle);
+            }
+            
+            // 1秒后移除粒子容器
+            setTimeout(() => {
+                if (particlesContainer.parentNode) {
+                    particlesContainer.parentNode.removeChild(particlesContainer);
+                }
+            }, 1000);
+        }
+        
+        // 创建数据加载光点汇聚效果
+        function createLoadingParticles() {
+            const particlesContainer = document.createElement('div');
+            particlesContainer.className = 'particles-container';
+            sprite.appendChild(particlesContainer);
+            
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = (Math.random() * 200 - 60) + 'px';
+                particle.style.top = (Math.random() * 200 - 50) + 'px';
+                particle.style.background = 'rgba(0, 240, 255, 0.8)';
+                particle.style.boxShadow = '0 0 5px rgba(0, 240, 255, 0.8)';
+                particle.style.animation = 'particleFlow 1s ease-out forwards';
+                particlesContainer.appendChild(particle);
+            }
+            
+            // 1秒后移除粒子容器
+            setTimeout(() => {
+                if (particlesContainer.parentNode) {
+                    particlesContainer.parentNode.removeChild(particlesContainer);
+                }
+            }, 1000);
+        }
+        
+        // 常态互动（闲置状态）
+        function initIdleInteractions() {
+            // 每隔10秒精灵眨眼睛、摇尾巴
+            setInterval(() => {
+                if (isHatched) {
+                    // 眨眼睛
+                    const eyes = document.querySelectorAll('.eye');
+                    eyes.forEach(eye => {
+                        eye.style.animation = 'none';
+                        setTimeout(() => {
+                            eye.style.animation = 'eyeBlink 0.5s ease-in-out';
+                        }, 100);
+                    });
+                    
+                    // 摇尾巴（这里假设精灵有尾巴元素）
+                    const tail = document.querySelector('.tail');
+                    if (tail) {
+                        tail.style.animation = 'tailWag 1s ease-in-out';
+                        setTimeout(() => {
+                            tail.style.animation = '';
+                        }, 1000);
+                    }
+                    
+                    // 粒子环慢速旋转（这里假设精灵有粒子环元素）
+                    const particleRing = document.querySelector('.particle-ring');
+                    if (particleRing) {
+                        particleRing.style.animation = 'spin 3s linear';
+                        setTimeout(() => {
+                            particleRing.style.animation = '';
+                        }, 3000);
+                    }
+                }
+            }, 10000);
+        }
+        
+        function bindEasterEggs(){const body=sprite.querySelector('.sprite-body');if(!body||body.querySelector('.hotspot-antenna'))return;const a=document.createElement('div'),b=document.createElement('div'),p=document.createElement('div');a.className='easter-hotspot hotspot-antenna';b.className='easter-hotspot hotspot-body';p.className='easter-hotspot hotspot-particle';body.append(a,b,p);a.onclick=(e)=>{e.stopPropagation();speechBubble.textContent='评论区：正向弹幕占比 72%';speechBubble.style.opacity='1';setTimeout(()=>speechBubble.style.opacity='0',1500);};b.onclick=(e)=>{e.stopPropagation();speechBubble.textContent='社交官热舞！';speechBubble.style.opacity='1';sprite.style.transform='scale(1) rotate(-16deg)';setTimeout(()=>sprite.style.transform='scale(1) rotate(0deg)',280);setTimeout(()=>speechBubble.style.opacity='0',1300);};p.onclick=(e)=>{e.stopPropagation();createLoadingParticles();};}
+        // 初始化精灵状态
+        window.addEventListener('load', function() {
+            // 粒子随机位置
+            const particles = document.querySelectorAll('.sprite .particle');
+            particles.forEach((particle, index) => {
+                const x = Math.random() * 80;
+                const y = Math.random() * 100;
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.animationDelay = index * 0.5 + 's';
+            });
+            
+            // 检查是否已经孵化过
+            const hatched = localStorage.getItem('spriteHatched');
+            if (hatched === 'true') {
+                // 隐藏胶囊
+                capsules.forEach(c => {
+                    c.style.opacity = '0';
+                    c.style.pointerEvents = 'none';
+                });
+                
+                // 显示精灵
+                sprite.style.transform = 'scale(1)';
+                sprite.style.opacity = '1';
+                
+                // 翅膀扇动动画
+                const leftWing = document.querySelector('.wing.left');
+                const rightWing = document.querySelector('.wing.right');
+                leftWing.style.animation = 'wingFlap 1s ease-in-out infinite';
+                rightWing.style.animation = 'wingFlapRight 1s ease-in-out infinite';
+                
+                // 设置精灵为已孵化状态
+                isHatched = true;
+                
+                // 显示当前页面的服饰
+                const currentPage = window.location.pathname.split('/').pop().split('.')[0];
+                let pageType = 'home';
+                switch(currentPage) {
+                    case 'analysis':
+                        pageType = 'analysis';
+                        break;
+                    case 'solution':
+                        pageType = 'solution';
+                        break;
+                    case 'validation':
+                        pageType = 'retention';
+                        break;
+                    case 'implementation':
+                        pageType = 'comments';
+                        break;
+                }
+                updateCostume(pageType);
+                bindEasterEggs();
+                
+                // 初始化闲置互动
+                initIdleInteractions();
+            }
+        });
+    </script>
+
+    </body>
+</html>
