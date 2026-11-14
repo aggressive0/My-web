@@ -205,29 +205,6 @@
             opacity: 0.3;
         }
 
-        .nav-link {
-            font-weight: 500;
-            color: #ffffff;
-            margin-right: 15px;
-            position: relative;
-            font-size: 0.9rem;
-            text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
-        }
-
-        .nav-link::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            transition: width 0.3s ease;
-        }
-
-        .nav-link:hover::after, .nav-link.active::after { width: 100%; }
-        .nav-link.active { color: var(--primary-color); text-shadow: 0 0 10px rgba(0, 240, 255, 0.7); }
-
         .system-status { display: flex; align-items: center; }
 
         .status-indicator {
@@ -1813,7 +1790,6 @@
                     <span>留存追踪</span></a></li>
             </ul>
             <div class="ops-meta">
-                <span class="ops-demo" title="页面数值为演示数据，未接入实时数据源">演示</span>
                 <span class="ops-range-wrap">
                     <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
                         <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>

@@ -194,18 +194,6 @@
     min-width: 0;
 }
 
-.ops-demo {
-    padding: 1px 7px;
-    border-radius: 5px;
-    border: 1px solid rgba(255, 180, 95, .38);
-    background: rgba(255, 180, 95, .1);
-    color: var(--ops-amber);
-    font-family: var(--ops-sans);
-    font-size: 10px;
-    letter-spacing: .08em;
-    white-space: nowrap;
-}
-
 .ops-range-wrap {
     position: relative;
     display: inline-flex;
@@ -394,7 +382,6 @@
 
 @media (max-width: 900px) {
     .ops-bar { gap: 12px; padding: 0 12px; }
-    .ops-demo { display: none; }
     .ops-tabs .nav-link span { display: none; }
     .ops-tabs .nav-link { padding: 0 9px; }
     .ops-tabs .nav-link.active::after { display: none; }

@@ -12,6 +12,7 @@
 <script src="libs/globe.gl.min.js"></script>
 <script src="js/dashboard-data.js"></script>
 <script src="js/globe-stage.js"></script>
+<script src="js/ops-nav.js" defer></script>
 <style>
 :root{
     /* —— 背景 —— */
@@ -852,13 +853,6 @@ body::after{
 .tk-item + .tk-item{margin-left:10px}
 
 /* ==================== 数据状态 / 地球图层 / 联动 ==================== */
-.ops-live.is-mock{color:var(--amber)}
-.ops-live.is-mock i{
-    background:var(--amber);
-    box-shadow:0 0 0 3px rgba(255,180,95,.14);
-    animation:none;
-}
-
 /* 地球上的热点标签（由 globe.gl 定位，勿设 position/transform） */
 .globe-label{
     display:inline-flex;
@@ -1213,7 +1207,6 @@ body::after{
                     <span>留存追踪</span></a></li>
             </ul>
             <div class="ops-meta">
-                <span class="ops-demo" title="页面数值为演示数据，未接入实时数据源">演示</span>
                 <span class="ops-range-wrap">
                     <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
                         <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>
@@ -2025,6 +2018,8 @@ body::after{
         if (window.DashboardCharts) window.DashboardCharts.setRange(range);
         refreshKpis(range);
         renderRegions(range);       /* §5：范围变化 → 排行同步 */
+        /* 反向同步：告诉导航下拉当前档位，避免"文案 90 天、选中态 30 天" */
+        window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: range } }));
     }
 
     segBtns.forEach(function (b) {
@@ -2104,7 +2099,8 @@ body::after{
 
     /* ---------- 导航时间范围下拉联动 ---------- */
     window.addEventListener('rangechange', function (ev) {
-        if (ev.detail && ev.detail.range) applyRange(ev.detail.range);
+        /* 同值短路：applyRange 自身也会派发该事件，否则会来回递归 */
+        if (ev.detail && ev.detail.range && ev.detail.range !== state.range) applyRange(ev.detail.range);
     });
 
     /* ---------- 区域排行（数据驱动，随范围变化） ---------- */
