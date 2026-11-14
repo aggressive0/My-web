@@ -1,21 +1,45 @@
-name: Deploy to GitHub Pages
+name: Deploy static site to GitHub Pages
+
+# 只发布静态站 front/static_html，不经过任何构建步骤：
+# 依赖（ECharts / globe.gl / 贴图）都已本地化在 libs/ 下，仓库里是什么就发布什么。
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+# 官方 Pages 动作所需的最小权限：
+#   contents: read  → 读取仓库
+#   pages: write    → 发布到 Pages
+#   id-token: write → deploy-pages 用 OIDC 换取一次性令牌
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个发布，避免连续 push 时两次部署互相覆盖
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          fetch-depth: 0
+          path: ./front/static_html
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./front/static_html
-          publish_branch: gh-pages
+        id: deployment
+        uses: actions/deploy-pages@v4

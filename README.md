@@ -176,24 +176,33 @@ python player_comparison_analysis.py
 
 ## 部署
 
-`.github/workflows/deploy.yml` 在 **push 到 `main`** 时触发，把 `front/static_html` 发布到 `gh-pages` 分支：
+`.github/workflows/deploy.yml` 在 **push 到 `main`**（或手动触发）时运行，用官方 Pages 动作发布 `front/static_html`，不经过任何构建步骤：
 
 ```yaml
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 steps:
   - uses: actions/checkout@v4
-  - uses: peaceiris/actions-gh-pages@v4
+  - uses: actions/configure-pages@v5
+  - uses: actions/upload-pages-artifact@v3
     with:
-      publish_dir: ./front/static_html
-      publish_branch: gh-pages
+      path: ./front/static_html
+  - uses: actions/deploy-pages@v4
 ```
 
 **分支约定**：`main` 是部署分支，`dev` 是开发分支。改动在 `dev` 上完成后合回 `main` 才会生效，`dev` 上的提交不会自动上线。
 
-发布后访问 `https://<用户名>.github.io/My-web/`。
+站点地址：**<https://aggressive0.github.io/My-web/>**
+
+> 仓库 Pages 的 Source 需设为「GitHub Actions」（Settings → Pages），否则该流水线不会被触发。原先基于 `gh-pages` 分支的部署方式已废弃。
 
 ---
 
