@@ -149,3 +149,120 @@
     .globe-wrap .orbit--d,
     .globe-scan { animation: none; }
 }
+
+
+/* ==========================================================================
+   Phase 2 — 区域风险柱体与迁移路径流动节点
+   所有节点只承担可视化；业务数值仍由 DashboardData 提供。
+   ========================================================================== */
+.globe-risk-pillar {
+    --pillar-height: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    min-width: 34px;
+    padding: 2px 3px 0;
+    border: 0;
+    border-radius: 7px;
+    background: linear-gradient(180deg, rgba(7, 18, 34, .86), rgba(7, 18, 34, .18));
+    color: #d9f5ff;
+    cursor: pointer;
+    pointer-events: auto;
+    text-shadow: 0 1px 5px #06101d;
+    transition: filter .2s ease, opacity .2s ease, background .2s ease;
+}
+
+.risk-pillar__value {
+    padding: 2px 4px;
+    border: 1px solid rgba(110, 190, 235, .20);
+    border-radius: 4px;
+    background: rgba(5, 13, 26, .88);
+    font: 9px/1.2 var(--mono, monospace);
+    white-space: nowrap;
+}
+
+.risk-pillar__stem {
+    display: block;
+    width: 3px;
+    height: var(--pillar-height);
+    border-radius: 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,.95), var(--pillar-color));
+    box-shadow: 0 0 9px var(--pillar-glow), 0 0 20px var(--pillar-glow);
+    transform-origin: bottom center;
+}
+
+.risk-pillar__base {
+    display: block;
+    width: 13px;
+    height: 5px;
+    margin-top: -3px;
+    border: 1px solid var(--pillar-color);
+    border-radius: 50%;
+    background: var(--pillar-glow);
+    box-shadow: 0 0 12px var(--pillar-glow);
+}
+
+.globe-risk-pillar--high { --pillar-color: #ff6b75; --pillar-glow: rgba(255, 83, 105, .56); }
+.globe-risk-pillar--medium { --pillar-color: #ffb45f; --pillar-glow: rgba(255, 180, 95, .48); }
+.globe-risk-pillar--low { --pillar-color: #35d9f2; --pillar-glow: rgba(53, 217, 242, .42); }
+
+.globe-risk-pillar:hover,
+.globe-risk-pillar.is-active {
+    filter: brightness(1.35);
+    background: rgba(11, 29, 49, .94);
+}
+
+.globe-risk-pillar.is-active .risk-pillar__stem {
+    box-shadow: 0 0 12px var(--pillar-glow), 0 0 26px var(--pillar-glow);
+}
+
+.globe-flow-particle {
+    --flow-color: #35d9f2;
+    position: relative;
+    display: block;
+    width: 7px;
+    height: 7px;
+    border: 1px solid rgba(230, 250, 255, .92);
+    border-radius: 50%;
+    background: var(--flow-color);
+    box-shadow: 0 0 8px var(--flow-color), 0 0 18px var(--flow-color);
+    pointer-events: none;
+    animation: flowNodePulse 1.9s ease-in-out var(--flow-delay, 0s) infinite;
+}
+
+.globe-flow-particle::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border: 1px solid var(--flow-color);
+    border-radius: 50%;
+    opacity: .6;
+    animation: flowNodeHalo 1.9s ease-out var(--flow-delay, 0s) infinite;
+}
+
+.globe-flow-particle--high { --flow-color: #ff6b75; }
+.globe-flow-particle--medium { --flow-color: #ffb45f; }
+.globe-flow-particle--low { --flow-color: #35d9f2; }
+
+@keyframes flowNodePulse {
+    0%, 100% { opacity: .62; transform: scale(.78); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes flowNodeHalo {
+    0% { opacity: .62; transform: scale(.55); }
+    100% { opacity: 0; transform: scale(1.85); }
+}
+
+@media (max-width: 900px) {
+    .globe-risk-pillar { min-width: 29px; }
+    .risk-pillar__value { font-size: 8px; }
+    .globe-flow-particle { width: 6px; height: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .globe-flow-particle,
+    .globe-flow-particle::after { animation: none; }
+}

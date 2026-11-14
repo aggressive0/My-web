@@ -1724,7 +1724,7 @@ body::after{
 
     var stage = window.GlobeStage ? window.GlobeStage.init({
         el: document.getElementById('globeContainer'),
-        data: { playerPoints: points, hotspots: D.hotspots, arcs: D.arcsWithCoords() },
+        data: { playerPoints: points, hotspots: D.hotspots, arcs: D.arcsWithCoords(), riskPillars: D.regionsFor('30d') },
         handlers: {
             onSelectRegion: function (id) { selectRegion(id, true); },
             onSelectHotspot: function (id) { selectHotspot(id, true); },
@@ -2022,6 +2022,7 @@ body::after{
         if (window.DashboardCharts) window.DashboardCharts.setRange(range);
         refreshKpis(range);
         renderRegions(range);       /* §5：范围变化 → 排行同步 */
+        if (stage) stage.setRiskPillars(D.regionsFor(range));
         /* 反向同步：告诉导航下拉当前档位，避免"文案 90 天、选中态 30 天" */
         window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: range } }));
     }

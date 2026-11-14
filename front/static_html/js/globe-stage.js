@@ -17,6 +17,8 @@
         points: null,
         arcs: null,
         selectedHotspot: null,
+        hotspots: [],
+        riskPillars: [],
         handlers: {},
         reduced: false
     };
@@ -39,6 +41,59 @@
             hash = Math.imul(hash, 16777619);
         }
         return ((hash >>> 0) % 10000) / 10000;
+    }
+
+    /* 球面插值：把迁移弧线上的流动节点放在真实的大圆路径上 */
+    function greatCirclePoint(a, b, t) {
+        var rad = Math.PI / 180, deg = 180 / Math.PI;
+        var p1 = a.startLat * rad, l1 = a.startLng * rad;
+        var p2 = a.endLat * rad, l2 = a.endLng * rad;
+        var cosOmega = Math.sin(p1) * Math.sin(p2) +
+            Math.cos(p1) * Math.cos(p2) * Math.cos(l2 - l1);
+        var omega = Math.acos(Math.max(-1, Math.min(1, cosOmega)));
+        if (omega < 1e-6) {
+            return { lat: a.startLat + (a.endLat - a.startLat) * t,
+                     lng: a.startLng + (a.endLng - a.startLng) * t };
+        }
+        var sinOmega = Math.sin(omega);
+        var x1 = Math.cos(p1) * Math.cos(l1), y1 = Math.cos(p1) * Math.sin(l1), z1 = Math.sin(p1);
+        var x2 = Math.cos(p2) * Math.cos(l2), y2 = Math.cos(p2) * Math.sin(l2), z2 = Math.sin(p2);
+        var w1 = Math.sin((1 - t) * omega) / sinOmega;
+        var w2 = Math.sin(t * omega) / sinOmega;
+        var x = w1 * x1 + w2 * x2, y = w1 * y1 + w2 * y2, z = w1 * z1 + w2 * z2;
+        return {
+            lat: Math.atan2(z, Math.sqrt(x * x + y * y)) * deg,
+            lng: Math.atan2(y, x) * deg
+        };
+    }
+
+    function buildFlowNodes(arcs) {
+        var out = [];
+        (arcs || []).forEach(function (arc) {
+            [0.28, 0.62].forEach(function (t, index) {
+                var p = greatCirclePoint(arc, null, t);
+                out.push({
+                    id: 'flow-' + arc.id + '-' + index,
+                    kind: 'flow',
+                    arcId: arc.id,
+                    lat: p.lat,
+                    lng: p.lng,
+                    risk: arc.risk,
+                    phase: stableArcGap({ id: arc.id + '-' + index })
+                });
+            });
+        });
+        return out;
+    }
+
+    function buildHtmlLayerData() {
+        var hotspots = (state.hotspots || []).map(function (h) {
+            return Object.assign({}, h, { kind: 'hotspot' });
+        });
+        var pillars = (state.riskPillars || []).map(function (r) {
+            return Object.assign({}, r, { kind: 'risk' });
+        });
+        return hotspots.concat(pillars, buildFlowNodes(state.arcs || []));
     }
 
     /* ---------- 工具：玩家点数 → 点半径（平方根压缩，避免超级点） ---------- */
@@ -93,6 +148,8 @@
 
         state.points = data.playerPoints;
         state.arcs = data.arcs;
+        state.hotspots = data.hotspots || [];
+        state.riskPillars = data.riskPillars || [];
 
         /* ---------- 玩家分布点 ---------- */
         globe
@@ -114,7 +171,7 @@
             });
 
         /* ---------- 热点脉冲环（只给高/中风险，控制密度） ---------- */
-        var ringData = data.hotspots.filter(function (h) { return h.risk !== 'low'; });
+        var ringData = state.hotspots.filter(function (h) { return h.risk !== 'low'; });
         globe
             .ringsData(ringData)
             .ringLat('lat')
@@ -158,19 +215,45 @@
 
         /* ---------- 热点标签（HTML 层，可点击、可 hover） ---------- */
         globe
-            .htmlElementsData(data.hotspots)
+            .htmlElementsData(buildHtmlLayerData())
             .htmlLat('lat').htmlLng('lng')
-            .htmlAltitude(0.02)
-            .htmlElement(function (h) {
+            .htmlAltitude(function (d) { return d.kind === 'risk' ? 0.004 : (d.kind === 'flow' ? 0.018 : 0.026); })
+            .htmlElement(function (d) {
+                if (d.kind === 'risk') {
+                    var pillar = document.createElement('button');
+                    pillar.type = 'button';
+                    pillar.className = 'globe-risk-pillar globe-risk-pillar--' + d.risk;
+                    pillar.dataset.regionId = d.id;
+                    pillar.setAttribute('aria-label', d.name + '高危玩家 ' + Number(d.atRisk || 0).toLocaleString() + ' 人');
+                    var height = Math.round(16 + Math.sqrt(Math.max(0, Number(d.atRisk) || 0)) / 3.5);
+                    pillar.style.setProperty('--pillar-height', Math.min(44, height) + 'px');
+                    pillar.innerHTML = '<span class="risk-pillar__value">' +
+                        (Number(d.atRisk) >= 1000 ? (Number(d.atRisk) / 1000).toFixed(1) + 'k' : d.atRisk) +
+                        '</span><span class="risk-pillar__stem"></span><span class="risk-pillar__base"></span>';
+                    pillar.addEventListener('click', function (ev) {
+                        ev.stopPropagation();
+                        if (state.handlers.onSelectRegion) state.handlers.onSelectRegion(d.id, 'pillar');
+                    });
+                    return pillar;
+                }
+
+                if (d.kind === 'flow') {
+                    var particle = document.createElement('span');
+                    particle.className = 'globe-flow-particle globe-flow-particle--' + d.risk;
+                    particle.setAttribute('aria-hidden', 'true');
+                    particle.style.setProperty('--flow-delay', (-d.phase * 2.4).toFixed(2) + 's');
+                    return particle;
+                }
+
                 var n = document.createElement('button');
                 n.type = 'button';
-                n.className = 'globe-label globe-label--' + h.risk;
-                n.dataset.hotspotId = h.id;
-                n.innerHTML = '<span class="gl-lb-name">' + h.name + '</span>' +
-                              '<span class="gl-lb-val">热度 ' + h.heat + '</span>';
+                n.className = 'globe-label globe-label--' + d.risk;
+                n.dataset.hotspotId = d.id;
+                n.innerHTML = '<span class="gl-lb-name">' + d.name + '</span>' +
+                              '<span class="gl-lb-val">热度 ' + d.heat + '</span>';
                 n.addEventListener('click', function (ev) {
                     ev.stopPropagation();
-                    if (state.handlers.onSelectHotspot) state.handlers.onSelectHotspot(h.id, 'label');
+                    if (state.handlers.onSelectHotspot) state.handlers.onSelectHotspot(d.id, 'label');
                 });
                 return n;
             })
@@ -259,6 +342,22 @@
         state.globe
             .pointsData(state.points.slice())
             .arcsData(state.arcs.slice());
+        if (state.el) {
+            state.el.querySelectorAll('.globe-risk-pillar').forEach(function (el) {
+                el.classList.toggle('is-active', el.dataset.regionId === state.selectedRegion);
+            });
+        }
+    }
+
+    function setRiskPillars(rows) {
+        if (!state.ready) return;
+        state.riskPillars = rows || [];
+        state.globe.htmlElementsData(buildHtmlLayerData());
+        if (state.selectedRegion && state.el) {
+            state.el.querySelectorAll('.globe-risk-pillar').forEach(function (el) {
+                el.classList.toggle('is-active', el.dataset.regionId === state.selectedRegion);
+            });
+        }
     }
 
     function setAutoRotate(on) {
@@ -281,6 +380,8 @@
         try { state.globe._destructor && state.globe._destructor(); } catch (e) {}
         try { state.globe.pauseAnimation(); } catch (e) {}
         state.globe = null;
+        state.hotspots = [];
+        state.riskPillars = [];
         state.ready = false;
     }
 
@@ -293,6 +394,7 @@
         reset: reset,
         setAutoRotate: setAutoRotate,
         setSelected: setSelected,
+        setRiskPillars: setRiskPillars,
         dispose: dispose,
         isReady: function () { return state.ready; },
         instance: function () { return state.globe; }
