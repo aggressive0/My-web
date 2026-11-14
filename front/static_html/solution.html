@@ -858,6 +858,27 @@
             background: rgba(2, 8, 16, 0.6);
             border-radius: 0 0 8px 8px;
         }
+
+        /* 减少动效：跑马灯停转，改为就地可滚动，保证 21 条策略仍可全部访问（WCAG 2.2.2） */
+        @media (prefers-reduced-motion: reduce) {
+            /* 选择器需高于基础 .rank-list（同在样式表中，仅靠顺序会被后面的规则覆盖） */
+            .rank-scroll-wrap .rank-list { animation: none; transform: none; }
+            .rank-scroll-wrap {
+                overflow-y: auto;
+                overflow-x: hidden;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(91, 141, 239, 0.4) transparent;
+            }
+            .rank-scroll-wrap::-webkit-scrollbar { width: 4px; }
+            .rank-scroll-wrap::-webkit-scrollbar-thumb {
+                background: rgba(91, 141, 239, 0.4);
+                border-radius: 2px;
+            }
+            .rank-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
+            /* 翻倍的数据只为无缝循环，静态阅读时去掉重复的一半 */
+            .rank-row:nth-child(n+22) { display: none; }
+        }
         /* 顶部渐变遮罩（去除底部黑暗遮罩） */
         .rank-scroll-wrap::after {
             content: '';
