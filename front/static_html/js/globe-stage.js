@@ -125,8 +125,8 @@
             .globeImageUrl('libs/textures/earth_lights_2048.png')
             .bumpImageUrl('libs/textures/earth_normal_2048.jpg')
             .showAtmosphere(true)
-            .atmosphereColor('#58baff')
-            .atmosphereAltitude(0.23)
+            .atmosphereColor('#4daaff')
+            .atmosphereAltitude(0.205)
             .showGraticules(true)
             .width(el.clientWidth)
             .height(el.clientHeight);
@@ -136,14 +136,18 @@
         if (mat) {
             /* 贴图本身是夜景灯带，不要再乘色压暗；用自发光让灯带透出来 */
             mat.color.set('#ffffff');
-            mat.roughness = 0.88;
-            mat.metalness = 0.025;
-            if ('bumpScale' in mat) mat.bumpScale = 0.12;
+            mat.roughness = 0.82;
+            mat.metalness = 0.035;
+            if ('bumpScale' in mat) mat.bumpScale = 0.16;
+            /* 夜景贴图保留自发光；额外的蓝色高光强化球体曲率 */
+            if (mat.specular && mat.specular.set) mat.specular.set('#477eae');
+            if ('shininess' in mat) mat.shininess = 18;
             if (mat.emissive && mat.map) {
-                mat.emissive.set('#356d9a');
+                mat.emissive.set('#3c79a8');
                 mat.emissiveMap = mat.map;
-                mat.emissiveIntensity = 0.62;
+                mat.emissiveIntensity = 0.72;
             }
+            mat.needsUpdate = true;
         }
 
         state.points = data.playerPoints;
@@ -281,7 +285,8 @@
         /* DPR 上限，避免高分屏过度消耗 */
         try {
             var r = globe.renderer();
-            r.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+            /* 1.75 DPR 在清晰度与持续帧率之间取平衡，避免高分屏过度绘制 */
+            r.setPixelRatio(Math.min(global.devicePixelRatio || 1, 1.75));
         } catch (e) { /* 非关键 */ }
 
         globe.pointOfView(DEFAULT_VIEW, 0);

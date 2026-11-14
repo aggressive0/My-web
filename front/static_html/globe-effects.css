@@ -266,3 +266,35 @@
     .globe-flow-particle,
     .globe-flow-particle::after { animation: none; }
 }
+
+
+/* ==========================================================================
+   Phase 3 — 地球材质与双层大气边缘光
+   只作用于透明 WebGL 画布，不覆盖 HTML 热点、风险柱的点击层。
+   ========================================================================== */
+#globeContainer canvas {
+    filter:
+        saturate(1.12)
+        contrast(1.055)
+        drop-shadow(0 0 7px rgba(78, 174, 255, .30))
+        drop-shadow(0 0 22px rgba(35, 122, 220, .18));
+}
+
+/* 球体周围的宽幅外晕由画布透明边缘承接，内层由 globe.gl atmosphere 提供 */
+#globeContainer {
+    filter: drop-shadow(0 0 30px rgba(44, 145, 235, .15));
+}
+
+@media (max-width: 900px) {
+    #globeContainer canvas {
+        filter:
+            saturate(1.08)
+            contrast(1.035)
+            drop-shadow(0 0 5px rgba(78, 174, 255, .24))
+            drop-shadow(0 0 14px rgba(35, 122, 220, .14));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #globeContainer canvas { transition: none; }
+}
