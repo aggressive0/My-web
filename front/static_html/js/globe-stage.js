@@ -30,6 +30,17 @@
 
     function riskColor(risk) { return RISK_COLOR[risk] || RISK_COLOR.low; }
 
+    /* 根据业务 ID 生成稳定的弧线初始相位，避免每次刷新都随机跳动 */
+    function stableArcGap(arc) {
+        var key = String((arc && arc.id) || (arc && arc.fromId) || 'arc');
+        var hash = 2166136261;
+        for (var i = 0; i < key.length; i++) {
+            hash ^= key.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return ((hash >>> 0) % 10000) / 10000;
+    }
+
     /* ---------- 工具：玩家点数 → 点半径（平方根压缩，避免超级点） ---------- */
     function pointRadius(p) {
         /* globe.gl 的半径单位是「度」，需按像素观感放大：1° ≈ 1.1px（当前缩放） */
@@ -59,8 +70,8 @@
             .globeImageUrl('libs/textures/earth_lights_2048.png')
             .bumpImageUrl('libs/textures/earth_normal_2048.jpg')
             .showAtmosphere(true)
-            .atmosphereColor('#3f8cff')
-            .atmosphereAltitude(0.2)
+            .atmosphereColor('#58baff')
+            .atmosphereAltitude(0.23)
             .showGraticules(true)
             .width(el.clientWidth)
             .height(el.clientHeight);
@@ -70,12 +81,13 @@
         if (mat) {
             /* 贴图本身是夜景灯带，不要再乘色压暗；用自发光让灯带透出来 */
             mat.color.set('#ffffff');
-            mat.roughness = 0.9;
-            mat.metalness = 0.02;
+            mat.roughness = 0.88;
+            mat.metalness = 0.025;
+            if ('bumpScale' in mat) mat.bumpScale = 0.12;
             if (mat.emissive && mat.map) {
-                mat.emissive.set('#2d4f74');
+                mat.emissive.set('#356d9a');
                 mat.emissiveMap = mat.map;
-                mat.emissiveIntensity = 0.55;
+                mat.emissiveIntensity = 0.62;
             }
         }
 
@@ -138,7 +150,7 @@
             .arcAltitudeAutoScale(0.38)
             .arcDashLength(0.45)
             .arcDashGap(0.55)
-            .arcDashInitialGap(function () { return Math.random(); })
+            .arcDashInitialGap(stableArcGap)
             .arcDashAnimateTime(function (a) { return a.risk === 'high' ? 2400 : 3600; })
             .onArcClick(function (a) {
                 if (a && state.handlers.onSelectArc) state.handlers.onSelectArc(a);
@@ -173,7 +185,7 @@
         controls.minDistance = 160;
         controls.maxDistance = 620;
         controls.autoRotate = !state.reduced;
-        controls.autoRotateSpeed = 0.4;
+        controls.autoRotateSpeed = 0.32;
 
         /* 双击复位 */
         el.addEventListener('dblclick', function () { reset(); });
