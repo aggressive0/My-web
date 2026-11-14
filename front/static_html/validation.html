@@ -1,1154 +1,720 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>效果验证 - 游戏玩家流失-召回-留存闭环分析系统</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@700;800;900&family=Share+Tech+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #00f0ff;
-            --secondary-color: #ff00ff;
-            --danger-color: #ff3366;
-            --success-color: #00ff9d;
-            --neutral-color: #86909C;
-            --cyan: #00FFFF;
-            --green: #00FF88;
-            --pink: #FF69B4;
-            --purple: #9370DB;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Noto Sans SC', sans-serif;
-            background-color: #0a1020;
-            color: #ffffff;
-            background-image: url('../images/sbpk.png');
-            background-size: cover;
-            background-position: center;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            position: relative;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle at 50% 35%, rgba(0, 210, 255, 0.10) 0%, rgba(4, 12, 28, 0.52) 58%, rgba(2, 6, 20, 0.72) 100%);
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        .particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        .particle {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: rgba(100, 200, 255, 0.9);
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
-            animation: float 4s infinite ease-in-out;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0; }
-            50% { transform: translateY(-80px) rotate(180deg); opacity: 1; }
-        }
-
-        @keyframes glow {
-            from { text-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 0 0 30px rgba(255, 0, 255, 0.6); }
-            to { text-shadow: 0 0 25px rgba(0, 240, 255, 1), 0 0 40px rgba(255, 0, 255, 0.8), 0 0 50px rgba(0, 240, 255, 0.6); }
-        }
-
-        /* 暖橙色光斑 */
-        .orange-spot {
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 165, 0, 0.3) 0%, rgba(255, 165, 0, 0) 70%);
-            filter: blur(30px);
-            z-index: 0;
-        }
-
-        .orange-spot-1 {
-            top: 20%;
-            left: 10%;
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        .orange-spot-2 {
-            top: 60%;
-            right: 15%;
-            animation: pulse 5s ease-in-out infinite 1s;
-        }
-
-        .navbar {
-            background-color: rgba(10, 10, 26, 0.95);
-            backdrop-filter: blur(15px);
-            border-bottom: 1px solid transparent;
-            border-image: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color)) 1;
-            padding: 1rem;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
-            position: relative;
-            z-index: 100;
-        }
-
-        .navbar-brand {
-            font-weight: 700;
-            color: var(--primary-color);
-            font-size: 1.2rem;
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
-            position: relative;
-        }
-
-        .navbar-brand::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -10px;
-            right: -10px;
-            bottom: 0;
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            z-index: -1;
-            filter: blur(10px);
-            opacity: 0.3;
-        }
-
-        .nav-link {
-            font-weight: 500;
-            color: #ffffff;
-            margin-right: 15px;
-            position: relative;
-            font-size: 0.9rem;
-            text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
-        }
-
-        .nav-link::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            transition: width 0.3s ease;
-        }
-
-        .nav-link:hover::after, .nav-link.active::after {
-            width: 100%;
-        }
-
-        .nav-link.active {
-            color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
-        }
-
-        .system-status {
-            display: flex;
-            align-items: center;
-        }
-
-        .status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: var(--success-color);
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 180, 42, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(0, 180, 42, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 180, 42, 0); }
-        }
-
-        .time-display {
-            position: absolute;
-            top: 10px;
-            right: 20px;
-            color: var(--neutral-color);
-            font-size: 0.9rem;
-        }
-
-        .hero-title-container {
-            position: relative;
-            display: inline-block;
-            font-family: 'Orbitron', 'Rajdhani', 'Share Tech Mono', sans-serif;
-            font-weight: 700;
-            font-size: 2rem;
-            text-align: center;
-            margin: 0;
-            background: #0a0a15;
-            padding: 0 20px;
-        }
-
-        .hero-title {
-            position: relative;
-            display: inline-block;
-            z-index: 2;
-            background: linear-gradient(90deg, #00f2fe 0%, #a855f7 60%, #ff1493 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 900;
-            letter-spacing: 0.15em;
-        }
-
-        .hover-effect {
-            display: inline-block;
-            transition: transform 0.3s ease;
-        }
-
-        .hover-effect:hover {
-            transform: scale(1.1);
-        }
-
-        .page-container {
-            flex: 1;
-            padding: 10px 20px;
-            display: grid;
-            grid-template-columns: 800px 1fr;
-            grid-template-rows: 240px 1fr;
-            gap: 20px;
-            position: relative;
-            z-index: 2;
-        }
-
-        .card-panel {
-            background: rgba(16, 32, 54, 0.85);
-            border: 1px solid rgba(0, 242, 254, 0.2);
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
-        }
-
-        .panel-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 16px;
-        }
-
-        .recall-matrix {
-            grid-column: 1;
-            grid-row: 1 / 3;
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-        }
-
-        .matrix-card {
-            background: rgba(16, 32, 54, 0.9);
-            border: 1px solid rgba(0, 242, 254, 0.15);
-            border-radius: 12px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .matrix-card .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-
-        .matrix-card .chart {
-            width: 120px;
-            height: 120px;
-            margin-bottom: 12px;
-        }
-
-        .matrix-card .percentage {
-            font-size: 36px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .matrix-card .label {
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.7);
-            text-align: center;
-        }
-
-        .player-profile {
-            grid-column: 2;
-            grid-row: 1;
-        }
-
-        .player-profile .chart {
-            width: 100%;
-            height: 180px;
-        }
-
-        .churn-warning {
-            grid-column: 2;
-            grid-row: 2;
-            overflow: hidden;
-        }
-
-        .warning-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: calc(100% - 40px);
-            overflow-y: auto;
-        }
-
-        .warning-list::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .warning-list::-webkit-scrollbar-thumb {
-            background: rgba(0, 240, 255, 0.3);
-            border-radius: 2px;
-        }
-
-        .warning-item {
-            display: grid;
-            grid-template-columns: 1fr 70px 1fr 60px;
-            align-items: center;
-            padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            gap: 12px;
-        }
-
-        .warning-item .nickname {
-            font-size: 14px;
-            color: #ffffff;
-        }
-
-        .warning-item .risk-tag {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-        }
-
-        .warning-item .risk-tag.high {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.4);
-        }
-
-        .warning-item .risk-tag.medium {
-            background: rgba(249, 115, 22, 0.2);
-            color: #f97316;
-            border: 1px solid rgba(249, 115, 22, 0.4);
-        }
-
-        .warning-item .risk-tag.low {
-            background: rgba(234, 179, 8, 0.2);
-            color: #eab308;
-            border: 1px solid rgba(234, 179, 8, 0.4);
-        }
-
-        .warning-item .reason {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .warning-item .level {
-            font-size: 14px;
-            font-weight: 600;
-            color: #00FF88;
-            text-align: right;
-        }
-
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            margin-top: 8px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .legend-item .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-
-        /* 精灵容器样式 */
-        .sprite-container {
-            position: absolute;
-            top: 0;
-            left: 200px;
-            z-index: 1000;
-            width: 150px;
-            height: 150px;
-        }
-
-        /* 精灵样式 */
-        .sprite {
-            position: absolute;
-            top: 80px;
-            left: 0;
-            width: 80px;
-            height: 100px;
-            transform: scale(1);
-            transition: all 0.5s ease;
-        }
-
-        .sprite-body {
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-
-        /* 精灵身体 */
-        .sprite-body::before {
-            content: '';
-            position: absolute;
-            top: 20px;
-            left: 15px;
-            width: 50px;
-            height: 60px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 50% 50% 40% 40%;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
-            animation: dataFlow 3s ease-in-out infinite;
-        }
-
-        /* 天线 */
-        .antenna {
-            position: absolute;
-            top: 5px;
-            width: 3px;
-            height: 15px;
-            background: linear-gradient(to top, rgba(59, 130, 246, 0.8), rgba(255, 255, 255, 0.8));
-            border-radius: 3px;
-            animation: antennaMove 2s ease-in-out infinite;
-        }
-
-        .antenna.left { left: 30px; }
-        .antenna.right { right: 30px; }
-
-        /* 眼睛 */
-        .eyes {
-            position: absolute;
-            top: 35px;
-            left: 20px;
-            width: 40px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .eye {
-            width: 15px;
-            height: 15px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .eye::before {
-            content: '';
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 9px;
-            height: 9px;
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 50%;
-            animation: eyeBlink 3s ease-in-out infinite;
-        }
-
-        /* 嘴巴 */
-        .mouth {
-            position: absolute;
-            top: 55px;
-            left: 35px;
-            width: 10px;
-            height: 5px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 50%;
-        }
-
-        /* 翅膀 */
-        .wings {
-            position: absolute;
-            top: 30px;
-            left: 0;
-            width: 100%;
-            height: 40px;
-            z-index: -1;
-        }
-
-        .wing {
-            position: absolute;
-            top: 0;
-            width: 30px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
-            border-radius: 50% 50% 0 0;
-            transition: all 0.3s ease;
-        }
-
-        .wing.left { left: 5px; transform: rotate(-30deg); }
-        .wing.right { right: 5px; transform: rotate(30deg); }
-
-        /* 四肢 */
-        .arms {
-            position: absolute;
-            top: 50px;
-            left: 10px;
-            width: 60px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .arm {
-            width: 10px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 5px;
-        }
-
-        .legs {
-            position: absolute;
-            bottom: 10px;
-            left: 25px;
-            width: 30px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .leg {
-            width: 10px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 5px;
-        }
-
-        /* 尾巴 */
-        .tail {
-            position: absolute;
-            bottom: 15px;
-            right: 10px;
-            width: 15px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 0 0 10px 10px;
-            opacity: 0.8;
-        }
-
-        /* 粒子效果 */
-        .particles-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-
-        .sprite .particle {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: rgba(59, 130, 246, 0.9);
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(59, 130, 246, 0.8);
-            animation: spriteParticle 3s ease-in-out infinite;
-        }
-
-        /* 对话气泡 */
-        .speech-bubble {
-            position: absolute;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
-            padding: 8px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-        }
-
-        .speech-bubble::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid rgba(255, 255, 255, 0.9);
-        }
-
-        /* 服饰样式 */
-        .costume {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transition: all 0.5s ease;
-        }
-
-        /* 问题分析服饰 */
-        .costume-analysis {
-            position: relative;
-        }
-
-        .detective-cape {
-            position: absolute;
-            top: 30px;
-            left: 5px;
-            width: 70px;
-            height: 40px;
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.8), rgba(79, 70, 229, 0.8));
-            border-radius: 50% 50% 0 0;
-            z-index: -1;
-        }
-
-        .magnifying-glass {
-            position: absolute;
-            top: 40px;
-            right: 10px;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        .magnifying-glass::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            right: -5px;
-            width: 10px;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.8);
-            transform: rotate(45deg);
-        }
-
-        .question-badge {
-            position: absolute;
-            top: 35px;
-            left: 15px;
-            width: 15px;
-            height: 15px;
-            background: rgba(0, 255, 0, 0.8);
-            border-radius: 50%;
-            color: #000;
-            font-size: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        /* 精灵球悬浮动画 */
-        @keyframes pokeballFloat {
-            0%, 100% {
-                transform: translateY(0px);
-            }
-            50% {
-                transform: translateY(-5px);
-            }
-        }
-
-        @keyframes pokeballRotate {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            50% {
-                transform: rotate(15deg);
-            }
-        }
-
-        @keyframes redCircuitFlow {
-            0% {
-                background-position: 0 0;
-            }
-            100% {
-                background-position: 20px 20px;
-            }
-        }
-
-        @keyframes whiteCircuitFlow {
-            0% {
-                background-position: 0 0;
-            }
-            100% {
-                background-position: -20px -20px;
-            }
-        }
-
-        @keyframes separatorGlow {
-            0%, 100% {
-                box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
-            }
-            50% {
-                box-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 30px rgba(255, 0, 0, 0.8);
-            }
-        }
-
-        @keyframes buttonPulse {
-            0%, 100% {
-                box-shadow: 0 0 8px rgba(0, 240, 255, 1);
-            }
-            50% {
-                box-shadow: 0 0 16px rgba(0, 240, 255, 1), 0 0 24px rgba(0, 240, 255, 0.8);
-            }
-        }
-
-        @keyframes spriteReveal {
-            0%, 80%, 100% {
-                opacity: 0;
-            }
-            85% {
-                opacity: 1;
-                box-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(0, 240, 255, 0.8);
-            }
-        }
-
-        @keyframes energyCharge {
-            0%, 90%, 100% {
-                box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
-            }
-            95% {
-                box-shadow: 0 0 30px rgba(255, 0, 0, 1), 0 0 40px rgba(0, 240, 255, 1), 0 0 50px rgba(147, 51, 234, 0.8);
-            }
-        }
-
-        /* 精灵球悬停动画 */
-        @keyframes pokeballHover {
-            0% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.1);
-            }
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        /* 精灵球点击动画 */
-        @keyframes pokeballClick {
-            0% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(0.95);
-            }
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        /* 精灵球打开动画 */
-        @keyframes pokeballOpenTop {
-            0% {
-                transform: translateY(0);
-            }
-            100% {
-                transform: translateY(-100px);
-            }
-        }
-
-        @keyframes pokeballOpenBottom {
-            0% {
-                transform: translateY(0);
-            }
-            100% {
-                transform: translateY(100px);
-            }
-        }
-
-        /* 精灵动画 */
-        @keyframes dataFlow {
-            0%, 100% {
-                background-position: 0 0;
-            }
-            50% {
-                background-position: 20px 20px;
-            }
-        }
-
-        @keyframes antennaMove {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            50% {
-                transform: rotate(10deg);
-            }
-        }
-
-        @keyframes eyeBlink {
-            0%, 100% {
-                transform: scaleY(1);
-            }
-            50% {
-                transform: scaleY(0.1);
-            }
-        }
-
-        @keyframes spriteParticle {
-            0%, 100% {
-                transform: translateY(0) scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: translateY(-20px) scale(0.5);
-                opacity: 0;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070B16'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%2335D9F2'/%3E%3Crect x='12' y='12' width='8' height='8' rx='2' fill='%23070B16'/%3E%3C/svg%3E">
+<title>留存追踪 · NEXUS 玩家留存中枢</title>
+<!-- 数据说明：本页数值来自 js/dashboard-data.js 的演示数据集，未接入后端接口 -->
+<link rel="stylesheet" href="ops-nav.css">
+<link rel="stylesheet" href="live-ticker.css">
+<script src="libs/echarts.min.js"></script>
+<script src="js/dashboard-data.js"></script>
+<script src="js/live-ticker.js" defer></script>
+<script src="js/ops-nav.js" defer></script>
+<style>
+:root{
+    --bg:#05090F;
+    --ink:#EAF3FF;
+    --ink-2:#9EB1CA;
+    --ink-3:#637A96;
+    --line:rgba(90,140,200,.18);
+    --line-soft:rgba(90,140,200,.10);
+    --cyan:#35D9F2;
+    --blue:#318BFF;
+    --violet:#9275FF;
+    --amber:#FFB45F;
+    --green:#35D399;
+    --red:#FF6B75;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    background:
+        radial-gradient(900px 420px at 50% -12%, rgba(49,139,255,.14), transparent 72%),
+        radial-gradient(700px 380px at 86% 8%, rgba(146,117,255,.08), transparent 74%),
+        var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:13px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+}
+
+.page{
+    flex:1;
+    min-height:0;
+    width:100%;
+    max-width:1420px;
+    margin:0 auto;
+    padding:14px clamp(12px,1.8vw,24px) 10px;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr) minmax(0,.86fr) auto;
+    gap:12px;
+}
+
+/* ---------- 通用面板 ---------- */
+.panel{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    border-radius:13px;
+    background:linear-gradient(180deg, rgba(13,24,41,.9), rgba(6,12,22,.94));
+    border:1px solid var(--line);
+    box-shadow:0 26px 56px -40px #000, inset 0 1px 0 rgba(255,255,255,.035);
+    overflow:hidden;
+}
+.panel::before{
+    content:"";
+    position:absolute;
+    top:0; left:10%; right:10%;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(53,217,242,.5), rgba(146,117,255,.32), transparent);
+    opacity:.8;
+}
+.p-head{
+    flex:none;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 14px 0;
+}
+.p-title{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin:0;
+    font-size:12.5px;
+    font-weight:600;
+    letter-spacing:.06em;
+    color:var(--ink);
+    white-space:nowrap;
+}
+.p-title::before{
+    content:"";
+    width:3px;height:12px;
+    border-radius:2px;
+    background:var(--accent,var(--cyan));
+    box-shadow:0 0 10px var(--accent,var(--cyan));
+}
+.p-tag{
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.14em;
+    color:var(--ink-3);
+    white-space:nowrap;
+}
+.p-body{position:relative;flex:1;min-height:0}
+
+/* ---------- KPI ---------- */
+.kpi-row{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+}
+.kpi{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:11px 14px;
+    border-radius:13px;
+    border:1px solid var(--line);
+    background:linear-gradient(158deg, rgba(18,32,54,.92), rgba(7,13,24,.94));
+    box-shadow:0 24px 48px -36px #000, inset 0 1px 0 rgba(255,255,255,.045);
+    overflow:hidden;
+}
+.kpi-ico{
+    flex:none;
+    width:38px;height:38px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    color:var(--c);
+    background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+    border:1px solid var(--edge);
+    box-shadow:0 0 22px -6px var(--glow), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.kpi-ico svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.kpi-main{min-width:0;padding-right:70px}
+.kpi-label{display:block;font-size:10.5px;letter-spacing:.13em;color:var(--ink-3);white-space:nowrap}
+.kpi-num{
+    display:flex;align-items:baseline;gap:3px;
+    margin-top:2px;
+    font-family:var(--mono);
+    font-size:22px;font-weight:600;line-height:1.15;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    white-space:nowrap;
+}
+.kpi-num .u{font-size:13px;font-weight:500;color:var(--ink-2)}
+.kpi-delta{flex:none;margin-left:5px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--green)}
+.kpi-delta.is-bad{color:var(--red)}
+.kpi-spark{position:absolute;right:8px;bottom:8px;width:66px;height:28px;pointer-events:none;opacity:.85}
+
+/* ---------- 中部两栏 ---------- */
+.mid{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(0,1fr);gap:12px;min-height:0}
+
+/* 分段控件 */
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:rgba(90,140,200,.08);border:1px solid rgba(90,140,200,.16)}
+.seg button{
+    padding:2px 9px;border:0;border-radius:6px;background:none;
+    color:var(--ink-3);font-family:var(--sans);font-size:10.5px;line-height:1.6;cursor:pointer;
+    transition:color .16s ease, background-color .16s ease;
+}
+.seg button:hover{color:var(--ink-2)}
+.seg button.is-on{
+    color:#04202B;font-weight:600;
+    background:linear-gradient(180deg,var(--cyan),#1FB6CF);
+    box-shadow:0 0 14px -4px rgba(53,217,242,.8);
+}
+.seg button:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
+
+/* ---------- cohort 表 ---------- */
+.cohort{
+    display:flex;flex-direction:column;
+    padding:8px 12px 12px;
+    height:100%;min-height:0;
+}
+.cohort-row{
+    display:grid;
+    grid-template-columns:minmax(0,1.32fr) repeat(5,minmax(0,1fr));
+    gap:6px;
+    align-items:center;
+}
+.cohort-head{padding-bottom:6px;border-bottom:1px solid rgba(90,140,200,.14)}
+.cohort-head span{
+    font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);text-align:center;
+}
+.cohort-head span:first-child{text-align:left}
+.cohort-body{display:flex;flex-direction:column;justify-content:space-between;gap:5px;margin-top:7px;flex:1;min-height:0}
+.cohort-cell{
+    display:grid;place-items:center;
+    height:100%;
+    min-height:26px;
+    border-radius:5px;
+    font-family:var(--mono);
+    font-size:11px;
+    font-variant-numeric:tabular-nums;
+    color:#DCEBFF;
+}
+.cohort-period{
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--ink-2);
+    white-space:nowrap;
+}
+
+/* ---------- 分群留存 ---------- */
+.seg-rows{
+    display:flex;flex-direction:column;justify-content:space-around;
+    gap:2px;padding:6px 14px 12px;height:100%;
+}
+.seg-row{display:grid;grid-template-columns:20px minmax(0,88px) minmax(0,1fr) 52px;align-items:center;gap:9px;font-size:11.5px}
+.seg-ico{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;color:var(--c);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.seg-ico svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.seg-name{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg-track{position:relative;height:9px;border-radius:5px;background:rgba(90,140,200,.10);overflow:hidden}
+.seg-fill{
+    position:absolute;inset:0 auto 0 0;border-radius:5px;
+    background:var(--c);
+    box-shadow:0 0 12px var(--c);
+    transform-origin:left center;
+    animation:grow .9s cubic-bezier(.22,.61,.36,1) both;
+}
+.seg-fill::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(90deg,rgba(255,255,255,.22),rgba(0,0,0,.12))}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.seg-val{display:flex;align-items:baseline;justify-content:flex-end;gap:5px;font-family:var(--mono);font-size:11.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.seg-val em{font-style:normal;font-size:9.5px;color:var(--green)}
+.seg-val em.is-bad{color:var(--red)}
+
+/* ---------- 关键因素 ---------- */
+.factor-wrap{display:grid;grid-template-columns:minmax(0,1fr);padding:2px 12px 10px;height:100%;min-height:0}
+#factorChart{min-height:120px}
+.factor-list{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:0 2px 2px}
+.factor-item{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-2)}
+.factor-dot{width:7px;height:7px;border-radius:2px;background:var(--c);box-shadow:0 0 8px var(--c)}
+.factor-item .v{font-family:var(--mono);font-size:10.5px;color:var(--ink)}
+
+/* ---------- AI 洞察 ---------- */
+.insight-wrap{display:flex;flex-direction:column;gap:8px;padding:8px 13px 12px;height:100%;min-height:0}
+.insight{
+    display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;
+    padding:8px 9px;border-radius:9px;
+    background:rgba(90,140,200,.05);
+    border:1px solid rgba(90,140,200,.1);
+}
+.insight-ico{
+    display:grid;place-items:center;width:26px;height:26px;border-radius:8px;
+    color:var(--ic);
+    background:rgba(255,255,255,.04);
+    border:1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+}
+.insight-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.insight b{display:block;font-size:11.5px;font-weight:600;color:var(--ink);line-height:1.4}
+.insight span{display:block;margin-top:1px;font-size:10px;line-height:1.5;color:var(--ink-3)}
+.insight-act{margin-top:3px;font-size:10px;color:var(--cyan)}
+.insight-cta{
+    margin-top:auto;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    height:30px;border-radius:8px;
+    border:1px solid rgba(53,217,242,.4);
+    background:linear-gradient(180deg, rgba(53,217,242,.2), rgba(53,217,242,.06));
+    color:#DFF9FF;font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.04em;
+    cursor:pointer;transition:background-color .18s ease, box-shadow .18s ease;
+}
+.insight-cta:hover{box-shadow:0 0 20px -6px rgba(53,217,242,.9);background:linear-gradient(180deg, rgba(53,217,242,.3), rgba(53,217,242,.1))}
+.badge{
+    padding:1px 7px;border-radius:5px;font-size:9.5px;letter-spacing:.06em;
+    color:var(--bc);background:rgba(255,255,255,.04);border:1px solid var(--bc);
+    white-space:nowrap;
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:1180px){
+    .page{grid-template-rows:auto auto auto auto}
+    .mid{grid-template-columns:minmax(0,1fr)}
+    .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .bottom-row{grid-template-columns:minmax(0,1fr) !important}
+    .cohort{min-height:250px}
+}
+@media (max-width:760px){
+    .kpi-row{grid-template-columns:minmax(0,1fr)}
+    .kpi-main{padding-right:64px}
+    .page{padding:10px 10px 8px}
+}
+@media (prefers-reduced-motion:reduce){
+    .seg-fill{animation:none}
+}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+</style>
 </head>
 <body>
-    <div class="particles" id="particles"></div>
 
-    <!-- 精灵和精灵球 -->
-    <div class="sprite-container">
-        <!-- 精灵 -->
-        <div class="sprite theme-analysis" id="sprite">
-            <div class="sprite-body">
-                <!-- 天线 -->
-                <div class="antenna left"></div>
-                <div class="antenna right"></div>
-
-                <!-- 眼睛 -->
-                <div class="eyes">
-                    <div class="eye left"></div>
-                    <div class="eye right"></div>
-                </div>
-
-                <!-- 嘴巴 -->
-                <div class="mouth"></div>
-
-                <!-- 翅膀 -->
-                <div class="wings">
-                    <div class="wing left"></div>
-                    <div class="wing right"></div>
-                </div>
-
-                <!-- 四肢 -->
-                <div class="arms">
-                    <div class="arm left"></div>
-                    <div class="arm right"></div>
-                </div>
-                <div class="legs">
-                    <div class="leg left"></div>
-                    <div class="leg right"></div>
-                </div>
-
-                <!-- 尾巴 -->
-                <div class="tail"></div>
-
-                <!-- 服饰 -->
-                <div class="costume costume-analysis" id="costume">
-                    <!-- 侦探披风 -->
-                    <div class="detective-cape"></div>
-                    <!-- 放大镜 -->
-                    <div class="magnifying-glass"></div>
-                    <!-- 问题徽章 -->
-                    <div class="question-badge">?</div>
-                </div>
-            </div>
-
-            <!-- 粒子效果 -->
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-        </div>
-
-        <!-- 对话框 -->
-        <div class="speech-bubble" id="speechBubble"></div>
-    </div>
-
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-        <div class="container-fluid d-flex flex-column align-items-center">
-            <div class="w-100 d-flex align-items-center justify-content-between mb-2">
-                <div class="system-status d-flex align-items-center">
-                    <div class="status-indicator"></div>
-                    <span style="color: var(--success-color); font-size: 0.9rem; margin-right: 20px;">系统运行中</span>
-                </div>
-                <div class="time-display" id="timeDisplay"></div>
-            </div>
-            <div class="w-100 text-center mb-3">
-                <div class="hero-title-container">
-                    <h1 class="hero-title" id="animatedTitle">
-                        基于热点情感的玩家<span class="hover-effect">流失阻断</span>与<span class="hover-effect">精准召回</span>方案
-                    </h1>
-                </div>
-            </div>
-            <div class="w-100">
-                <ul class="navbar-nav d-flex flex-row justify-content-center gap-4">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.html" data-page="home">首页</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="solution.html" data-page="solution">召回策略</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="validation.html" data-page="retention">留存追踪</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="implementation.html" data-page="comments">评论区</a>
-                    </li>
+<!-- 顶部导航（对齐 NEXUS 概念图） -->
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top ops-nav" aria-label="主导航">
+    <div class="ops-bar">
+        <a class="ops-brand" href="index.html" aria-label="NEXUS 玩家留存中枢 · 返回总览">
+            <span class="ops-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <defs>
+                        <linearGradient id="nxsLogo" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#7FEBFF"/><stop offset="1" stop-color="#318BFF"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M5.4 19.2V4.8l13.2 14.4V4.8" fill="none" stroke="url(#nxsLogo)"
+                          stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"/>
+                </svg>
+            </span>
+            <span class="ops-wordmark">NEXUS</span>
+            <span class="ops-dot" aria-hidden="true">·</span>
+            <span class="ops-brand-sub">玩家留存中枢</span>
+        </a>
+        <ul class="ops-tabs">
+            <li><a class="nav-link" href="index.html" data-page="home" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.6" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="2.6" y="11" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="11" width="6.4" height="6.4" rx="1.4"/></svg>
+                <span>总览</span></a></li>
+            <li><a class="nav-link" href="analysis.html" data-page="analysis" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 11h3l2.2-5.6L10 15l2.4-6.6L14 11h4"/></svg>
+                <span>流失分析</span></a></li>
+            <li><a class="nav-link" href="solution.html" data-page="solution" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.4"/><circle cx="10" cy="10" r="2.1"/><path d="M10 1.6v2.8M10 15.6v2.8M1.6 10h2.8M15.6 10h2.8"/></svg>
+                <span>召回策略</span></a></li>
+            <li><a class="nav-link active" href="validation.html" data-page="retention" aria-current="page">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l6.2 2v5.1c0 3.2-2.7 5.7-6.2 7.7-3.5-2-6.2-4.5-6.2-7.7V4.6z"/><path d="M7.2 10.2l2 2 3.6-4.2"/></svg>
+                <span>留存追踪</span></a></li>
+        </ul>
+        <div class="ops-meta">
+            <span class="ops-demo" title="页面数值为演示数据，未接入实时数据源">演示</span>
+            <span class="ops-range-wrap">
+                <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
+                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>
+                    <span id="rangeLabel">10.16 – 11.14</span>
+                    <svg class="ops-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.6l3 3 3-3"/></svg>
+                </button>
+                <ul class="ops-range-menu" id="rangeMenu" role="listbox" aria-label="统计时间范围" hidden>
+                    <li><button type="button" role="option" data-range="7d" data-label="11.08 – 11.14" aria-selected="false">近 7 天<em>11.08–11.14</em></button></li>
+                    <li><button type="button" role="option" data-range="30d" data-label="10.16 – 11.14" aria-selected="true">近 30 天<em>10.16–11.14</em></button></li>
+                    <li><button type="button" role="option" data-range="90d" data-label="8.17 – 11.14" aria-selected="false">近 90 天<em>8.17–11.14</em></button></li>
                 </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- 暖橙色光斑 -->
-    <div class="orange-spot orange-spot-1"></div>
-    <div class="orange-spot orange-spot-2"></div>
-
-    <div class="page-container">
-        <div class="recall-matrix">
-            <div class="matrix-card">
-                <div class="card-title">语音召唤</div>
-                <div class="chart" id="chart1"></div>
-                <div class="percentage" style="color: var(--cyan);">45%</div>
-                <div class="label">触达 3.5w / 确认 1.4w</div>
-            </div>
-            <div class="matrix-card">
-                <div class="card-title">活动推送</div>
-                <div class="chart" id="chart2"></div>
-                <div class="percentage" style="color: var(--green);">38%</div>
-                <div class="label">推送 6.2w / 激活 1.9w</div>
-            </div>
-            <div class="matrix-card">
-                <div class="card-title">组队邀请</div>
-                <div class="chart" id="chart3"></div>
-                <div class="percentage" style="color: var(--pink);">52%</div>
-                <div class="label">邀请 4.8k / 归队 2.1k</div>
-            </div>
-            <div class="matrix-card">
-                <div class="card-title">工会频道</div>
-                <div class="chart" id="chart4"></div>
-                <div class="percentage" style="color: var(--purple);">32%</div>
-                <div class="label">触达 1.8w / 活跃 0.7w</div>
-            </div>
-        </div>
-
-        <div class="card-panel player-profile">
-            <div class="panel-title">召回玩家画像</div>
-            <div class="chart" id="radarChart"></div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="dot" style="background: #00BFFF;"></div>
-                    <span>被召回玩家</span>
-                </div>
-                <div class="legend-item">
-                    <div class="dot" style="background: #888888;"></div>
-                    <span>普通玩家</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="card-panel churn-warning">
-            <div class="panel-title">流失预警名单</div>
-            <div class="warning-list">
-                <div class="warning-item">
-                    <div class="nickname">星刃·破晓</div>
-                    <div class="risk-tag high">高危</div>
-                    <div class="reason">流失前7天氪金</div>
-                    <div class="level">Lv.95</div>
-                </div>
-                <div class="warning-item">
-                    <div class="nickname">夜影·潜行</div>
-                    <div class="risk-tag medium">中危</div>
-                    <div class="reason">公会退会·社交断层</div>
-                    <div class="level">Lv.88</div>
-                </div>
-                <div class="warning-item">
-                    <div class="nickname">炎狱·狂战士</div>
-                    <div class="risk-tag low">低危</div>
-                    <div class="reason">战力骤降·装备分解</div>
-                    <div class="level">Lv.76</div>
-                </div>
-                <div class="warning-item">
-                    <div class="nickname">霜寒·终结者</div>
-                    <div class="risk-tag high">高危</div>
-                    <div class="reason">连续15天未登录</div>
-                    <div class="level">Lv.92</div>
-                </div>
-                <div class="warning-item">
-                    <div class="nickname">暗影·裁决</div>
-                    <div class="risk-tag medium">中危</div>
-                    <div class="reason">付费归零·兴趣转移</div>
-                    <div class="level">Lv.81</div>
-                </div>
-            </div>
+            </span>
+            <span class="ops-live"><i aria-hidden="true"></i>LIVE<span class="ops-signal" aria-hidden="true"><b></b><b></b><b></b><b></b></span></span>
+            <span class="ops-clock" id="timeDisplay"></span>
         </div>
     </div>
+</nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        function updateTime() {
-            const now = new Date();
-            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-            const dayName = dayNames[now.getDay()];
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            document.getElementById('timeDisplay').textContent = `${dayName} ${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-        }
-        updateTime();
-        setInterval(updateTime, 1000);
+<main class="page">
 
-        function createDonutChart(elementId, percentage, color) {
-            var chart = echarts.init(document.getElementById(elementId));
-            var option = {
-                series: [{
-                    type: 'gauge',
-                    startAngle: 90,
-                    endAngle: -270,
-                    radius: '90%',
-                    pointer: { show: false },
-                    progress: {
-                        show: true,
-                        overlap: false,
-                        roundCap: true,
-                        clip: false,
-                        itemStyle: {
-                            color: color
-                        }
-                    },
-                    axisLine: {
-                        lineStyle: {
-                            width: 10,
-                            color: [[1, 'rgba(255,255,255,0.1)']]
-                        }
-                    },
-                    splitLine: { show: false },
-                    axisTick: { show: false },
-                    axisLabel: { show: false },
-                    data: [{ value: percentage, name: '', itemStyle: { color: color } }],
-                    title: { show: false },
-                    detail: { show: false }
-                }]
+    <!-- 顶部：四个留存指标 -->
+    <section class="kpi-row" id="retKpi" aria-label="留存核心指标"></section>
+
+    <!-- 中部：趋势 + cohort -->
+    <section class="mid" aria-label="留存趋势与队列分析">
+        <article class="panel">
+            <div class="p-head">
+                <h2 class="p-title" style="--accent:#35D9F2">留存趋势分析</h2>
+                <div class="seg" id="trendSeg" role="group" aria-label="趋势时间范围">
+                    <button type="button" data-range="7d" aria-pressed="false">7天</button>
+                    <button type="button" data-range="30d" class="is-on" aria-pressed="true">30天</button>
+                    <button type="button" data-range="90d" aria-pressed="false">90天</button>
+                </div>
+            </div>
+            <div class="p-body">
+                <div id="retTrendChart" style="position:absolute;inset:0" role="img"
+                     aria-label="留存趋势：次日留存约 36.8%，7 日留存约 24.7%，30 日留存约 12.1%，整体缓慢上行。"></div>
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="p-head">
+                <h2 class="p-title" style="--accent:#9275FF">用户留存 cohort 分析</h2>
+                <span class="p-tag">按注册周</span>
+            </div>
+            <div class="p-body">
+                <div class="cohort">
+                    <div class="cohort-head cohort-row">
+                        <span>注册时间</span><span>次日</span><span>3日</span><span>7日</span><span>14日</span><span>30日</span>
+                    </div>
+                    <div class="cohort-body" id="cohortBody"></div>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <!-- 底部三栏：分群 / 因素 / AI -->
+    <section class="bottom-row" style="display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.82fr) minmax(0,1fr);gap:12px;min-height:0">
+        <article class="panel">
+            <div class="p-head">
+                <h2 class="p-title" style="--accent:#35D399">分群留存表现</h2>
+                <div class="seg" id="segSeg" role="group" aria-label="留存口径">
+                    <button type="button" data-seg="d1" class="is-on" aria-pressed="true">次日</button>
+                    <button type="button" data-seg="d7" aria-pressed="false">7日</button>
+                    <button type="button" data-seg="d30" aria-pressed="false">30日</button>
+                </div>
+            </div>
+            <div class="p-body">
+                <div class="seg-rows" id="segRows"></div>
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="p-head">
+                <h2 class="p-title" style="--accent:#FFB45F">影响留存的关键因素</h2>
+                <span class="p-tag">权重</span>
+            </div>
+            <div class="p-body">
+                <div class="factor-wrap">
+                    <div id="factorChart" role="img" aria-label="影响留存的关键因素权重：游戏热点热度 35.2%，玩家情感倾向 28.6%，活动参与度 22.1%，其他 14.1%。"></div>
+                    <div class="factor-list" id="factorList"></div>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="p-head">
+                <h2 class="p-title" style="--accent:#9275FF">AI 洞察与建议</h2>
+                <span class="badge" style="--bc:#FF6B75">高优先级</span>
+            </div>
+            <div class="p-body">
+                <div class="insight-wrap" id="insightWrap"></div>
+            </div>
+        </article>
+    </section>
+
+    <div data-live-ticker></div>
+</main>
+
+<script>
+/* ==================== 留存追踪页 ==================== */
+(function () {
+    'use strict';
+    var D = window.DashboardData;
+    if (!D || !D.retention) return;
+    var R = D.retention;
+
+    var MONO = 'ui-monospace, "Cascadia Mono", Consolas, monospace';
+    var AXIS = '#637A96';
+
+    /* ---------- 图标 ---------- */
+    var ICONS = {
+        users: '<circle cx="9" cy="8" r="3.1"/><path d="M3 19c.6-3 3.1-4.8 6-4.8s5.4 1.8 6 4.8"/><circle cx="17" cy="7.2" r="2.3"/><path d="M16.4 12.5c2.5.3 4.2 2 4.6 4.5"/>',
+        calendar: '<rect x="3.4" y="5" width="17" height="15" rx="2.6"/><path d="M3.4 9.6h17M8 3v3.4M16 3v3.4"/>',
+        crown: '<path d="M3 17.5V8l4.6 3.4L12 5l4.4 6.4L21 8v9.5z"/><path d="M3 20.4h18"/>',
+        clock: '<circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3.2 2"/>',
+        gem: '<path d="M12 3.4l7 5.2-7 12-7-12z"/><path d="M5 8.6h14"/>',
+        lock: '<rect x="4.4" y="10.4" width="15.2" height="10" rx="2.4"/><path d="M8 10.4V7.6a4 4 0 0 1 8 0v2.8"/>',
+        warn: '<path d="M12 3.6l8.4 15.2H3.6z"/><path d="M12 9.4v4.4M12 16.6v.6"/>',
+        bolt: '<path d="M13 2.6L4.8 13.4h5.6L11 21.4l8.2-10.8h-5.6z"/>'
+    };
+    function icon(name, cls) {
+        return '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.bolt) + '</svg>';
+    }
+
+    function sparkPath(arr, w, h) {
+        var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
+        var span = (max - min) || 1;
+        return arr.map(function (v, i) {
+            var x = (i / Math.max(arr.length - 1, 1)) * w;
+            var y = 3 + (h - ((v - min) / span) * h);
+            return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+        }).join(' ');
+    }
+
+    /* ---------- KPI ---------- */
+    var KPI_C = [
+        { c: '#35D9F2', edge: 'rgba(53,217,242,.34)', glow: 'rgba(53,217,242,.45)' },
+        { c: '#9275FF', edge: 'rgba(146,117,255,.34)', glow: 'rgba(146,117,255,.42)' },
+        { c: '#FFB45F', edge: 'rgba(255,180,95,.34)', glow: 'rgba(255,180,95,.4)' },
+        { c: '#35D399', edge: 'rgba(53,211,153,.32)', glow: 'rgba(53,211,153,.4)' }
+    ];
+
+    document.getElementById('retKpi').innerHTML = R.kpis.map(function (k, i) {
+        var col = KPI_C[i % KPI_C.length];
+        var up = k.change >= 0;
+        return '<article class="kpi" style="--c:' + col.c + ';--edge:' + col.edge + ';--glow:' + col.glow + '">' +
+            '<span class="kpi-ico" aria-hidden="true">' + icon(k.icon, '') + '</span>' +
+            '<div class="kpi-main">' +
+                '<span class="kpi-label">' + k.label + '</span>' +
+                '<div class="kpi-num">' + k.value.toFixed(1) +
+                    '<span class="u">' + k.unit + '</span>' +
+                    '<span class="kpi-delta' + (up ? '' : ' is-bad') + '">' +
+                        (up ? '▲' : '▼') + ' ' + Math.abs(k.change) + (k.key === 'duration' ? '%' : 'pp') +
+                    '</span>' +
+                '</div>' +
+            '</div>' +
+            '<svg class="kpi-spark" viewBox="0 0 74 30" aria-hidden="true" focusable="false">' +
+                '<path d="' + sparkPath(k.spark, 72, 22) + '" fill="none" stroke="' + col.c +
+                '" stroke-width="1.5" stroke-linejoin="round" opacity=".85"/></svg>' +
+        '</article>';
+    }).join('');
+
+    /* ---------- 趋势 ---------- */
+    var trend = echarts.init(document.getElementById('retTrendChart'), null, { renderer: 'canvas' });
+    var currentRange = '30d';
+
+    function trendOption(rows) {
+        var days = rows.map(function (r) { return r.timestamp; });
+        var interval = rows.length > 40 ? Math.ceil(rows.length / 9) : Math.ceil(rows.length / 6);
+
+        function line(name, key, color) {
+            return {
+                name: name,
+                type: 'line',
+                smooth: .35,
+                symbol: 'none',
+                data: rows.map(function (r) { return r[key]; }),
+                lineStyle: { width: 2, color: color, shadowColor: color, shadowBlur: 10 },
+                endLabel: {
+                    show: true,
+                    formatter: '{c}%',
+                    color: '#04202B',
+                    backgroundColor: color,
+                    padding: [2, 5],
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontFamily: MONO,
+                    distance: 6
+                }
             };
-            chart.setOption(option);
-            window.addEventListener('resize', function() { chart.resize(); });
         }
 
-        function initRadarChart() {
-            var chart = echarts.init(document.getElementById('radarChart'));
-            var option = {
-                radar: {
-                    indicator: [
-                        { name: '战力', max: 100 },
-                        { name: '社交', max: 100 },
-                        { name: '忠诚', max: 100 },
-                        { name: '活跃', max: 100 },
-                        { name: '付费', max: 100 }
-                    ],
-                    radius: '65%',
-                    name: {
-                        textStyle: { color: 'rgba(255,255,255,0.6)', fontSize: 11 }
-                    },
-                    splitLine: {
-                        lineStyle: { color: 'rgba(255,255,255,0.08)' }
-                    },
-                    splitArea: {
-                        areaStyle: { color: ['rgba(168,85,247,0.04)', 'transparent'] }
-                    },
-                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
-                },
-                series: [{
-                    type: 'radar',
-                    data: [
-                        {
-                            value: [80, 60, 70, 90, 85],
-                            name: '被召回玩家',
-                            areaStyle: { color: 'rgba(0, 191, 255, 0.2)' },
-                            lineStyle: { color: '#00BFFF', width: 2 },
-                            itemStyle: { color: '#00BFFF' }
-                        },
-                        {
-                            value: [50, 40, 60, 50, 40],
-                            name: '普通玩家',
-                            areaStyle: { color: 'rgba(136, 136, 136, 0.15)' },
-                            lineStyle: { color: '#888888', width: 2 },
-                            itemStyle: { color: '#888888' }
-                        }
-                    ]
-                }]
-            };
-            chart.setOption(option);
-            window.addEventListener('resize', function() { chart.resize(); });
-        }
+        return {
+            grid: { left: 44, right: 62, top: 34, bottom: 26 },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(7,13,24,.96)',
+                borderColor: 'rgba(90,140,200,.28)',
+                borderWidth: 1,
+                padding: [8, 11],
+                textStyle: { color: '#EAF3FF', fontSize: 11 },
+                extraCssText: 'border-radius:8px;box-shadow:0 18px 40px -22px #000;',
+                axisPointer: { type: 'line', lineStyle: { color: 'rgba(53,217,242,.4)' } },
+                formatter: function (ps) {
+                    var head = '<div style="font-family:' + MONO + ';font-size:9.5px;letter-spacing:.1em;color:#637A96;margin-bottom:5px">' + ps[0].axisValue + '</div>';
+                    return head + ps.map(function (p) {
+                        return '<div style="display:flex;gap:14px;justify-content:space-between"><span>' + p.marker + p.seriesName +
+                            '</span><b style="font-family:' + MONO + '">' + p.value + '%</b></div>';
+                    }).join('');
+                }
+            },
+            legend: {
+                right: 54, top: 2,
+                itemWidth: 7, itemHeight: 7, itemGap: 12, icon: 'circle',
+                textStyle: { color: '#9EB1CA', fontSize: 10, fontFamily: MONO },
+                data: ['次日留存', '7日留存', '30日留存']
+            },
+            xAxis: {
+                type: 'category', boundaryGap: false, data: days,
+                axisLine: { lineStyle: { color: 'rgba(90,140,200,.2)' } },
+                axisTick: { show: false },
+                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, interval: interval }
+            },
+            yAxis: {
+                type: 'value', min: 0, max: 60, splitNumber: 3,
+                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, formatter: '{value}%' },
+                splitLine: { lineStyle: { color: 'rgba(90,140,200,.09)', type: 'dashed' } }
+            },
+            series: [
+                line('次日留存', 'd1', '#35D9F2'),
+                line('7日留存', 'd7', '#9275FF'),
+                line('30日留存', 'd30', '#FFB45F')
+            ]
+        };
+    }
 
-        function initParticles() {
-            var container = document.getElementById('particles');
-            for (var i = 0; i < 30; i++) {
-                var particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.top = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 4 + 's';
-                particle.style.animationDuration = (3 + Math.random() * 2) + 's';
-                container.appendChild(particle);
-            }
+    function renderTrend(range) {
+        currentRange = range;
+        try {
+            trend.setOption(trendOption(R.trend(range)), true);
+        } catch (e) {
+            console.warn('留存趋势渲染失败，已降级为占位状态', e);
+            document.getElementById('retTrendChart').innerHTML = '<div class="cohort-period" style="padding:16px">趋势数据暂不可用</div>';
         }
+    }
 
-        window.addEventListener('load', function() {
-            initParticles();
-            createDonutChart('chart1', 45, '#00FFFF');
-            createDonutChart('chart2', 38, '#00FF88');
-            createDonutChart('chart3', 52, '#FF69B4');
-            createDonutChart('chart4', 32, '#9370DB');
-            initRadarChart();
+    document.querySelectorAll('#trendSeg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.querySelectorAll('#trendSeg button').forEach(function (x) {
+                var on = x === b;
+                x.classList.toggle('is-on', on);
+                x.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            renderTrend(b.dataset.range);
+            window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: b.dataset.range } }));
         });
-    </script>
+    });
+
+    /* 导航下拉 → 同步趋势 */
+    window.addEventListener('rangechange', function (ev) {
+        var r = ev.detail && ev.detail.range;
+        if (!r || r === currentRange) return;
+        document.querySelectorAll('#trendSeg button').forEach(function (x) {
+            var on = x.dataset.range === r;
+            x.classList.toggle('is-on', on);
+            x.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        renderTrend(r);
+    });
+
+    /* ---------- cohort 表 ---------- */
+    (function renderCohort() {
+        var host = document.getElementById('cohortBody');
+        var max = 52;
+        host.innerHTML = R.cohort.map(function (row) {
+            var cells = ['d1', 'd3', 'd7', 'd14', 'd30'].map(function (k) {
+                var v = row[k];
+                var a = 0.10 + (v / max) * 0.62;
+                return '<span class="cohort-cell" style="background:rgba(49,139,255,' + a.toFixed(3) + ')">' + v + '%</span>';
+            }).join('');
+            return '<div class="cohort-row">' +
+                '<span class="cohort-period">' + row.period + '</span>' + cells +
+            '</div>';
+        }).join('');
+    })();
+
+    /* ---------- 分群 ---------- */
+    function renderSegments(seg) {
+        var rows = R.segments[seg] || R.segments.d1;
+        document.getElementById('segRows').innerHTML = rows.map(function (s, i) {
+            var up = s.change >= 0;
+            return '<div class="seg-row">' +
+                '<span class="seg-ico" style="--c:' + s.c + '" aria-hidden="true">' + icon(s.icon, '') + '</span>' +
+                '<span class="seg-name">' + s.name + '</span>' +
+                '<span class="seg-track"><span class="seg-fill" style="--c:' + s.c + ';width:' + s.rate +
+                    '%;animation-delay:' + (i * 0.06).toFixed(2) + 's"></span></span>' +
+                '<span class="seg-val">' + s.rate.toFixed(1) + '%' +
+                    '<em class="' + (up ? '' : 'is-bad') + '">' + (up ? '▲' : '▼') +
+                    Math.abs(s.change).toFixed(1) + '</em></span>' +
+            '</div>';
+        }).join('');
+    }
+    document.querySelectorAll('#segSeg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.querySelectorAll('#segSeg button').forEach(function (x) {
+                var on = x === b;
+                x.classList.toggle('is-on', on);
+                x.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            renderSegments(b.dataset.seg);
+        });
+    });
+
+    /* ---------- 关键因素 ---------- */
+    var factor = echarts.init(document.getElementById('factorChart'), null, { renderer: 'canvas' });
+    factor.setOption({
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(7,13,24,.96)',
+            borderColor: 'rgba(90,140,200,.28)',
+            borderWidth: 1,
+            textStyle: { color: '#EAF3FF', fontSize: 11 },
+            formatter: '{b}：{d}%'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['62%', '84%'],
+            center: ['50%', '52%'],
+            itemStyle: { borderRadius: 4, borderColor: '#070D18', borderWidth: 2 },
+            label: {
+                show: true,
+                position: 'center',
+                formatter: '{a|68.7%}\n{b|综合影响度}',
+                rich: {
+                    a: { fontSize: 17, fontWeight: 600, color: '#EAF3FF', fontFamily: MONO, lineHeight: 20 },
+                    b: { fontSize: 9, color: '#637A96', lineHeight: 13 }
+                }
+            },
+            labelLine: { show: false },
+            data: R.factors.map(function (f) {
+                return { value: f.value, name: f.name, itemStyle: { color: f.c } };
+            })
+        }]
+    });
+
+    document.getElementById('factorList').innerHTML = R.factors.map(function (f) {
+        return '<span class="factor-item"><i class="factor-dot" style="--c:' + f.c + '"></i>' +
+            '<span>' + f.name + '</span><b class="v">' + f.value.toFixed(1) + '%</b></span>';
+    }).join('');
+
+    /* ---------- AI 洞察 ---------- */
+    (function renderInsights() {
+        var host = document.getElementById('insightWrap');
+        var TONE = { high: { c: '#FF6B75', icon: 'warn' }, mid: { c: '#FFB45F', icon: 'bolt' } };
+        host.innerHTML = R.insights.map(function (it) {
+            var t = TONE[it.tone] || TONE.mid;
+            return '<div class="insight">' +
+                '<span class="insight-ico" style="--ic:' + t.c + '" aria-hidden="true">' + icon(t.icon, '') + '</span>' +
+                '<div><b>' + it.title + '</b>' +
+                    '<span>' + it.desc + '</span>' +
+                    '<span class="insight-act">建议：' + it.action + '</span>' +
+                '</div>' +
+            '</div>';
+        }).join('') +
+        '<button class="insight-cta" type="button" id="insightCta">查看详细策略 <span aria-hidden="true">→</span></button>';
+
+        document.getElementById('insightCta').addEventListener('click', function () {
+            /* 没有策略中心页面，不做假跳转，只给明确反馈 */
+            this.textContent = '策略中心尚未上线';
+            this.disabled = true;
+            this.style.opacity = '.6';
+            this.style.cursor = 'default';
+        });
+    })();
+
+    /* ---------- 初始化 ---------- */
+    renderTrend('30d');
+    renderSegments('d1');
+    window.addEventListener('resize', function () { trend.resize(); factor.resize(); });
+})();
+</script>
 </body>
 </html>
