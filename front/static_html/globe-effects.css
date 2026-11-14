@@ -1,0 +1,151 @@
+/* ==========================================================================
+   globe-effects.css — 首页地球空间氛围层
+   仅增强视觉层，不参与业务数据、筛选、选中态或图表逻辑。
+   ========================================================================== */
+
+.globe-wrap {
+    isolation: isolate;
+    perspective: 1100px;
+}
+
+/* 深空星场：多层稀疏星点 + 中央星云，不覆盖地球交互 */
+.space-field {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse at 50% 48%, rgba(25, 91, 158, .12), transparent 42%),
+        radial-gradient(ellipse at 18% 22%, rgba(89, 75, 180, .10), transparent 34%),
+        radial-gradient(ellipse at 82% 76%, rgba(25, 160, 190, .08), transparent 38%),
+        radial-gradient(1px 1px at 8% 18%, rgba(210, 235, 255, .78) 98%, transparent),
+        radial-gradient(1px 1px at 16% 72%, rgba(133, 205, 255, .58) 98%, transparent),
+        radial-gradient(1px 1px at 27% 34%, rgba(220, 238, 255, .66) 98%, transparent),
+        radial-gradient(1px 1px at 38% 84%, rgba(133, 205, 255, .50) 98%, transparent),
+        radial-gradient(1px 1px at 52% 12%, rgba(220, 238, 255, .72) 98%, transparent),
+        radial-gradient(1px 1px at 63% 27%, rgba(133, 205, 255, .56) 98%, transparent),
+        radial-gradient(1px 1px at 74% 66%, rgba(220, 238, 255, .62) 98%, transparent),
+        radial-gradient(1px 1px at 89% 38%, rgba(133, 205, 255, .54) 98%, transparent),
+        radial-gradient(1px 1px at 94% 83%, rgba(220, 238, 255, .70) 98%, transparent);
+    opacity: .88;
+}
+
+.space-field::after {
+    content: "";
+    position: absolute;
+    inset: 8% 4%;
+    border: 1px solid rgba(91, 168, 225, .055);
+    border-radius: 50%;
+    transform: rotate(-17deg) scaleY(.72);
+    box-shadow: 0 0 70px rgba(42, 137, 211, .055);
+}
+
+/* 三条轨道从平面圆环改为有透视的倾斜轨道 */
+.globe-wrap .orbit {
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+
+.globe-wrap .orbit--a {
+    width: 84%;
+    aspect-ratio: 1.18;
+    border-color: rgba(78, 176, 238, .22);
+    border-top-color: rgba(116, 222, 255, .72);
+    box-shadow:
+        0 0 18px rgba(38, 159, 226, .10),
+        inset 0 0 42px rgba(59, 130, 246, .07);
+    transform: translate(-50%, -50%) rotateX(67deg) rotateZ(-18deg);
+}
+
+.globe-wrap .orbit--b {
+    width: 98%;
+    aspect-ratio: 1.16;
+    border: 1px dashed rgba(151, 130, 255, .20);
+    animation: orbitDrift 86s linear infinite;
+    transform: translate(-50%, -50%) rotateX(71deg) rotateZ(34deg);
+}
+
+.globe-wrap .orbit--c {
+    width: 70%;
+    aspect-ratio: 1.12;
+    border-color: rgba(53, 217, 242, .14);
+    transform: translate(-50%, -50%) rotateX(73deg) rotateZ(76deg);
+}
+
+.globe-wrap .orbit--d {
+    width: 90%;
+    aspect-ratio: 1.12;
+    border: 0;
+    background: conic-gradient(
+        from 12deg,
+        transparent 0deg 248deg,
+        rgba(53, 217, 242, .04) 258deg,
+        rgba(102, 219, 255, .68) 266deg,
+        rgba(53, 217, 242, .08) 272deg,
+        transparent 282deg 360deg
+    );
+    -webkit-mask: radial-gradient(ellipse, transparent 61.8%, #000 62.2%, #000 62.7%, transparent 63.1%);
+    mask: radial-gradient(ellipse, transparent 61.8%, #000 62.2%, #000 62.7%, transparent 63.1%);
+    filter: drop-shadow(0 0 5px rgba(53, 217, 242, .55));
+    animation: orbitDrift 34s linear infinite reverse;
+    transform: translate(-50%, -50%) rotateX(69deg) rotateZ(-42deg);
+}
+
+@keyframes orbitDrift {
+    from { rotate: 0deg; }
+    to { rotate: 360deg; }
+}
+
+/* 低对比扫描光，提供纵深和设备感；不拦截地球点击 */
+.globe-scan {
+    position: absolute;
+    inset: 8% 2%;
+    z-index: 3;
+    overflow: hidden;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: .34;
+    mix-blend-mode: screen;
+    background:
+        linear-gradient(180deg,
+            transparent 0%,
+            transparent 42%,
+            rgba(74, 190, 255, .025) 48%,
+            rgba(91, 216, 255, .13) 50%,
+            rgba(74, 190, 255, .025) 52%,
+            transparent 58%,
+            transparent 100%);
+    -webkit-mask: radial-gradient(ellipse at center, #000 38%, transparent 73%);
+    mask: radial-gradient(ellipse at center, #000 38%, transparent 73%);
+    animation: globeScan 12s ease-in-out infinite;
+}
+
+@keyframes globeScan {
+    0%, 100% { transform: translateY(-12%); opacity: .12; }
+    50% { transform: translateY(12%); opacity: .42; }
+}
+
+/* 让地球边缘和空间背景自然融合 */
+#globeContainer {
+    filter: drop-shadow(0 0 24px rgba(31, 133, 214, .12));
+}
+
+#globeContainer canvas {
+    position: relative;
+    z-index: 1;
+}
+
+/* 窄屏减少装饰层密度，优先保证数据可读 */
+@media (max-width: 900px) {
+    .globe-wrap .orbit--b,
+    .globe-wrap .orbit--c { opacity: .45; }
+    .globe-wrap .orbit--d { opacity: .55; }
+    .globe-scan { opacity: .18; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .globe-wrap .orbit--b,
+    .globe-wrap .orbit--d,
+    .globe-scan { animation: none; }
+}
