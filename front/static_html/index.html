@@ -1170,6 +1170,7 @@ body::after{
     .board{animation:none}
 }
 </style>
+<link rel="stylesheet" href="globe-effects.css">
 </head>
 <body>
 
@@ -1328,11 +1329,14 @@ body::after{
             </div>
 
             <div class="globe-wrap">
+                <div class="space-field" aria-hidden="true"></div>
                 <div class="orbit orbit--a" aria-hidden="true"></div>
                 <div class="orbit orbit--b" aria-hidden="true"></div>
                 <div class="orbit orbit--c" aria-hidden="true"></div>
+                <div class="orbit orbit--d" aria-hidden="true"></div>
                 <div id="globeContainer" role="img"
                      aria-label="可交互三维地球：青色/橙色/红色点位为玩家分布与风险等级，脉冲环为热点区域，弧线为区域间迁移路径。支持拖动旋转、滚轮缩放、双击复位。"></div>
+                <div class="globe-scan" aria-hidden="true"></div>
                 <div class="globe-info" id="globeInfo" aria-live="polite">
                     <span class="gi-k">全局态势</span>
                     <b class="gi-title">全球玩家分布</b>
