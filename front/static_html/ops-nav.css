@@ -1,0 +1,407 @@
+/* ==========================================================================
+   OPS NAV v3 — 严格对齐 NEXUS 概念图
+   品牌 / 四个板块（图标+胶囊选中态）/ 时间范围下拉 / LIVE+信号条
+   不依赖 Bootstrap，不依赖任何网络字体。
+   ========================================================================== */
+
+:root {
+    --ops-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    --ops-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --ops-bg: #05090F;
+    --ops-ink: #EAF3FF;
+    --ops-ink-2: #9EB1CA;
+    --ops-ink-3: #5C6B82;
+    --ops-line: rgba(90, 140, 200, .18);
+    --ops-cyan: #35D9F2;
+    --ops-blue: #318BFF;
+    --ops-green: #35D399;
+    --ops-amber: #FFB45F;
+}
+
+/* ---------- 外框 ---------- */
+.ops-nav.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1040;
+    display: flex;
+    align-items: center;
+    height: 62px;
+    flex: 0 0 62px;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(180deg, #060B12 0%, #05090F 100%);
+    border-bottom: 1px solid var(--ops-line);
+    box-shadow: 0 12px 30px -22px #000;
+}
+
+.ops-bar {
+    width: 100%;
+    height: 62px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 24px;
+    padding: 0 clamp(14px, 2vw, 28px);
+}
+
+/* ---------- 品牌 ---------- */
+.ops-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+.ops-logo {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+}
+
+.ops-logo svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 8px rgba(53, 217, 242, .55));
+}
+
+.ops-wordmark {
+    font-family: var(--ops-sans);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: #F2F7FF;
+}
+
+.ops-dot {
+    color: #43536B;
+    font-size: 15px;
+    line-height: 1;
+    margin: 0 1px;
+}
+
+.ops-brand-sub {
+    font-family: var(--ops-sans);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .22em;
+    color: #8394AB;
+    white-space: nowrap;
+}
+
+/* ---------- 中间四个板块 ---------- */
+.ops-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 62px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ops-tabs > li {
+    display: flex;
+    margin: 0;
+    padding: 0;
+}
+
+.ops-tabs .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    color: #8FA0B8;
+    font-family: var(--ops-sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .18s ease, background-color .18s ease, border-color .18s ease;
+}
+
+.ops-tabs .nav-link .ops-ico {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: .85;
+}
+
+.ops-tabs .nav-link:hover {
+    color: #D6E4F5;
+    background: rgba(53, 217, 242, .06);
+}
+
+.ops-tabs .nav-link:focus-visible {
+    outline: none;
+    border-color: rgba(53, 217, 242, .55);
+    color: var(--ops-ink);
+}
+
+/* 选中态：概念图里的发光胶囊 */
+.ops-tabs .nav-link.active {
+    color: #F2FBFF;
+    font-weight: 600;
+    border-color: rgba(53, 217, 242, .42);
+    background:
+        radial-gradient(120% 140% at 50% 120%, rgba(53, 217, 242, .28), transparent 70%),
+        linear-gradient(180deg, rgba(53, 217, 242, .18), rgba(49, 139, 255, .10));
+    box-shadow:
+        0 0 0 1px rgba(53, 217, 242, .12),
+        0 8px 22px -12px rgba(53, 217, 242, .9),
+        inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+.ops-tabs .nav-link.active .ops-ico {
+    opacity: 1;
+    stroke: #7FEBFF;
+    filter: drop-shadow(0 0 5px rgba(53, 217, 242, .8));
+}
+
+.ops-tabs .nav-link.active::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -1px;
+    width: 22px;
+    height: 2px;
+    translate: -50% 0;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--ops-cyan), transparent);
+    box-shadow: 0 0 10px rgba(53, 217, 242, .9);
+}
+
+/* ---------- 右侧 ---------- */
+.ops-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    min-width: 0;
+}
+
+.ops-demo {
+    padding: 1px 7px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 180, 95, .38);
+    background: rgba(255, 180, 95, .1);
+    color: var(--ops-amber);
+    font-family: var(--ops-sans);
+    font-size: 10px;
+    letter-spacing: .08em;
+    white-space: nowrap;
+}
+
+.ops-range-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.ops-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--ops-line);
+    border-radius: 8px;
+    background: rgba(11, 20, 36, .8);
+    color: #A9BBD2;
+    font-family: var(--ops-mono);
+    font-size: 11px;
+    letter-spacing: .02em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .18s ease, color .18s ease;
+}
+
+.ops-range:hover {
+    border-color: rgba(53, 217, 242, .45);
+    color: var(--ops-ink);
+}
+
+.ops-range:focus-visible {
+    outline: none;
+    border-color: var(--ops-cyan);
+}
+
+.ops-range .ops-ico {
+    width: 13px;
+    height: 13px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+    opacity: .8;
+}
+
+.ops-caret {
+    width: 10px;
+    height: 10px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    opacity: .7;
+    transition: transform .18s ease;
+}
+
+.ops-range[aria-expanded="true"] .ops-caret {
+    transform: rotate(180deg);
+}
+
+.ops-range-menu {
+    position: absolute;
+    top: 36px;
+    right: 0;
+    z-index: 60;
+    min-width: 136px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border-radius: 9px;
+    border: 1px solid var(--ops-line);
+    background: rgba(8, 15, 27, .98);
+    box-shadow: 0 20px 44px -22px #000;
+}
+
+.ops-range-menu[hidden] {
+    display: none;
+}
+
+.ops-range-menu button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: #A9BBD2;
+    font-family: var(--ops-sans);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ops-range-menu button:hover {
+    background: rgba(53, 217, 242, .1);
+    color: var(--ops-ink);
+}
+
+.ops-range-menu button[aria-selected="true"] {
+    color: #7FEBFF;
+    background: rgba(53, 217, 242, .12);
+}
+
+.ops-range-menu em {
+    font-style: normal;
+    font-family: var(--ops-mono);
+    font-size: 9.5px;
+    color: var(--ops-ink-3);
+}
+
+/* LIVE + 信号条 */
+.ops-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--ops-mono);
+    font-size: 10.5px;
+    letter-spacing: .16em;
+    color: var(--ops-green);
+    white-space: nowrap;
+}
+
+.ops-live i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ops-green);
+    box-shadow: 0 0 0 0 rgba(53, 211, 153, .55);
+    animation: opsPulse 2.6s ease-out infinite;
+}
+
+@keyframes opsPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(53, 211, 153, .55); }
+    70%  { box-shadow: 0 0 0 7px rgba(53, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(53, 211, 153, 0); }
+}
+
+.ops-signal {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 11px;
+    margin-left: 1px;
+}
+
+.ops-signal b {
+    width: 2px;
+    border-radius: 1px;
+    background: var(--ops-green);
+    opacity: .9;
+}
+.ops-signal b:nth-child(1) { height: 4px; }
+.ops-signal b:nth-child(2) { height: 7px; }
+.ops-signal b:nth-child(3) { height: 9px; }
+.ops-signal b:nth-child(4) { height: 11px; animation: sigBlink 2.2s ease-in-out infinite; }
+
+@keyframes sigBlink {
+    0%, 60%, 100% { opacity: .9; }
+    80% { opacity: .35; }
+}
+
+.ops-clock {
+    font-family: var(--ops-mono);
+    font-size: 10.5px;
+    color: #6E809B;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ops-live i,
+    .ops-signal b:nth-child(4) { animation: none; }
+    .ops-tabs .nav-link,
+    .ops-caret { transition: none; }
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1320px) {
+    .ops-brand-sub { display: none; }
+}
+
+@media (max-width: 1100px) {
+    .ops-clock { display: none; }
+    .ops-tabs .nav-link { padding: 0 10px; }
+}
+
+@media (max-width: 900px) {
+    .ops-bar { gap: 12px; padding: 0 12px; }
+    .ops-demo { display: none; }
+    .ops-tabs .nav-link span { display: none; }
+    .ops-tabs .nav-link { padding: 0 9px; }
+    .ops-tabs .nav-link.active::after { display: none; }
+}
+
+@media (max-width: 640px) {
+    .ops-wordmark { font-size: 15px; letter-spacing: .1em; }
+    .ops-live { font-size: 9.5px; letter-spacing: .1em; }
+    .ops-signal { display: none; }
+}
