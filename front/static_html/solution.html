@@ -1,2994 +1,1534 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070B16'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%2335D9F2'/%3E%3Crect x='12' y='12' width='8' height='8' rx='2' fill='%23070B16'/%3E%3C/svg%3E">
-<title>召回策略 - 游戏玩家流失-召回-留存闭环分析系统</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="libs/echarts.min.js"></script>
-    <style>
-        :root {
-            --primary-color: #4A90E2;
-            --secondary-color: #FF6B8B;
-            --danger-color: #FF4444;
-            --success-color: #4CAF50;
-            --neutral-color: #6C7A89;
-            --cosmic-blue: #5B8DEF;
-            --cosmic-accent: #22D3EE;
-            --cosmic-purple: #818CF8;
-            --cosmic-gold: #6366F1;
-            --neon-red: #ff4444;
-            --neon-yellow: #ffdd00;
-            --neon-blue: #4488ff;
-            --neon-cyan: #00ddff;
-            --neon-purple: #aa44ff;
-            --void-black: #010810;
-            --deep-blue: #020a18;
-            --panel-dark: rgba(0, 15, 35, 0.88);
-            --glow-blue: 0 0 20px rgba(68, 136, 255, 0.5), 0 0 40px rgba(68, 136, 255, 0.2);
-            --glow-cosmic: 0 0 20px rgba(91, 141, 239, 0.5), 0 0 40px rgba(91, 141, 239, 0.2);
-            --glow-accent: 0 0 20px rgba(34, 211, 238, 0.5), 0 0 40px rgba(34, 211, 238, 0.2);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        /* 标题样式 */
-        .hero-title-container {
-            position: relative;
-            display: inline-block;
-            font-family: 'Orbitron', 'Rajdhani', 'Share Tech Mono', sans-serif;
-            font-weight: 700;
-            font-size: 2rem;
-            text-align: center;
-            margin: 0;
-            background: #0a0a15;
-            padding: 0 20px;
-        }
-        
-        .hero-title {
-            position: relative;
-            display: inline-block;
-            z-index: 2;
-            will-change: transform, opacity;
-            background: linear-gradient(90deg, #00f2fe 0%, #a855f7 60%, #ff1493 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 900;
-            letter-spacing: 0.15em;
-            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="%2300f2fe" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="%23ec4899" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="%23ffffff"/></svg>'), auto;
-            transition: all 0.3s ease;
-        }
-        
-        .hover-effect {
-            display: inline-block;
-            transition: transform 0.3s ease, text-shadow 0.3s ease;
-        }
-        
-        .hover-effect:hover {
-            transform: scale(1.1);
-            text-shadow: 0 0 2px rgba(0, 242, 254, 1), 0 0 4px rgba(168, 85, 247, 0.8), 0 0 6px rgba(255, 20, 147, 0.6);
-        }
-        
-        .hero-title:hover {
-            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="%2300f2fe" stroke-width="2"/><circle cx="16" cy="16" r="8" fill="none" stroke="%23ec4899" stroke-width="2"/><circle cx="16" cy="16" r="3" fill="%23ffffff"/></svg>'), auto;
-        }
-        
-
-
-        html, body { height: 100%; overflow: hidden; }
-
-        body {
-            font-family: 'Noto Sans SC', sans-serif;
-            background-color: #0a1020;
-            color: #ffffff;
-            background-image: url('images/sbpk.webp');
-            background-size: cover;
-            background-position: center;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            position: relative;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle at 50% 35%, rgba(0, 210, 255, 0.10) 0%, rgba(4, 12, 28, 0.52) 58%, rgba(2, 6, 20, 0.72) 100%);
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* 暖橙色光斑 */
-        .orange-spot {
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 165, 0, 0.3) 0%, rgba(255, 165, 0, 0) 70%);
-            filter: blur(30px);
-            z-index: 0;
-        }
-        
-        .orange-spot-1 {
-            top: 20%;
-            left: 10%;
-            animation: pulse 4s ease-in-out infinite;
-        }
-        
-        .orange-spot-2 {
-            top: 60%;
-            right: 15%;
-            animation: pulse 5s ease-in-out infinite 1s;
-        }
-
-        .scanline {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--cosmic-accent), transparent);
-            opacity: 0.3;
-            animation: scanMove 4s linear infinite;
-            z-index: 1;
-            pointer-events: none;
-        }
-        @keyframes scanMove {
-            0% { top: 0; opacity: 0; }
-            10% { opacity: 0.4; }
-            90% { opacity: 0.2; }
-            100% { top: 100%; opacity: 0; }
-        }
-
-        .particles { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-        .particle {
-            position: absolute;
-            border-radius: 50%;
-            animation: floatParticle linear infinite;
-            opacity: 0;
-        }
-        @keyframes floatParticle {
-            0% { transform: translateY(100vh) translateX(0) scale(0); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 0.6; }
-            100% { transform: translateY(-10vh) translateX(var(--drift, 50px)) scale(1.5); opacity: 0; }
-        }
-
-        .app-shell {
-            position: relative;
-            z-index: 2;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 0 12px;
-        }
-
-        /* 导航栏 */
-        .navbar {
-            background-color: rgba(10, 10, 26, 0.95);
-            backdrop-filter: blur(15px);
-            border-bottom: 1px solid transparent;
-            border-image: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color)) 1;
-            padding: 1rem;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
-            position: relative;
-            z-index: 100;
-        }
-
-        .navbar-brand {
-            font-weight: 700;
-            color: var(--primary-color);
-            font-size: 1.2rem;
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
-            position: relative;
-        }
-
-        .navbar-brand::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -10px;
-            right: -10px;
-            bottom: 0;
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            z-index: -1;
-            filter: blur(10px);
-            opacity: 0.3;
-        }
-
-        .system-status { display: flex; align-items: center; }
-
-        .status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: var(--success-color);
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 180, 42, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(0, 180, 42, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 180, 42, 0); }
-        }
-
-        .time-display { color: var(--neutral-color); font-size: 0.9rem; }
-
-        /* 主内容区 */
-        .main-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 8px 0;
-            min-height: 0;
-            overflow: hidden;
-            height: calc(100vh - 118px);
-        }
-
-        /* 三列布局 */
-        .three-col-layout {
-            display: flex;
-            gap: 8px;
-            flex: 1;
-            min-height: 0;
-            align-items: stretch;
-        }
-
-        .left-col {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            flex: 1;
-            min-width: 0;
-            min-height: 0;
-        }
-
-        .left-col .glass-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-
-        .left-col .glass-panel .panel-body {
-            flex: 1;
-            min-height: 0;
-        }
-
-        .center-col {
-            flex: 2;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-
-        .center-col .glass-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-
-        .center-col .glass-panel .panel-body {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            min-height: 0;
-        }
-
-        .right-col {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            flex: 1;
-            min-width: 0;
-            min-height: 0;
-        }
-
-        .right-col .glass-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-
-        .right-col .glass-panel .panel-body {
-            flex: 1;
-            min-height: 0;
-        }
-
-        .right-col .glass-panel .panel-body {
-            flex: 1;
-            min-height: 0;
-        }
-
-        /* 数据分析面板 - 切角发光边框 */
-        .glass-panel {
-            background: var(--panel-dark);
-            border: 1px solid rgba(68, 136, 255, 0.3);
-            clip-path: polygon(
-                0 12px, 12px 0, 
-                calc(100% - 12px) 0, 100% 12px,
-                100% calc(100% - 12px), calc(100% - 12px) 100%,
-                12px 100%, 0 calc(100% - 12px)
-            );
-            display: flex;
-            flex-direction: column;
-            overflow: visible;
-            position: relative;
-        }
-        .glass-panel:hover { 
-            border-color: rgba(68, 136, 255, 0.6);
-            box-shadow: 0 0 40px rgba(68, 136, 255, 0.25);
-        }
-        
-        /* 切角装饰 */
-        .corner-accent {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            pointer-events: none;
-            z-index: 10;
-        }
-        .corner-accent::before,
-        .corner-accent::after {
-            content: '';
-            position: absolute;
-            background: linear-gradient(135deg, var(--cosmic-blue), var(--cosmic-accent));
-            box-shadow: 0 0 8px rgba(0, 229, 255, 0.6), 0 0 16px rgba(157, 78, 221, 0.4);
-        }
-        .corner-accent.tl { top: -1px; left: -1px; }
-        .corner-accent.tl::before { width: 22px; height: 2px; top: 0; left: 0; }
-        .corner-accent.tl::after { width: 2px; height: 22px; top: 0; left: 0; }
-        
-        .corner-accent.tr { top: -1px; right: -1px; }
-        .corner-accent.tr::before { width: 22px; height: 2px; top: 0; right: 0; }
-        .corner-accent.tr::after { width: 2px; height: 22px; top: 0; right: 0; }
-        
-        .corner-accent.bl { bottom: -1px; left: -1px; }
-        .corner-accent.bl::before { width: 22px; height: 2px; bottom: 0; left: 0; }
-        .corner-accent.bl::after { width: 2px; height: 22px; bottom: 0; left: 0; }
-        
-        .corner-accent.br { bottom: -1px; right: -1px; }
-        .corner-accent.br::before { width: 22px; height: 2px; bottom: 0; right: 0; }
-        .corner-accent.br::after { width: 2px; height: 22px; bottom: 0; right: 0; }
-        
-        .glass-panel:hover .corner-accent::before,
-        .glass-panel:hover .corner-accent::after {
-            background: linear-gradient(135deg, var(--cosmic-accent), var(--cosmic-blue));
-            box-shadow: 0 0 12px rgba(0, 229, 255, 0.8), 0 0 24px rgba(255, 45, 120, 0.5);
-        }
-
-        .panel-header {
-            padding: 8px 12px 6px;
-            border-bottom: 1px solid rgba(68, 136, 255, 0.06);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            flex-shrink: 0;
-            position: relative;
-        }
-
-        .panel-icon {
-            width: 24px; height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        /* 核心指标 - 仪表盘 */
-        .panel-icon--kpi {
-            color: var(--cosmic-gold);
-            font-size: 1.1rem;
-            text-shadow: 0 0 12px rgba(245, 158, 11, 0.9), 0 0 24px rgba(245, 158, 11, 0.5);
-        }
-        .panel-icon--kpi::after { content: ''; }
-        /* 柱状图 - 召回率对比 */
-        .panel-icon--chart {
-            color: var(--cosmic-blue);
-            font-size: 0.95rem;
-            text-shadow: 0 0 12px rgba(91, 141, 239, 0.9), 0 0 24px rgba(91, 141, 239, 0.5);
-        }
-        .panel-icon--chart::after { content: ''; }
-        /* AI分析报告 */
-        .panel-icon--report {
-            color: var(--cosmic-accent);
-            font-size: 0.95rem;
-            text-shadow: 0 0 10px rgba(0, 229, 255, 0.8);
-        }
-        .panel-icon--report::after { content: ''; }
-        /* 饼图 - 效果占比 */
-        .panel-icon--pie {
-            color: var(--cosmic-purple);
-            font-size: 0.9rem;
-            text-shadow: 0 0 12px rgba(129, 140, 248, 0.9), 0 0 24px rgba(129, 140, 248, 0.5);
-        }
-        .panel-icon--pie::after { content: ''; }
-        /* AI策略 - 闪电/智能 */
-        .panel-icon--ai {
-            color: var(--cosmic-purple);
-            font-size: 0.95rem;
-            text-shadow: 0 0 12px rgba(129, 140, 248, 0.9), 0 0 24px rgba(129, 140, 248, 0.5);
-        }
-        .panel-icon--ai::after { content: ''; }
-        /* 排行榜图标 */
-        .panel-icon--rank {
-            color: var(--cosmic-accent);
-            font-size: 0.95rem;
-            text-shadow: 0 0 12px rgba(34, 211, 238, 0.9), 0 0 24px rgba(34, 211, 238, 0.5);
-        }
-        .panel-icon--rank::after { content: ''; }
-        /* 模拟器 - 齿轮 */
-        .panel-icon--sim {
-            color: #00ff88;
-            font-size: 1rem;
-            text-shadow: 0 0 12px rgba(0, 255, 136, 0.8), 0 0 24px rgba(0, 255, 136, 0.4);
-        }
-        .panel-icon--sim::after { content: ''; }
-
-        .panel-title {
-            font-size: 1rem;
-            font-weight: 700;
-            color: #5B8DEF;
-            text-align: center;
-        }
-
-        .panel-body {
-            padding: 8px 10px;
-            flex: 1;
-            overflow-y: auto;
-            min-height: 0;
-        }
-        .panel-body::-webkit-scrollbar { width: 3px; }
-        .panel-body::-webkit-scrollbar-track { background: transparent; }
-        .panel-body::-webkit-scrollbar-thumb { background: rgba(68, 136, 255, 0.15); border-radius: 2px; }
-
-        /* KPI区域 - 放在数据分析面板内 */
-        .kpi-area {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            flex: 0 0 120px;
-        }
-
-        .kpi-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-
-        .kpi-card {
-            background: var(--panel-dark);
-            border: 1px solid rgba(68, 136, 255, 0.15);
-            border-radius: 6px;
-            padding: 6px 10px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            text-align: center;
-        }
-        .kpi-card::before {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--card-color, var(--neon-blue)), transparent);
-            box-shadow: 0 0 10px var(--card-color, var(--neon-blue));
-        }
-        .kpi-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(68, 136, 255, 0.4);
-            box-shadow: 0 6px 24px rgba(68, 136, 255, 0.15);
-        }
-
-        .kpi-card--cyan   { --card-color: var(--cosmic-blue); }
-        .kpi-card--green  { --card-color: var(--cosmic-purple); }
-        .kpi-card--purple { --card-color: var(--cosmic-accent); }
-        .kpi-card--orange { --card-color: var(--cosmic-gold); }
-
-        .kpi-label {
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: rgba(255,255,255,0.6);
-            letter-spacing: 1px;
-            margin-bottom: 2px;
-            text-align: center;
-        }
-
-        .kpi-value {
-            font-size: 1.2rem;
-            font-weight: 900;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-            letter-spacing: 1px;
-            text-align: center;
-        }
-        .kpi-card--cyan   .kpi-value { color: #22D3EE; text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-        .kpi-card--green  .kpi-value { color: #22D3EE; text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-        .kpi-card--purple .kpi-value { color: #22D3EE; text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-        .kpi-card--orange .kpi-value { color: #22D3EE; text-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
-
-        .kpi-trend { font-size: 0.52rem; color: rgba(255,255,255,0.4); margin-top: 2px; text-align: center; }
-
-        /* 图表区域 */
-        .chart-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            min-height: 0;
-        }
-        .chart-item {
-            flex: 1;
-            min-height: 0;
-            min-height: 80px;
-        }
-
-        /* 下部：AI生成 + 策略模拟器并排 */
-        /* AI 生成器 */
-        .ai-section-label {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #22D3EE;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            gap: 8px;
-        }
-        .ai-section-label::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: linear-gradient(90deg, rgba(129, 140, 248, 0.15), rgba(91, 141, 239, 0.35), transparent);
-        }
-
-        .ai-textarea {
-            width: 100%;
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.06), rgba(157, 78, 221, 0.04), rgba(2, 8, 16, 0.8));
-            border: 1px solid rgba(0, 229, 255, 0.2);
-            border-radius: 6px;
-            color: #E8F4F8;
-            font-size: 0.78rem;
-            line-height: 1.6;
-            padding: 10px 14px;
-            resize: none;
-            outline: none;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            margin-bottom: 8px;
-            box-shadow: 
-                inset 0 1px 2px rgba(0, 229, 255, 0.08),
-                0 0 15px rgba(0, 229, 255, 0.06),
-                inset 0 0 20px rgba(157, 78, 221, 0.03);
-        }
-        .ai-textarea:focus {
-            border-color: rgba(34, 211, 238, 0.5);
-            background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(91, 141, 239, 0.06), rgba(2, 8, 16, 0.9));
-            box-shadow: 
-                inset 0 1px 2px rgba(34, 211, 238, 0.1),
-                0 0 25px rgba(34, 211, 238, 0.12),
-                0 0 50px rgba(91, 141, 239, 0.06);
-        }
-        .ai-textarea::placeholder { color: rgba(34, 211, 238, 0.3); }
-
-        /* AI 预设策略卡片 */
-        .ai-preset-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            margin-top: 8px;
-        }
-        .ai-preset-card {
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.04), rgba(157, 78, 221, 0.03));
-            border: 1px solid rgba(0, 229, 255, 0.1);
-            border-radius: 6px;
-            padding: 8px 10px;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        .ai-preset-card::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 0; bottom: 0;
-            width: 2px;
-            background: linear-gradient(180deg, var(--card-accent, var(--cosmic-accent)), rgba(91,141,239,0.5));
-            box-shadow: 0 0 8px var(--card-accent, var(--cosmic-accent)), 0 0 16px var(--card-accent, rgba(34,211,238,0.3));
-        }
-        .ai-preset-card:hover {
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(157, 78, 221, 0.08));
-            border-color: rgba(0, 229, 255, 0.3);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 229, 255, 0.12), 0 0 40px rgba(157, 78, 221, 0.08);
-        }
-        .ai-preset-card-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #22D3EE;
-            margin-bottom: 4px;
-            text-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
-        }
-        .ai-preset-card-tag {
-            display: inline-block;
-            font-size: 0.7rem;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: 600;
-        }
-        .ai-preset-card-content {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .ai-generate-btn {
-            width: 100%;
-            padding: 10px;
-            background: linear-gradient(135deg, rgba(157, 78, 221, 0.5), rgba(0, 229, 255, 0.4));
-            border: 1px solid rgba(157, 78, 221, 0.5);
-            border-radius: 6px;
-            color: #E8F4F8;
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            position: relative;
-            overflow: hidden;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            box-shadow: 0 0 15px rgba(157, 78, 221, 0.2), 0 0 30px rgba(0, 229, 255, 0.1);
-        }
-        .ai-generate-btn::before {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%;
-            width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-            transition: left 0.5s;
-        }
-        .ai-generate-btn:hover::before { left: 100%; }
-        .ai-generate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 25px rgba(157, 78, 221, 0.5), 0 0 50px rgba(0, 229, 255, 0.2);
-            border-color: rgba(0, 229, 255, 0.7);
-        }
-        .ai-generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .ai-copy-btn {
-            padding: 10px 14px;
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(157, 78, 221, 0.08));
-            border: 1px solid rgba(0, 229, 255, 0.25);
-            border-radius: 6px;
-            color: var(--cosmic-accent);
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            white-space: nowrap;
-        }
-        .ai-copy-btn:hover {
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(157, 78, 221, 0.15));
-            border-color: rgba(0, 229, 255, 0.5);
-            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
-            border-color: rgba(0, 221, 255, 0.5);
-            box-shadow: 0 0 15px rgba(0, 221, 255, 0.3);
-        }
-
-        /* AI服务选择器 */
-        .ai-service-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
-        }
-        .ai-service-label {
-            color: rgba(255,255,255,0.6);
-            font-size: 0.75rem;
-        }
-        .ai-service-btn {
-            padding: 5px 12px;
-            background: rgba(68, 136, 255, 0.08);
-            border: 1px solid rgba(68, 136, 255, 0.2);
-            border-radius: 4px;
-            color: rgba(255,255,255,0.7);
-            font-size: 0.72rem;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .ai-service-btn:hover {
-            background: rgba(68, 136, 255, 0.15);
-            border-color: rgba(68, 136, 255, 0.4);
-        }
-        .ai-service-btn.active {
-            background: linear-gradient(135deg, rgba(68, 136, 255, 0.2), rgba(0, 221, 255, 0.15));
-            border-color: rgba(0, 221, 255, 0.5);
-            color: #00ddff;
-            box-shadow: 0 0 10px rgba(0, 221, 255, 0.2);
-        }
-
-        .ai-response-box {
-            flex: 1;
-            min-height: 0;
-            background: linear-gradient(135deg, rgba(157, 78, 221, 0.08), rgba(0, 229, 255, 0.05), rgba(2, 8, 16, 0.9));
-            border: 1px solid rgba(157, 78, 221, 0.3);
-            border-radius: 6px;
-            padding: 10px 12px;
-            display: flex;
-            flex-direction: column;
-            animation: fadeSlideIn 0.3s ease;
-            box-shadow: 0 0 20px rgba(157, 78, 221, 0.1), inset 0 0 30px rgba(0, 229, 255, 0.03);
-        }
-        @keyframes fadeSlideIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .ai-response-header {
-            font-size: 0.9rem;
-            color: #5B8DEF;
-            font-weight: 700;
-            margin-bottom: 6px;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            text-align: left;
-        }
-        .ai-response-text {
-            flex: 1;
-            font-size: 0.72rem;
-            color: rgba(232, 244, 248, 0.8);
-            line-height: 1.7;
-            white-space: pre-wrap;
-            overflow-y: auto;
-        }
-
-        /* 结果指标 */
-        .result-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        .result-metric {
-            background: rgba(68, 136, 255, 0.04);
-            border: 1px solid rgba(68, 136, 255, 0.1);
-            border-radius: 6px;
-            padding: 10px;
-            text-align: center;
-            transition: all 0.35s;
-            position: relative;
-            overflow: hidden;
-        }
-        .result-metric::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: var(--metric-color, var(--neon-blue));
-            opacity: 0.6;
-        }
-        .result-metric.updated { animation: metricFlash 0.45s ease; }
-        @keyframes metricFlash {
-            0% { background: rgba(68, 136, 255, 0.15); border-color: rgba(68, 136, 255, 0.4); }
-            100% { background: rgba(68, 136, 255, 0.04); border-color: rgba(68, 136, 255, 0.1); }
-        }
-        #rm-recall { --metric-color: var(--cosmic-blue); }
-        #rm-roi { --metric-color: var(--cosmic-accent); }
-
-        .result-metric-value {
-            font-size: 1.3rem;
-            font-weight: 900;
-            font-variant-numeric: tabular-nums;
-        }
-        #rm-recall .result-metric-value { color: var(--cosmic-blue); text-shadow: var(--glow-cosmic); }
-        #rm-roi .result-metric-value { color: var(--cosmic-accent); text-shadow: var(--glow-accent); }
-
-        .result-metric-label {
-            font-size: 0.62rem;
-            color: rgba(255,255,255,0.4);
-            margin-top: 3px;
-            letter-spacing: 1px;
-        }
-
-        /* 排行榜 */
-        .panel-icon--rank::after { content: ''; }
-
-        .rank-header {
-            display: grid;
-            /* 5列：排名 | 策略名称 | 策略类型 | 召回率 | 趋势 */
-            grid-template-columns: 26px minmax(0, 1fr) 58px 50px 40px;
-            padding: 4px 6px;
-            font-size: 0.75rem;
-            color: #5B8DEF;
-            border-bottom: 1px solid rgba(91, 141, 239, 0.3);
-            margin-bottom: 1px;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }
-
-        .rank-header .rh-rank  { text-align: center; }
-        .rank-header .rh-name {
-            padding-left: 8px;
-        }
-        .rank-header .rh-type { text-align: center; padding-left: 0; }
-        .rank-header .rh-rate { text-align: center; }
-        .rank-header .rh-trend { text-align: center; }
-
-        .rank-scroll-wrap {
-            flex: 1;
-            min-height: 0;
-            position: relative;
-            overflow: hidden;
-            background: rgba(2, 8, 16, 0.6);
-            border-radius: 0 0 8px 8px;
-        }
-
-        /* 减少动效：跑马灯停转，改为就地可滚动，保证 21 条策略仍可全部访问（WCAG 2.2.2） */
-        @media (prefers-reduced-motion: reduce) {
-            /* 选择器需高于基础 .rank-list（同在样式表中，仅靠顺序会被后面的规则覆盖） */
-            .rank-scroll-wrap .rank-list { animation: none; transform: none; }
-            .rank-scroll-wrap {
-                overflow-y: auto;
-                overflow-x: hidden;
-                overscroll-behavior: contain;
-                scrollbar-width: thin;
-                scrollbar-color: rgba(91, 141, 239, 0.4) transparent;
-            }
-            .rank-scroll-wrap::-webkit-scrollbar { width: 4px; }
-            .rank-scroll-wrap::-webkit-scrollbar-thumb {
-                background: rgba(91, 141, 239, 0.4);
-                border-radius: 2px;
-            }
-            .rank-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
-            /* 翻倍的数据只为无缝循环，静态阅读时去掉重复的一半 */
-            .rank-row:nth-child(n+22) { display: none; }
-        }
-        /* 顶部渐变遮罩（去除底部黑暗遮罩） */
-        .rank-scroll-wrap::after {
-            content: '';
-            position: absolute;
-            left: 0; right: 0;
-            top: 0;
-            height: 30px;
-            z-index: 3;
-            pointer-events: none;
-            background: linear-gradient(to bottom, rgba(2,8,16,0.5), transparent);
-        }
-
-        .rank-list {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            animation: rankScroll linear infinite;
-            animation-duration: 18s;
-            width: 100%;
-        }
-        .rank-list:hover { animation-play-state: paused; }
-
-        @keyframes rankScroll {
-            0%   { transform: translateY(-50%); }
-            100% { transform: translateY(0); }
-        }
-
-        .rank-row {
-            display: grid;
-            grid-template-columns: 26px minmax(0, 1fr) 58px 50px 40px;
-            align-items: center;
-            min-height: 38px;
-            padding: 2px 6px;
-            position: relative;
-            border-bottom: 1px solid rgba(0, 229, 255, 0.04);
-            transition: background 0.25s ease;
-            cursor: default;
-        }
-        /* 悬停左侧光条 */
-        .rank-row::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 20%; bottom: 20%;
-            width: 2px;
-            background: var(--cosmic-accent);
-            border-radius: 0 2px 2px 0;
-            opacity: 0;
-            transition: opacity 0.25s ease;
-            box-shadow: 0 0 8px var(--cosmic-accent);
-        }
-        .rank-row:hover {
-            background: rgba(0, 229, 255, 0.06);
-        }
-        .rank-row:hover::before { opacity: 1; }
-
-        .rank-num {
-            font-size: 0.95rem;
-            font-weight: 700;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1px;
-        }
-        .rank-num .num-val {
-            font-size: 0.68rem;
-            font-weight: 600;
-            opacity: 0.5;
-            font-family: 'JetBrains Mono', 'Consolas', monospace;
-        }
-        .rank-num.top1 { color: var(--cosmic-gold); }
-        .rank-num.top1 .medal { text-shadow: 0 0 12px rgba(245,158,11,0.9), 0 0 24px rgba(245,158,11,0.5); animation: glow-pulse 2s ease-in-out infinite; }
-        .rank-num.top2 { color: #C0C0C0; }
-        .rank-num.top2 .medal { text-shadow: 0 0 10px rgba(192,192,192,0.8); animation: glow-pulse 2s ease-in-out infinite 0.3s; }
-        .rank-num.top3 { color: var(--cosmic-purple); }
-        .rank-num.top3 .medal { text-shadow: 0 0 10px rgba(129,140,248,0.8); animation: glow-pulse 2s ease-in-out infinite 0.6s; }
-        .rank-num.other { color: rgba(0, 229, 255, 0.35); }
-
-        @keyframes glow-pulse {
-            0%, 100% { opacity: 1; filter: brightness(1); }
-            50%       { opacity: 0.7; filter: brightness(1.4); }
-        }
-
-        .rank-name {
-            font-size: 0.82rem;
-            color: #00E5FF;
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            padding-left: 8px;
-        }
-        /* 策略类型标签（独立列） */
-        .rank-type-tag {
-            font-size: 0.6rem;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-weight: 600;
-            text-align: center;
-            white-space: nowrap;
-            border: 1px solid transparent;
-            align-self: center;
-            justify-self: center;
-        }
-        .rank-rate {
-            font-size: 1rem;
-            font-weight: 700;
-            font-family: 'JetBrains Mono', 'Consolas', monospace;
-            text-align: center;
-            letter-spacing: -0.02em;
-        }
-        .rank-roi {
-            font-size: 0.6rem;
-            color: var(--cosmic-gold);
-            text-align: center;
-            font-weight: 600;
-            text-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
-        }
-        .rank-trend {
-            font-size: 1.4rem;
-            font-weight: 400;
-            text-align: center;
-            letter-spacing: 0.04em;
-            line-height: 1;
-        }
-
-        .rank-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            padding: 6px 8px;
-            border-top: 1px solid rgba(91, 141, 239, 0.15);
-            font-size: 0.62rem;
-            color: rgba(232, 244, 248, 0.45);
-            flex-shrink: 0;
-            letter-spacing: 0.02em;
-        }
-        .rank-footer .footer-sep {
-            color: rgba(91, 141, 239, 0.2);
-            margin: 0 2px;
-        }
-
-        /* 页脚 */
-        footer {
-            height: 24px;
-            background: rgba(1, 8, 16, 0.9);
-            border-top: 1px solid rgba(68, 136, 255, 0.06);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.58rem;
-            color: rgba(255,255,255,0.25);
-            flex-shrink: 0;
-        }
-
-        .btn-spinner {
-            width: 14px; height: 14px;
-            border: 2px solid rgba(255,255,255,0.2);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        @keyframes numberCount {
-            from { opacity: 0.3; transform: scale(0.85); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .number-animate { animation: numberCount 0.25s ease; }
-
-        ::-webkit-scrollbar { width: 3px; height: 3px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-        ::-webkit-scrollbar-thumb { background: rgba(68, 136, 255, 0.15); border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(68, 136, 255, 0.3); }
-        
-        /* 精灵和精灵球样式 */
-        .sprite-container {
-            position: absolute;
-            top: 10px;
-            left: 200px;
-            z-index: 9999;
-            width: 150px;
-            height: 150px;
-        }
-        
-        /* 精灵球胶囊样式 */
-        .capsule {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 80px;
-            height: 80px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            overflow: hidden;
-            animation: pokeballFloat 2s ease-in-out infinite, pokeballRotate 5s ease-in-out infinite;
-        }
-        
-        /* 精灵球外壳 */
-        .pokeball {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 3px solid rgba(0, 240, 255, 0.8);
-        }
-        
-        /* 环绕光环效果 */
-        .pokeball::before {
-            content: '';
-            position: absolute;
-            top: -20px;
-            left: -20px;
-            right: -20px;
-            bottom: -20px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, transparent, rgba(0, 240, 255, 0.3), transparent);
-            animation: ringRotate 3s linear infinite;
-            pointer-events: none;
-        }
-        
-        @keyframes ringRotate {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-        
-        /* 上半部分（红色） */
-        .pokeball-top {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            background: linear-gradient(135deg, #ff3333, #ff6666);
-            overflow: hidden;
-        }
-        
-        /* 下半部分（白色） */
-        .pokeball-bottom {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            background: linear-gradient(135deg, #ffffff, #f0f0f0);
-            overflow: hidden;
-        }
-        
-        /* 分隔线 */
-        .pokeball-separator {
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: #000000;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
-            animation: separatorGlow 2s ease-in-out infinite;
-            z-index: 2;
-        }
-        
-        /* 中间按钮 */
-        .pokeball-button {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            background: #c0c0c0;
-            border-radius: 50%;
-            border: 2px solid #333333;
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
-            z-index: 3;
-        }
-        
-        /* 按钮内环 */
-        .button-inner {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 10px;
-            height: 10px;
-            background: #00f0ff;
-            border-radius: 50%;
-            box-shadow: 0 0 8px rgba(0, 240, 255, 1);
-            animation: buttonPulse 2s ease-in-out infinite;
-        }
-        
-        /* 电路纹 */
-        .circuit-pattern {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        
-        /* 红色区域电路纹 */
-        .red-circuit {
-            background: 
-                linear-gradient(90deg, transparent 49%, rgba(0, 240, 255, 0.5) 50%, transparent 51%),
-                linear-gradient(0deg, transparent 49%, rgba(255, 0, 0, 0.5) 50%, transparent 51%);
-            background-size: 15px 15px;
-            animation: redCircuitFlow 3s linear infinite;
-        }
-        
-        /* 白色区域电路纹 */
-        .white-circuit {
-            background: 
-                linear-gradient(90deg, transparent 49%, rgba(147, 51, 234, 0.5) 50%, transparent 51%),
-                linear-gradient(0deg, transparent 49%, rgba(0, 240, 255, 0.5) 50%, transparent 51%);
-            background-size: 15px 15px;
-            animation: whiteCircuitFlow 3s linear infinite reverse;
-        }
-        
-        /* Q版精灵剪影 */
-        .sprite-silhouette {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 30px;
-            height: 30px;
-            background: rgba(255, 255, 255, 0.8);
-            clip-path: polygon(
-                50% 0%, 
-                100% 25%, 
-                100% 75%, 
-                50% 100%, 
-                0% 75%, 
-                0% 25%
-            );
-            opacity: 0;
-            animation: spriteReveal 8s ease-in-out infinite;
-            z-index: 1;
-        }
-        
-        /* 粒子效果 */
-        .capsule-particles {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 4;
-        }
-        
-        /* 精灵球悬浮动画 */
-        @keyframes pokeballFloat {
-            0%, 100% {
-                transform: translateY(0px);
-            }
-            50% {
-                transform: translateY(-5px);
-            }
-        }
-        
-        /* 精灵球旋转动画 */
-        @keyframes pokeballRotate {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            25% {
-                transform: rotate(15deg);
-            }
-            75% {
-                transform: rotate(-15deg);
-            }
-        }
-        
-        /* 红色电路纹流动动画 */
-        @keyframes redCircuitFlow {
-            0% {
-                background-position: 0 0;
-            }
-            100% {
-                background-position: 30px 30px;
-            }
-        }
-        
-        /* 白色电路纹流动动画 */
-        @keyframes whiteCircuitFlow {
-            0% {
-                background-position: 0 0;
-            }
-            100% {
-                background-position: 30px 30px;
-            }
-        }
-        
-        /* 分隔线闪光动画 */
-        @keyframes separatorGlow {
-            0%, 100% {
-                box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
-            }
-            50% {
-                box-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 30px rgba(255, 0, 0, 0.8);
-            }
-        }
-        
-        /* 按钮脉冲动画 */
-        @keyframes buttonPulse {
-            0%, 100% {
-                box-shadow: 0 0 8px rgba(0, 240, 255, 1);
-                transform: translate(-50%, -50%) scale(1);
-            }
-            50% {
-                box-shadow: 0 0 15px rgba(0, 240, 255, 1), 0 0 25px rgba(0, 240, 255, 0.8);
-                transform: translate(-50%, -50%) scale(1.1);
-            }
-        }
-        
-        /* Q版精灵剪影显现动画 */
-        @keyframes spriteReveal {
-            0%, 85%, 100% {
-                opacity: 0;
-            }
-            90% {
-                opacity: 1;
-                box-shadow: 0 0 20px rgba(255, 255, 255, 1);
-            }
-        }
-        
-        /* 精灵球悬停效果 */
-        .capsule:hover {
-            transform: scale(1.1) translateY(-5px);
-            animation: pokeballHover 0.5s ease-out forwards, pokeballRotate 5s ease-in-out infinite;
-        }
-        
-        @keyframes pokeballHover {
-            0% {
-                transform: scale(1) translateY(0px);
-            }
-            50% {
-                transform: scale(1.15) translateY(-8px);
-            }
-            100% {
-                transform: scale(1.1) translateY(-5px);
-            }
-        }
-        
-        /* 精灵球点击动画 */
-        .capsule.clicked {
-            animation: pokeballClick 1s ease-out forwards;
-        }
-        
-        @keyframes pokeballClick {
-            0% {
-                transform: scale(1.1) translateY(-5px);
-            }
-            50% {
-                transform: scale(1.2) translateY(-10px);
-            }
-            100% {
-                transform: scale(0);
-                opacity: 0;
-            }
-        }
-        
-        /* 精灵球打开动画 - 上半部分 */
-        @keyframes pokeballOpenTop {
-            0% {
-                transform: translateY(0);
-            }
-            100% {
-                transform: translateY(-100%);
-            }
-        }
-        
-        /* 精灵球打开动画 - 下半部分 */
-        @keyframes pokeballOpenBottom {
-            0% {
-                transform: translateY(0);
-            }
-            100% {
-                transform: translateY(100%);
-            }
-        }
-        
-        /* 光粒汇聚动画 */
-        .light-particle {
-            position: absolute;
-            width: 2px;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
-            animation: lightConverge 1s ease-out forwards;
-        }
-        
-        @keyframes lightConverge {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: scale(0);
-                opacity: 0;
-            }
-        }
-        
-        /* 粒子旋转动画 */
-        @keyframes particleRotate {
-            0% {
-                transform: translate(-50%, -50%) rotate(0deg) translateX(40px);
-            }
-            100% {
-                transform: translate(-50%, -50%) rotate(360deg) translateX(40px);
-            }
-        }
-        
-        /* 能量充能特效 */
-        @keyframes energyCharge {
-            0%, 95% {
-                opacity: 0.7;
-                transform: scale(1);
-            }
-            98% {
-                opacity: 1;
-                transform: scale(1.05);
-                box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 0 0 60px rgba(0, 240, 255, 0.6);
-            }
-            100% {
-                opacity: 0.7;
-                transform: scale(1);
-            }
-        }
-        
-        /* 精灵消失动画 */
-        @keyframes spriteDisappear {
-            0% {
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-            }
-            100% {
-                transform: scale(0) rotate(45deg);
-                opacity: 0;
-            }
-        }
-        
-        /* 精灵样式 */
-        .sprite {
-            position: absolute;
-            top: 80px;
-            left: 0;
-            width: 80px;
-            height: 100px;
-            transform: scale(0);
-            transition: all 0.5s ease;
-        }
-        
-        .sprite-body {
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-        
-        /* 精灵身体 */
-        .sprite-body::before {
-            content: '';
-            position: absolute;
-            top: 20px;
-            left: 15px;
-            width: 50px;
-            height: 60px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 50% 50% 40% 40%;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
-            animation: dataFlow 3s ease-in-out infinite;
-        }
-        
-        /* 天线 */
-        .antenna {
-            position: absolute;
-            top: 5px;
-            width: 3px;
-            height: 15px;
-            background: linear-gradient(to top, rgba(59, 130, 246, 0.8), rgba(255, 255, 255, 0.8));
-            border-radius: 3px;
-            animation: antennaMove 2s ease-in-out infinite;
-        }
-        
-        .antenna.left {
-            left: 30px;
-        }
-        
-        .antenna.right {
-            right: 30px;
-        }
-        
-        /* 眼睛 */
-        .eyes {
-            position: absolute;
-            top: 35px;
-            left: 20px;
-            width: 40px;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .eye {
-            width: 15px;
-            height: 15px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .eye::before {
-            content: '';
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 9px;
-            height: 9px;
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 50%;
-            animation: eyeBlink 3s ease-in-out infinite;
-        }
-        
-        /* 嘴巴 */
-        .mouth {
-            position: absolute;
-            top: 55px;
-            left: 35px;
-            width: 10px;
-            height: 5px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 50%;
-        }
-        
-        /* 翅膀 */
-        .wings {
-            position: absolute;
-            top: 30px;
-            left: 0;
-            width: 100%;
-            height: 40px;
-            z-index: -1;
-        }
-        
-        .wing {
-            position: absolute;
-            top: 0;
-            width: 30px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
-            border-radius: 50% 50% 0 0;
-            transition: all 0.3s ease;
-        }
-        
-        .wing.left {
-            left: 5px;
-            transform: rotate(-30deg);
-        }
-        
-        .wing.right {
-            right: 5px;
-            transform: rotate(30deg);
-        }
-        
-        /* 四肢 */
-        .arms {
-            position: absolute;
-            top: 50px;
-            left: 10px;
-            width: 60px;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .arm {
-            width: 10px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 5px;
-        }
-        
-        .legs {
-            position: absolute;
-            bottom: 10px;
-            left: 25px;
-            width: 30px;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .leg {
-            width: 10px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 5px;
-        }
-        
-        /* 尾巴 */
-        .tail {
-            position: absolute;
-            bottom: 15px;
-            right: 10px;
-            width: 15px;
-            height: 20px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8));
-            border-radius: 0 0 10px 10px;
-            opacity: 0.8;
-        }
-        
-        /* 尾巴摇摆动画 */
-        @keyframes tailWag {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            50% {
-                transform: rotate(15deg);
-            }
-        }
-        
-        /* 粒子效果 */
-        .particles-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        
-        .sprite .particle {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: rgba(59, 130, 246, 0.9);
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(59, 130, 246, 0.8);
-            animation: spriteParticle 3s ease-in-out infinite;
-        }
-        
-        /* 对话气泡 */
-        .speech-bubble {
-            position: absolute;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
-            padding: 8px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-        }
-        
-        .speech-bubble::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid rgba(255, 255, 255, 0.9);
-        }
-        
-        /* 服饰样式 */
-        .costume {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transition: all 0.5s ease;
-        }
-        
-        /* 小E 2.0 主题精灵升级 */
-        .sprite {
-            width: 80px;
-            height: 100px;
-            will-change: transform, opacity, filter;
-            filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.35));
-            --theme-color: #34d9ff;
-        }
-        .sprite-body::before {
-            background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.5), rgba(59, 130, 246, 0.28) 30%, rgba(147, 51, 234, 0.38) 72%);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(1px);
-        }
-        .sprite.theme-home { --theme-color: #34d9ff; }
-        .sprite.theme-analysis { --theme-color: #b76dff; }
-        .sprite.theme-solution { --theme-color: #38f7a4; }
-        .sprite.theme-retention { --theme-color: #4ec8ff; }
-        .sprite.theme-comments { --theme-color: #ff75c8; }
-        .sprite .antenna { box-shadow: 0 0 8px var(--theme-color); }
-        .sprite .arm, .sprite .leg, .sprite .tail {
-            background: linear-gradient(160deg, color-mix(in srgb, var(--theme-color) 70%, #ffffff 30%), rgba(255, 255, 255, 0.2));
-        }
-        .costume { opacity: 1; transform: scale(1); transition: opacity 0.35s ease, transform 0.35s ease; }
-        .theme-tag {
-            position: absolute; top: -12px; left: 8px; padding: 1px 6px; border-radius: 10px;
-            font-size: 8px; color: #fff; letter-spacing: 0.4px;
-            background: color-mix(in srgb, var(--theme-color) 75%, #000 25%); box-shadow: 0 0 10px var(--theme-color);
-        }
-        .armor-core,.detective-cape,.tactical-vest,.data-robe,.social-hoodie{position:absolute;left:16px;top:38px;width:48px;height:34px;border-radius:10px;}
-        .armor-core{background:linear-gradient(145deg,#cfd8e3,#8da5c6);box-shadow:inset 0 0 12px rgba(255,255,255,.6),0 0 10px #4ec8ff;}
-        .holo-board{position:absolute;left:4px;top:64px;width:72px;height:14px;font-size:8px;line-height:14px;text-align:center;color:#7ef6ff;background:rgba(8,18,36,.8);border:1px solid #4ec8ff;border-radius:8px;animation:boardJump 2s linear infinite;}
-        .heatmap-grid{position:absolute;left:8px;top:66px;width:64px;height:10px;border-radius:6px;background:repeating-linear-gradient(90deg,rgba(255,0,80,.35) 0 6px,rgba(0,220,255,.3) 6px 12px);opacity:.7;}
-        .mag-boots{position:absolute;left:21px;top:86px;width:38px;display:flex;justify-content:space-between;}
-        .mag-boots span{width:12px;height:6px;border-radius:8px;background:#a7f3ff;box-shadow:0 0 8px #34d9ff;animation:bootPulse 1.6s ease-in-out infinite;}
-        .mag-boots span:last-child{animation-delay:.3s;}
-        .detective-cape{background:linear-gradient(160deg,rgba(119,40,230,.85),rgba(185,120,255,.45));}
-        .prism-lens{position:absolute;right:2px;top:46px;width:18px;height:18px;border:2px solid #77f7ff;border-radius:50%;background:conic-gradient(from 0deg,#7affff,#d19cff,#7affff);animation:spin 3.2s linear infinite;}
-        .clue-flow{position:absolute;left:14px;top:74px;width:52px;height:2px;background:linear-gradient(90deg,transparent,#a0ff7b,transparent);animation:clueFlow 1.8s linear infinite;}
-        .question-badge{position:absolute;right:1px;top:23px;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;line-height:14px;text-align:center;color:#091520;background:#7fff5f;box-shadow:0 0 8px #7fff5f;}
-        .tactical-vest{background:linear-gradient(145deg,rgba(0,255,170,.75),rgba(22,140,88,.65));}
-        .strategy-cards{position:absolute;left:8px;top:63px;display:flex;gap:2px;}
-        .strategy-cards span{font-size:7px;color:#032a1d;background:#88ffcf;padding:0 3px;border-radius:3px;}
-        .energy-band{position:absolute;right:4px;top:55px;width:18px;height:7px;border:1px solid #8fffd4;border-radius:5px;overflow:hidden;}
-        .energy-band i{display:block;height:100%;background:linear-gradient(90deg,#44ffa8,#d5ffed);animation:progressGrow 2.2s ease-in-out infinite;}
-        .thruster-boots{position:absolute;left:20px;top:86px;display:flex;gap:13px;}
-        .thruster-boots b{display:block;width:12px;height:5px;border-radius:8px;background:#c4fff1;position:relative;}
-        .thruster-boots b::after{content:'';position:absolute;left:3px;top:5px;width:6px;height:9px;background:linear-gradient(#50d7ff,transparent);filter:blur(.2px);animation:flameJet .8s ease-in-out infinite;}
-        .data-robe{background:linear-gradient(150deg,rgba(89,225,255,.45),rgba(116,132,255,.35));border:1px solid rgba(94,245,255,.4);}
-        .ar-glasses{position:absolute;left:18px;top:33px;width:44px;height:12px;border:1px solid #84f3ff;border-radius:6px;background:rgba(16,34,64,.7);}
-        .retention-badge{position:absolute;left:10px;top:74px;padding:0 5px;height:13px;line-height:13px;font-size:8px;color:#fff;background:rgba(70,200,255,.45);border:1px solid #6ef6ff;border-radius:8px;animation:boardJump 1.8s ease-in-out infinite;}
-        .trend-line{position:absolute;left:16px;top:50px;width:40px;height:18px;border-bottom:1px solid rgba(130,255,255,.4);border-left:1px solid rgba(130,255,255,.4);}
-        .trend-line::after{content:'';position:absolute;left:2px;top:12px;width:32px;height:2px;background:linear-gradient(90deg,#7ff8ff,#ffffff);transform:skewY(-28deg);animation:trendMove 1.6s ease-in-out infinite;}
-        .social-hoodie{background:linear-gradient(140deg,rgba(255,115,196,.85),rgba(255,175,220,.5));}
-        .bubble-pack{position:absolute;left:2px;top:62px;width:76px;height:14px;border-radius:9px;background:rgba(255,255,255,.84);font-size:7px;line-height:14px;text-align:center;color:#5f2149;overflow:hidden;white-space:nowrap;animation:marqueeMsg 5s linear infinite;}
-        .emotion-band{position:absolute;right:6px;top:58px;width:13px;height:13px;border-radius:50%;border:2px solid #6dff9d;animation:sentimentShift 2.6s ease-in-out infinite;}
-        .wifi-signal{position:absolute;left:28px;top:28px;width:22px;height:12px;border-top:2px solid rgba(255,255,255,.75);border-radius:12px 12px 0 0;animation:wifiPulse 1.3s ease-in-out infinite;}
-        .fx-particles{position:absolute;inset:0;pointer-events:none;}
-        .fx-dot{position:absolute;width:3px;height:3px;border-radius:50%;opacity:0;}
-        .fx-dot.dissolve{background:#fff;animation:fxDissolve .72s ease-out forwards;}
-        .fx-dot.load{background:var(--theme-color);box-shadow:0 0 7px var(--theme-color);animation:fxLoad .72s ease-out forwards;}
-        .idle-blink .eye::before{animation:eyeBlink .4s ease-in-out 1;}
-        @keyframes boardJump{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
-        @keyframes bootPulse{0%,100%{box-shadow:0 0 8px #34d9ff}50%{box-shadow:0 0 8px #ff5166}}
-        @keyframes clueFlow{0%{transform:translateX(-8px)}100%{transform:translateX(8px)}}
-        @keyframes progressGrow{0%,100%{width:28%}50%{width:88%}}
-        @keyframes flameJet{0%,100%{opacity:.35;transform:scaleY(.8)}50%{opacity:1;transform:scaleY(1.2)}}
-        @keyframes trendMove{0%,100%{transform:translateX(0) skewY(-28deg)}50%{transform:translateX(4px) skewY(-28deg)}}
-        @keyframes marqueeMsg{0%{text-indent:2px}50%{text-indent:-32px}100%{text-indent:2px}}
-        @keyframes sentimentShift{0%,100%{border-color:#6dff9d}50%{border-color:#ff5c6a}}
-        @keyframes wifiPulse{0%,100%{opacity:.35}50%{opacity:1}}
-        @keyframes fxDissolve{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:translateY(-10px) scale(0)}}
-        @keyframes fxLoad{0%{opacity:0;transform:translateY(10px) scale(0)}100%{opacity:1;transform:translateY(0) scale(1)}}
-        .sprite.cinema-break .costume { animation: cinemaBreak .45s ease forwards; }
-        .sprite.cinema-rebuild .costume { animation: cinemaRebuild .55s ease forwards; }
-        .sprite.cinema-born .costume { animation: cinemaBorn .5s ease forwards; }
-        .sprite-stage-fx {
-            position: absolute;
-            inset: -10px;
-            pointer-events: none;
-            border-radius: 14px;
-            opacity: 0;
-            z-index: 4;
-        }
-        .sprite-stage-fx.active { opacity: 1; }
-        .sprite-stage-fx.break { background: radial-gradient(circle, rgba(255,255,255,.2), transparent 70%); animation: fxShake .45s linear; }
-        .sprite-stage-fx.rebuild { background: conic-gradient(from 0deg, transparent, var(--theme-color), transparent); animation: fxSpin 0.55s linear; }
-        .sprite-stage-fx.born { background: radial-gradient(circle, color-mix(in srgb, var(--theme-color) 45%, #fff 55%), transparent 65%); animation: fxPulse .5s ease; }
-        .easter-hotspot { position: absolute; z-index: 8; cursor: pointer; }
-        .hotspot-antenna { top: 0; left: 24px; width: 30px; height: 15px; }
-        .hotspot-body { top: 22px; left: 12px; width: 56px; height: 62px; border-radius: 20px; }
-        .hotspot-particle { top: 16px; right: -6px; width: 22px; height: 22px; border-radius: 50%; }
-        @keyframes cinemaBreak { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:translateY(8px) scale(.72) rotate(-12deg)} }
-        @keyframes cinemaRebuild { 0%{opacity:0;transform:scale(.55) rotate(20deg)} 100%{opacity:1;transform:scale(1) rotate(0)} }
-        @keyframes cinemaBorn { 0%{filter:brightness(1)} 50%{filter:brightness(1.8)} 100%{filter:brightness(1)} }
-        @keyframes fxShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
-        @keyframes fxSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-        @keyframes fxPulse { 0%{transform:scale(.7)} 100%{transform:scale(1.15);opacity:0} }
-    </style>
-    <link rel="stylesheet" href="ops-nav.css">
-    <link rel="stylesheet" href="live-ticker.css">
-    <script src="js/dashboard-data.js"></script>
-    <script src="js/live-ticker.js" defer></script>
-    <script src="js/ops-nav.js" defer></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070B16'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%2335D9F2'/%3E%3Crect x='12' y='12' width='8' height='8' rx='2' fill='%23070B16'/%3E%3C/svg%3E">
+<title>召回策略 · 玩家留存中枢</title>
+<!-- 数据说明：本页数值由 js/dashboard-data.js 派生，属设计用示例数据，尚未接入 /api/churn-retention -->
+<link rel="stylesheet" href="ops-nav.css">
+<link rel="stylesheet" href="live-ticker.css">
+<script src="js/dashboard-data.js"></script>
+<script src="js/live-ticker.js" defer></script>
+<script src="js/ops-nav.js" defer></script>
+<style>
+:root{
+    --bg:#070B16;
+    --bg-2:#0B1424;
+    --panel:rgba(13,27,47,.82);
+    --cyan:#35D9F2;
+    --blue:#318BFF;
+    --violet:#9275FF;
+    --green:#35D399;
+    --amber:#FFB45F;
+    --red:#FF6B75;
+    --ink:#EAF3FF;
+    --ink-2:#9EB1CA;
+    --ink-3:#637A96;
+    --line:rgba(68,155,209,.22);
+    --mono: ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans: system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+
+body{
+    margin:0;
+    font-family:var(--sans);
+    font-size:13px;
+    color:var(--ink);
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+}
+
+/* 背景光晕：与总览页同一套语言，不使用位图 */
+body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:0;
+    background:
+        radial-gradient(900px 520px at 50% -8%, rgba(49,139,255,.16), transparent 68%),
+        radial-gradient(700px 460px at 8% 92%, rgba(146,117,255,.12), transparent 70%),
+        radial-gradient(680px 420px at 96% 84%, rgba(53,217,242,.08), transparent 70%);
+}
+
+.board{
+    position:relative;
+    z-index:1;
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:13px clamp(12px,1.6vw,22px) 12px;
+    animation:boardIn .45s cubic-bezier(.22,.61,.36,1) both;
+}
+@keyframes boardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ==================== 三栏 ==================== */
+.stage{
+    flex:1;
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(0,.88fr) minmax(0,1.62fr) minmax(0,.98fr);
+    gap:12px;
+}
+.wing{display:grid;gap:12px;min-height:0}
+.wing--left{grid-template-rows:1fr 1fr}
+
+/* ==================== 面板 ==================== */
+.panel{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    border-radius:14px;
+    background:linear-gradient(180deg, rgba(13,22,38,.9), rgba(6,11,21,.94));
+    border:1px solid var(--line);
+    box-shadow:0 30px 60px -42px #000, inset 0 1px 0 rgba(255,255,255,.04);
+    -webkit-backdrop-filter:blur(10px);
+    backdrop-filter:blur(10px);
+    overflow:hidden;
+}
+.panel::before{
+    content:"";
+    position:absolute;
+    top:0;left:12%;right:12%;
+    height:1px;
+    background:linear-gradient(90deg,transparent,var(--hair,rgba(34,211,238,.5)),rgba(146,117,255,.3),transparent);
+    opacity:.85;
+    pointer-events:none;
+}
+.p-head{
+    flex:none;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 13px 0;
+}
+.p-title{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin:0;
+    font-size:12.5px;
+    font-weight:600;
+    letter-spacing:.06em;
+    white-space:nowrap;
+}
+.p-title::before{
+    content:"";
+    width:3px;height:11px;
+    border-radius:2px;
+    background:var(--accent,var(--cyan));
+    box-shadow:0 0 10px var(--accent,var(--cyan));
+}
+.p-meta{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.1em;
+    color:var(--ink-3);
+    white-space:nowrap;
+}
+.p-body{
+    position:relative;
+    flex:1;
+    min-height:0;
+    margin:7px 10px 10px;
+    display:flex;
+    flex-direction:column;
+}
+
+/* ==================== 左：风险概览 ==================== */
+.risk-top{display:flex;align-items:center;gap:14px;flex:1;min-height:0}
+.risk-ring{position:relative;width:124px;height:124px;flex:none}
+.risk-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.risk-ring .track{stroke:rgba(90,140,200,.16)}
+.risk-ring .arc{
+    stroke:url(#riskGrad);
+    stroke-linecap:round;
+    stroke-dasharray:100;
+    stroke-dashoffset:100;
+    animation:arcIn 1.2s cubic-bezier(.22,.61,.36,1) .1s forwards;
+}
+@keyframes arcIn{to{stroke-dashoffset:var(--off,76.6)}}
+.risk-ring .cap{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:1px;
+}
+.risk-ring .cap b{
+    font-family:var(--mono);
+    font-size:21px;
+    font-weight:600;
+    letter-spacing:-.02em;
+    line-height:1;
+}
+.risk-ring .cap span{font-size:9px;color:var(--ink-3);letter-spacing:.06em}
+.risk-ring .cap em{
+    font-style:normal;
+    font-family:var(--mono);
+    font-size:9.5px;
+    color:var(--red);
+}
+
+.risk-list{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.risk-row{display:flex;align-items:center;gap:7px;min-width:0}
+.risk-row i{
+    width:6px;height:6px;border-radius:50%;
+    flex:none;
+    background:var(--c);
+    box-shadow:0 0 8px var(--c);
+}
+.risk-row span{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.risk-row b{
+    margin-left:auto;
+    font-family:var(--mono);
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+}
+.risk-foot{
+    flex:none;
+    margin-top:10px;
+    padding-top:9px;
+    border-top:1px dashed rgba(90,140,200,.18);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    font-size:10px;
+    color:var(--ink-3);
+}
+.risk-foot b{font-family:var(--mono);color:var(--ink-2);font-weight:600}
+
+/* 可召回覆盖率：填补面板下方空档，同时给出一个可解释的口径 */
+.risk-bar{flex:none;margin-top:auto;padding-top:12px}
+.rb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9.5px;color:var(--ink-3);margin-bottom:6px}
+.rb-head b{font-family:var(--mono);font-size:11px;color:var(--cyan);font-weight:600}
+.rb-track{height:6px;border-radius:999px;background:rgba(90,140,200,.14);overflow:hidden}
+.rb-fill{
+    height:100%;
+    width:0;
+    border-radius:999px;
+    background:linear-gradient(90deg,rgba(53,217,242,.85),rgba(49,139,255,.95));
+    box-shadow:0 0 12px -2px rgba(53,217,242,.8);
+    transition:width .6s cubic-bezier(.22,.61,.36,1);
+}
+
+/* ==================== 左：人群细分 ==================== */
+.seg{
+    display:inline-flex;
+    gap:2px;
+    padding:2px;
+    border-radius:8px;
+    background:rgba(8,16,30,.8);
+    border:1px solid rgba(90,140,200,.16);
+    align-self:flex-start;
+}
+.seg-btn{
+    appearance:none;
+    border:0;
+    background:transparent;
+    color:var(--ink-3);
+    font-family:var(--sans);
+    font-size:10.5px;
+    padding:3px 8px;
+    border-radius:6px;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background .18s ease,color .18s ease;
+}
+.seg-btn:hover{color:var(--ink-2)}
+.seg-btn.is-on{
+    color:#06121F;
+    background:linear-gradient(180deg,#5FE6FF,#2FA9D8);
+    font-weight:600;
+    box-shadow:0 0 12px -3px rgba(53,217,242,.7);
+}
+
+.seg-wrap{display:flex;align-items:center;gap:14px;flex:1;min-height:0;margin-top:8px}
+.seg-donut{position:relative;width:108px;height:108px;flex:none}
+.seg-donut svg{width:100%;height:100%}
+.seg-donut .cap{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:1px;
+}
+.seg-donut .cap b{font-family:var(--mono);font-size:15px;font-weight:600;line-height:1}
+.seg-donut .cap span{font-size:9px;color:var(--ink-3)}
+
+.legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.legend-row{display:flex;align-items:center;gap:7px;min-width:0;transition:opacity .2s ease}
+.legend-row i{width:7px;height:7px;border-radius:2px;flex:none;background:var(--c);box-shadow:0 0 8px var(--c)}
+.legend-row span{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.legend-row b{margin-left:auto;font-family:var(--mono);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ==================== 中央：AI 引擎 ==================== */
+.engine-col{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    border-radius:14px;
+    border:1px solid rgba(68,155,209,.16);
+    background:
+        radial-gradient(420px 300px at 50% 42%, rgba(49,139,255,.13), transparent 72%),
+        linear-gradient(180deg, rgba(10,18,32,.72), rgba(5,9,17,.86));
+    overflow:hidden;
+}
+.engine-head{flex:none;text-align:center;padding:12px 16px 0}
+.engine-title{
+    margin:0;
+    font-size:17px;
+    font-weight:700;
+    letter-spacing:.12em;
+    background:linear-gradient(92deg,#8FF0FF 0%,#7FA8FF 46%,#C9A6FF 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+.engine-sub{
+    margin:5px 0 0;
+    font-size:10.5px;
+    letter-spacing:.04em;
+    color:var(--ink-3);
+}
+
+.engine{
+    position:relative;
+    flex:1;
+    min-height:0;
+    display:grid;
+    grid-template-columns:0.86fr 1.28fr 0.86fr;
+    grid-template-rows:1fr 1fr;
+    align-items:center;
+    gap:8px 4px;
+    padding:6px 14px 0;
+    perspective:1400px;
+}
+
+.node{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    min-width:150px;
+    padding:9px 11px;
+    border-radius:11px;
+    border:1px solid rgba(68,155,209,.28);
+    background:linear-gradient(150deg, rgba(16,30,52,.94), rgba(7,13,24,.94));
+    box-shadow:0 18px 34px -26px #000, inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.node:hover{transform:translateY(-1px);border-color:rgba(53,217,242,.5);box-shadow:0 22px 40px -26px #000, 0 0 22px -12px rgba(53,217,242,.7)}
+.node--l{justify-self:start}
+.node--r{justify-self:end;flex-direction:row-reverse;text-align:right}
+/* 显式定位：热点分析(左上)、玩家画像(左下)、策略生成(右上)、效果预测(右下) */
+.node--tl{grid-area:1/1}
+.node--bl{grid-area:2/1}
+.node--tr{grid-area:1/3}
+.node--br{grid-area:2/3}
+.node-ico{
+    flex:none;
+    width:30px;height:30px;
+    display:grid;
+    place-items:center;
+    border-radius:9px;
+    color:var(--c);
+    background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.01));
+    border:1px solid color-mix(in srgb, var(--c) 40%, transparent);
+    box-shadow:0 0 18px -6px var(--c);
+}
+.node-ico svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.node-txt{min-width:0}
+.node-txt b{display:block;font-size:11.5px;font-weight:600;letter-spacing:.03em;white-space:nowrap}
+.node-txt span{display:block;margin-top:2px;font-size:9.5px;color:var(--ink-3);white-space:nowrap}
+
+/* 核心聚合：以柔光取代硬连线，四个节点靠向心构图聚合，避免细线在大跨度下退化成碎点 */
+.engine::before{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:min(560px,88%);
+    aspect-ratio:1/.78;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+    z-index:0;
+    background:radial-gradient(ellipse at 50% 50%, rgba(49,139,255,.16), rgba(49,139,255,.05) 46%, transparent 72%);
+}
+
+.core{position:relative;z-index:2;grid-column:2;grid-row:1 / span 2;display:grid;place-items:center;min-height:0}
+.core-plate{
+    position:absolute;
+    width:min(300px,94%);
+    aspect-ratio:1/.62;
+    border-radius:50%;
+    background:radial-gradient(ellipse at 50% 62%, rgba(49,139,255,.3), rgba(49,139,255,.06) 58%, transparent 72%);
+    border:1px solid rgba(53,217,242,.16);
+    box-shadow:0 0 60px -18px rgba(49,139,255,.6), inset 0 0 40px -20px rgba(53,217,242,.7);
+    transform:translateY(30%);
+}
+.core-plate::after{
+    content:"";
+    position:absolute;
+    inset:16% 12%;
+    border-radius:50%;
+    border:1px solid rgba(53,217,242,.13);
+}
+.core-hex{
+    position:relative;
+    width:148px;
+    height:168px;
+    display:grid;
+    place-items:center;
+    filter:drop-shadow(0 18px 30px rgba(49,139,255,.35));
+}
+.hex{position:absolute;inset:0;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.hex--out{background:linear-gradient(165deg, rgba(143,240,255,.95), rgba(49,139,255,.85) 46%, rgba(146,117,255,.8))}
+.hex--in{inset:2px;background:linear-gradient(170deg, #0C1B31, #060D1A 62%)}
+.hex--glow{
+    inset:0;
+    background:linear-gradient(150deg, rgba(143,240,255,.5), rgba(146,117,255,.32));
+    filter:blur(14px);
+    opacity:.75;
+}
+.core-ai{
+    position:relative;
+    font-family:var(--mono);
+    font-size:34px;
+    font-weight:700;
+    letter-spacing:.02em;
+    background:linear-gradient(180deg,#DFF8FF,#7FB2FF);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    text-shadow:0 0 22px rgba(127,178,255,.5);
+}
+.core-orbit{
+    position:absolute;
+    left:50%;
+    top:50%;
+    border-radius:50%;
+    border:1px dashed rgba(53,217,242,.22);
+    transform:translate(-50%,-50%) rotateX(70deg);
+    pointer-events:none;
+}
+.core-orbit.o1{width:196px;height:196px;animation:orbit 26s linear infinite}
+.core-orbit.o2{width:244px;height:244px;border-color:rgba(146,117,255,.16);animation:orbit 40s linear infinite reverse}
+@keyframes orbit{
+    from{transform:translate(-50%,-50%) rotateX(70deg) rotate(0deg)}
+    to{transform:translate(-50%,-50%) rotateX(70deg) rotate(360deg)}
+}
+
+.engine-status{
+    position:relative;
+    flex:none;
+    margin:0 16px 14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 14px;
+    border-radius:999px;
+    border:1px solid rgba(53,217,242,.24);
+    background:rgba(7,16,29,.86);
+    font-size:11px;
+    color:var(--ink-2);
+    overflow:hidden;
+}
+.engine-status .dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--cyan);
+    box-shadow:0 0 9px var(--cyan);
+    animation:blink 1.8s ease-in-out infinite;
+    flex:none;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.28}}
+.engine-status::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(90deg,transparent,rgba(53,217,242,.13),transparent);
+    transform:translateX(-100%);
+    animation:sweep 3.4s ease-in-out infinite;
+}
+@keyframes sweep{0%{transform:translateX(-100%)}55%,100%{transform:translateX(100%)}}
+.engine-status.is-done{border-color:rgba(53,211,153,.4)}
+.engine-status.is-done .dot{background:var(--green);box-shadow:0 0 9px var(--green);animation:none}
+
+/* ==================== 右：AI 生成方案 ==================== */
+.badge-rec{
+    flex:none;
+    font-family:var(--mono);
+    font-size:9px;
+    letter-spacing:.08em;
+    padding:2px 7px;
+    border-radius:999px;
+    color:#1B1005;
+    background:linear-gradient(180deg,#FFD98A,#F0A83C);
+    box-shadow:0 0 14px -4px rgba(240,168,60,.9);
+}
+.plan-title{
+    margin:8px 0 0;
+    font-size:13.5px;
+    font-weight:600;
+    line-height:1.45;
+    letter-spacing:.01em;
+    color:var(--ink);
+}
+.plan-desc{margin:6px 0 0;font-size:10.5px;line-height:1.6;color:var(--ink-3)}
+
+.plan-visual{
+    flex:1;
+    min-height:96px;
+    position:relative;
+    margin:8px 0 2px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    background:
+        radial-gradient(160px 80px at 50% 62%, rgba(146,117,255,.24), transparent 72%),
+        linear-gradient(180deg, rgba(20,32,56,.6), rgba(8,14,26,.5));
+    border:1px solid rgba(146,117,255,.18);
+    overflow:hidden;
+}
+.plan-visual::before{
+    content:"";
+    position:absolute;
+    width:132px;height:132px;
+    border-radius:50%;
+    border:1px dashed rgba(146,117,255,.28);
+    background:radial-gradient(circle, rgba(146,117,255,.18), transparent 70%);
+}
+.plan-visual::after{
+    content:"";
+    position:absolute;
+    width:178px;height:178px;
+    border-radius:50%;
+    border:1px solid rgba(146,117,255,.1);
+}
+.plan-visual svg{
+    position:relative;
+    z-index:1;
+    width:108px;
+    height:108px;
+    filter:drop-shadow(0 10px 18px rgba(146,117,255,.45));
+}
+
+.plan-metrics{flex:none;display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.pm-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-2)}
+.pm-ico{
+    width:16px;height:16px;flex:none;
+    display:grid;place-items:center;
+    color:var(--c,var(--cyan));
+}
+.pm-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pm-row b{
+    margin-left:auto;
+    font-family:var(--mono);
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+}
+.pm-row em{font-style:normal;font-size:10px;color:var(--green);margin-left:3px}
+
+.steps{flex:none;margin-top:12px;padding-top:10px;border-top:1px dashed rgba(90,140,200,.18)}
+.steps-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:10px;color:var(--ink-3);letter-spacing:.08em;
+}
+.steps-track{display:flex;align-items:center;gap:2px;margin-top:9px}
+.step{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+.step-ico{
+    width:26px;height:26px;border-radius:8px;
+    display:grid;place-items:center;
+    color:var(--c);
+    background:rgba(255,255,255,.045);
+    border:1px solid color-mix(in srgb, var(--c) 34%, transparent);
+}
+.step-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.step span{font-size:9.5px;color:var(--ink-3);white-space:nowrap}
+.step::before{
+    content:"";
+    position:absolute;
+    top:13px;
+    left:-6%;
+    width:12%;
+    height:1px;
+    background:linear-gradient(90deg,rgba(90,140,200,.1),rgba(90,140,200,.45));
+}
+.step:first-child::before{display:none}
+
+.ai-fold{flex:none;margin-top:10px;border-radius:9px;border:1px solid rgba(90,140,200,.18);background:rgba(8,15,27,.7)}
+.ai-fold>summary{
+    list-style:none;
+    cursor:pointer;
+    padding:7px 10px;
+    font-size:10px;
+    letter-spacing:.06em;
+    color:var(--ink-3);
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+.ai-fold>summary::-webkit-details-marker{display:none}
+.ai-fold>summary::after{content:"＋";margin-left:auto;font-family:var(--mono)}
+.ai-fold[open]>summary::after{content:"－"}
+.ai-fold>summary:hover{color:var(--ink-2)}
+.ai-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:7px}
+.ai-body textarea{
+    width:100%;
+    min-height:46px;
+    resize:vertical;
+    padding:7px 8px;
+    border-radius:7px;
+    border:1px solid rgba(90,140,200,.24);
+    background:rgba(4,9,18,.9);
+    color:var(--ink-2);
+    font-family:var(--sans);
+    font-size:10.5px;
+    line-height:1.55;
+    outline:none;
+    transition:border-color .18s ease;
+}
+.ai-body textarea:focus{border-color:rgba(53,217,242,.5)}
+.btn-ai{
+    align-self:flex-start;
+    appearance:none;
+    cursor:pointer;
+    padding:5px 12px;
+    border-radius:7px;
+    border:1px solid rgba(53,217,242,.4);
+    background:rgba(53,217,242,.1);
+    color:#BFF3FF;
+    font-family:var(--sans);
+    font-size:10.5px;
+    transition:background .18s ease,border-color .18s ease;
+}
+.btn-ai:hover{background:rgba(53,217,242,.18);border-color:rgba(53,217,242,.7)}
+.btn-ai[disabled]{opacity:.55;cursor:default}
+.ai-out{
+    max-height:110px;
+    overflow:auto;
+    font-size:10.5px;
+    line-height:1.7;
+    color:var(--ink-2);
+    white-space:pre-wrap;
+}
+
+.btn-deploy{
+    flex:none;
+    margin-top:auto;
+    width:100%;
+    padding:11px 14px;
+    border:0;
+    border-radius:10px;
+    cursor:pointer;
+    font-family:var(--sans);
+    font-size:12.5px;
+    font-weight:600;
+    letter-spacing:.04em;
+    color:#04121F;
+    background:linear-gradient(96deg,#7FE7FF 0%,#6FA8FF 52%,#B79CFF 100%);
+    box-shadow:0 16px 30px -18px rgba(111,168,255,.9), inset 0 1px 0 rgba(255,255,255,.4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.btn-deploy:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 20px 36px -18px rgba(111,168,255,1)}
+.btn-deploy:active{transform:translateY(0)}
+.btn-deploy.is-done{
+    background:linear-gradient(96deg,rgba(53,211,153,.92),rgba(53,217,242,.86));
+    color:#04140E;
+    cursor:default;
+}
+.btn-deploy svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ==================== 底部：策略对比 ==================== */
+.strategies{flex:none;display:flex;flex-direction:column;gap:8px;min-height:0}
+.strat-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.strat-title{display:flex;align-items:center;gap:7px;margin:0;font-size:12.5px;font-weight:600;letter-spacing:.06em}
+.strat-title::before{
+    content:"";width:3px;height:11px;border-radius:2px;
+    background:var(--violet);box-shadow:0 0 10px var(--violet);
+}
+.strat-grid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    height:186px;
+}
+
+.card{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    padding:10px 12px 9px;
+    border-radius:13px;
+    background:linear-gradient(168deg, rgba(17,29,49,.92), rgba(7,12,22,.95));
+    border:1px solid var(--line);
+    box-shadow:0 24px 44px -36px #000, inset 0 1px 0 rgba(255,255,255,.04);
+    overflow:hidden;
+    cursor:pointer;
+    transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.card::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:radial-gradient(140px 70px at 12% 0%, var(--tint), transparent 74%);
+}
+.card:hover{transform:translateY(-2px);border-color:color-mix(in srgb, var(--c) 46%, transparent);box-shadow:0 28px 50px -34px #000, 0 0 24px -14px var(--c)}
+.card.is-active{border-color:color-mix(in srgb, var(--c) 62%, transparent);box-shadow:0 28px 50px -34px #000, 0 0 26px -12px var(--c)}
+.card-top{display:flex;align-items:center;gap:7px;flex:none}
+.card-ico{
+    width:24px;height:24px;flex:none;
+    display:grid;place-items:center;
+    border-radius:7px;
+    color:var(--c);
+    background:rgba(255,255,255,.05);
+    border:1px solid color-mix(in srgb, var(--c) 34%, transparent);
+}
+.card-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card-name{
+    margin:0;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:.02em;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.tag-match{
+    margin-left:auto;
+    flex:none;
+    font-size:8.5px;
+    letter-spacing:.06em;
+    padding:1px 6px;
+    border-radius:999px;
+    color:#1A1305;
+    background:linear-gradient(180deg,#FFD98A,#F0A83C);
+}
+.card-desc{
+    flex:none;
+    margin:7px 0 0;
+    font-size:9.5px;
+    line-height:1.55;
+    color:var(--ink-3);
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+}
+.card-spark{flex:none;height:28px;margin:6px 0 2px}
+.card-spark svg{width:100%;height:100%;overflow:visible}
+.card-metrics{flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:auto}
+.cm{min-width:0}
+.cm i{display:block;font-style:normal;font-size:8.5px;color:var(--ink-3);white-space:nowrap;letter-spacing:.02em}
+.cm b{
+    display:block;
+    margin-top:2px;
+    font-family:var(--mono);
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+}
+.cm .stars{color:var(--amber);font-size:9.5px;letter-spacing:-1px}
+.card-foot{
+    flex:none;
+    margin-top:7px;
+    padding-top:7px;
+    border-top:1px solid rgba(90,140,200,.14);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+}
+.btn-view{
+    appearance:none;
+    border:0;
+    background:transparent;
+    cursor:pointer;
+    padding:0;
+    font-family:var(--sans);
+    font-size:10px;
+    color:var(--ink-3);
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    transition:color .18s ease;
+}
+.btn-view:hover{color:var(--c)}
+.btn-view span{transition:transform .18s ease}
+.btn-view:hover span{transform:translateX(3px)}
+
+/* ==================== 页脚 ==================== */
+.foot{
+    flex:none;
+    margin:0;
+    font-size:9.5px;
+    letter-spacing:.02em;
+    color:#4B5D75;
+}
+.foot b{color:#6B80A0;font-weight:600}
+.foot code{font-family:var(--mono);font-size:9px;color:#6B80A0}
+
+.toast{
+    position:fixed;
+    left:50%;
+    bottom:64px;
+    z-index:1200;
+    transform:translate(-50%,14px);
+    padding:9px 16px;
+    border-radius:999px;
+    border:1px solid rgba(53,217,242,.4);
+    background:rgba(6,14,26,.96);
+    color:var(--ink);
+    font-size:11.5px;
+    box-shadow:0 20px 40px -22px #000, 0 0 26px -14px rgba(53,217,242,.8);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .22s ease, transform .22s ease;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ==================== 响应式 ==================== */
+@media (max-height:880px){
+    .plan-visual{height:66px}
+    .plan-visual svg{width:56px;height:56px}
+    .strat-grid{height:168px}
+    .card-desc{-webkit-line-clamp:1}
+}
+@media (max-height:780px){
+    .plan-visual{display:none}
+    .card-spark{height:20px}
+    .engine-sub{display:none}
+    .foot{display:none}
+    .strat-grid{height:152px}
+}
+@media (max-width:1380px){
+    .stage{grid-template-columns:minmax(0,.95fr) minmax(0,1.42fr) minmax(0,1.02fr)}
+    .node-txt span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+    .board{animation:none}
+    .core-orbit,.engine-status::after,.engine-status .dot{animation:none}
+    .risk-ring .arc{animation:none;stroke-dashoffset:var(--off,76.6)}
+}
+</style>
 </head>
 <body>
-    <div class="scanline"></div>
-    <div class="orange-spot orange-spot-1"></div>
-    <div class="orange-spot orange-spot-2"></div>
-    <div class="particles" id="particles"></div>
 
-    <!-- 精灵和精灵球 -->
-
-        <!-- 统一页头 -->
-    <!-- 顶部导航（对齐 NEXUS 概念图） -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top ops-nav" aria-label="主导航">
-        <div class="ops-bar">
-            <a class="ops-brand" href="index.html" aria-label="NEXUS 玩家留存中枢 · 返回总览">
-                <span class="ops-logo" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                        <defs>
-                            <linearGradient id="nxsLogo" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0" stop-color="#7FEBFF"/><stop offset="1" stop-color="#318BFF"/>
-                            </linearGradient>
-                        </defs>
-                        <path d="M5.4 19.2V4.8l13.2 14.4V4.8" fill="none" stroke="url(#nxsLogo)"
-                              stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"/>
-                    </svg>
-                </span>
-                <span class="ops-wordmark">NEXUS</span>
-                <span class="ops-dot" aria-hidden="true">·</span>
-                <span class="ops-brand-sub">玩家留存中枢</span>
-            </a>
-            <ul class="ops-tabs">
-                <li><a class="nav-link" href="index.html" data-page="home" aria-current="false">
-                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.6" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="2.6" y="11" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="11" width="6.4" height="6.4" rx="1.4"/></svg>
-                    <span>总览</span></a></li>
-                <li><a class="nav-link" href="analysis.html" data-page="analysis" aria-current="false">
-                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 11h3l2.2-5.6L10 15l2.4-6.6L14 11h4"/></svg>
-                    <span>流失分析</span></a></li>
-                <li><a class="nav-link active" href="solution.html" data-page="solution" aria-current="page">
-                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.4"/><circle cx="10" cy="10" r="2.1"/><path d="M10 1.6v2.8M10 15.6v2.8M1.6 10h2.8M15.6 10h2.8"/></svg>
-                    <span>召回策略</span></a></li>
-                <li><a class="nav-link" href="validation.html" data-page="retention" aria-current="false">
-                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l6.2 2v5.1c0 3.2-2.7 5.7-6.2 7.7-3.5-2-6.2-4.5-6.2-7.7V4.6z"/><path d="M7.2 10.2l2 2 3.6-4.2"/></svg>
-                    <span>留存追踪</span></a></li>
-            </ul>
-            <div class="ops-meta">
-                <span class="ops-range-wrap">
-                    <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
-                        <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>
-                        <span id="rangeLabel">10.16 – 11.14</span>
-                        <svg class="ops-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.6l3 3 3-3"/></svg>
-                    </button>
-                    <ul class="ops-range-menu" id="rangeMenu" role="listbox" aria-label="统计时间范围" hidden>
-                        <li><button type="button" role="option" data-range="7d" data-label="11.08 – 11.14" aria-selected="false">近 7 天<em>11.08–11.14</em></button></li>
-                        <li><button type="button" role="option" data-range="30d" data-label="10.16 – 11.14" aria-selected="true">近 30 天<em>10.16–11.14</em></button></li>
-                        <li><button type="button" role="option" data-range="90d" data-label="8.17 – 11.14" aria-selected="false">近 90 天<em>8.17–11.14</em></button></li>
-                    </ul>
-                </span>
-                <span class="ops-live"><i aria-hidden="true"></i>LIVE<span class="ops-signal" aria-hidden="true"><b></b><b></b><b></b><b></b></span></span>
-                <span class="ops-clock" id="timeDisplay"></span>
-            </div>
-        </div>
-    </nav>
-
-
-    <!-- 主内容 -->
-    <div class="main-area">
-
-        <!-- 三列布局：左(排行榜) | 中(AI) | 右(指标+图表) -->
-        <div class="three-col-layout">
-
-            <!-- 左列：召回策略排行榜 -->
-            <div class="left-col">
-                <div class="glass-panel" style="flex:1;min-height:0;">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">召回策略排行榜</div>
-                        <span style="position:absolute;right:12px;font-size:0.58rem;color:rgba(0,221,255,0.5);border:1px solid rgba(0,221,255,0.2);padding:2px 8px;border-radius:10px;">实时更新</span>
-                    </div>
-                    <div class="panel-body" style="display:flex;flex-direction:column;gap:0;padding:6px 10px;">
-                        <div class="rank-header">
-                            <span class="rh-rank">排名</span>
-                            <span class="rh-name">策略方案</span>
-                            <span class="rh-type">类型</span>
-                            <span class="rh-rate">召回率</span>
-                            <span class="rh-trend">趋势</span>
-                        </div>
-                        <div class="rank-scroll-wrap">
-                            <div class="rank-list" id="rankList" role="list" aria-label="召回策略排行榜"></div>
-                        </div>
-                        <div class="rank-footer">
-                            <span>本周最优：<b style="color:var(--cosmic-accent);">AI智能陪玩精准触达</b></span>
-                            <span style="color:rgba(91,141,239,0.3);">│</span>
-                            <span>综合得分 <b style="color:var(--cosmic-purple);">96.2</b></span>
-                            <span style="color:rgba(91,141,239,0.3);">│</span>
-                            <span>↑ 较上周 <b style="color:var(--cosmic-accent);">+8.3%</b></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 中列：AI分析报告 + AI策略生成 -->
-            <div class="center-col" style="flex-direction:column;">
-
-                <!-- AI分析报告面板 -->
-                <div class="glass-panel" style="flex:1;min-height:0;margin-bottom:10px;">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">AI分析报告</div>
-                    </div>
-                    <div class="panel-body" style="flex:1;min-height:0;display:flex;flex-direction:column;">
-                        <div class="ai-response-box" id="modelResponse" style="flex:1;min-height:0;">
-                            <div class="ai-response-header">分析详情</div>
-                            <div class="ai-response-text" id="responseContent">请描述您的召回场景，AI 将为您生成个性化召回策略...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- AI策略生成面板 -->
-                <div class="glass-panel">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">AI策略生成</div>
-                        <span style="position:absolute;right:12px;font-size:0.58rem;color:rgba(157,78,221,0.7);border:1px solid rgba(157,78,221,0.3);padding:2px 8px;border-radius:10px;">Qwen 2.5</span>
-                    </div>
-                    <div class="panel-body">
-                        <div class="ai-section-label">场景描述</div>
-                        <textarea class="ai-textarea" id="modelPrompt" rows="4" placeholder="描述召回场景，如：流失7日的高活跃VIP玩家..."></textarea>
-                        <button class="ai-generate-btn" id="generateStrategy" style="width:100%;">
-                            <span>生成召回方案</span>
-                        </button>
-                        <div class="ai-section-label" style="margin-top:10px;">💡 推荐策略参考</div>
-                        <div class="ai-preset-cards">
-                            <div class="ai-preset-card" style="--card-accent:var(--cosmic-accent);" onclick="fillPrompt('流失7日内高付费VIP用户精准召回')">
-                                <div class="ai-preset-card-content">
-                                    <div class="ai-preset-card-tag" style="background:rgba(34,211,238,0.12);color:var(--cosmic-accent);">ROI 3.1x</div>
-                                    <div class="ai-preset-card-title">定向福利唤醒</div>
-                                </div>
-                            </div>
-                            <div class="ai-preset-card" style="--card-accent:var(--cosmic-purple);" onclick="fillPrompt('情感化邮件唤回流失超15天的老玩家')">
-                                <div class="ai-preset-card-content">
-                                    <div class="ai-preset-card-tag" style="background:rgba(129,140,248,0.12);color:var(--cosmic-purple);">ROI 4.5x</div>
-                                    <div class="ai-preset-card-title">情感化邮件</div>
-                                </div>
-                            </div>
-                            <div class="ai-preset-card" style="--card-accent:var(--cosmic-blue);" onclick="fillPrompt('专属客服一对一跟进流失的高价值用户')">
-                                <div class="ai-preset-card-content">
-                                    <div class="ai-preset-card-tag" style="background:rgba(91,141,239,0.12);color:var(--cosmic-blue);">ROI 2.8x</div>
-                                    <div class="ai-preset-card-title">专属客服跟进</div>
-                                </div>
-                            </div>
-                            <div class="ai-preset-card" style="--card-accent:var(--cosmic-gold);background:rgba(99,102,241,0.04);border-color:rgba(99,102,241,0.2);" onclick="fillPrompt('AI智能陪玩降低流失玩家的重返门槛')">
-                                <div class="ai-preset-card-content">
-                                    <div class="ai-preset-card-tag" style="background:rgba(99,102,241,0.12);color:var(--cosmic-gold);">ROI 5.8x</div>
-                                    <div class="ai-preset-card-title">AI陪玩引导</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- 右列：核心指标 + 图表 -->
-            <div class="right-col">
-                <!-- 核心指标 -->
-                <div class="glass-panel">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">核心指标</div>
-                    </div>
-                    <div class="panel-body">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                            <div class="kpi-card kpi-card--cyan">
-                                <div class="kpi-label">最佳召回率</div>
-                                <div class="kpi-value">45%</div>
-                                <div class="kpi-trend">较上月 +3.2%</div>
-                            </div>
-                            <div class="kpi-card kpi-card--green">
-                                <div class="kpi-label">最高 ROI</div>
-                                <div class="kpi-value">1:5.8</div>
-                                <div class="kpi-trend">AI陪玩策略</div>
-                            </div>
-                            <div class="kpi-card kpi-card--purple">
-                                <div class="kpi-label">本月召回</div>
-                                <div class="kpi-value">12,847</div>
-                                <div class="kpi-trend">节省成本 ¥320万</div>
-                            </div>
-                            <div class="kpi-card kpi-card--orange">
-                                <div class="kpi-label">平均触达响应率</div>
-                                <div class="kpi-value">38.6%</div>
-                                <div class="kpi-trend">行业均值 22%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 各策略召回率对比 -->
-                <div class="glass-panel">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">各策略召回率对比</div>
-                    </div>
-                    <div class="panel-body" style="display:flex;align-items:center;justify-content:center;">
-                        <div id="strategyChart" style="width:100%;height:180px;"></div>
-                    </div>
-                </div>
-                <!-- 策略效果占比 -->
-                <div class="glass-panel">
-                    <div class="corner-accent tl"></div><div class="corner-accent tr"></div>
-                    <div class="corner-accent bl"></div><div class="corner-accent br"></div>
-                    <div class="panel-header" style="justify-content:center;">
-                        <div class="panel-title">策略效果占比</div>
-                    </div>
-                    <div class="panel-body" style="display:flex;align-items:center;justify-content:center;">
-                        <div id="effectChart" style="width:100%;height:180px;"></div>
-                    </div>
-                </div>
-            </div>
-
+<!-- 顶部导航：与其余三页完全一致，仅当前页高亮不同 -->
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top ops-nav" aria-label="主导航">
+    <div class="ops-bar">
+        <a class="ops-brand" href="index.html" aria-label="NEXUS 玩家留存中枢 · 返回总览">
+            <span class="ops-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <defs>
+                        <linearGradient id="nxsLogo" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#7FEBFF"/><stop offset="1" stop-color="#318BFF"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M5.4 19.2V4.8l13.2 14.4V4.8" fill="none" stroke="url(#nxsLogo)"
+                          stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"/>
+                </svg>
+            </span>
+            <span class="ops-wordmark">NEXUS</span>
+            <span class="ops-dot" aria-hidden="true">·</span>
+            <span class="ops-brand-sub">玩家留存中枢</span>
+        </a>
+        <ul class="ops-tabs">
+            <li><a class="nav-link" href="index.html" data-page="home" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.6" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="2.6" width="6.4" height="6.4" rx="1.4"/><rect x="2.6" y="11" width="6.4" height="6.4" rx="1.4"/><rect x="11" y="11" width="6.4" height="6.4" rx="1.4"/></svg>
+                <span>总览</span></a></li>
+            <li><a class="nav-link" href="analysis.html" data-page="analysis" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 11h3l2.2-5.6L10 15l2.4-6.6L14 11h4"/></svg>
+                <span>流失分析</span></a></li>
+            <li><a class="nav-link active" href="solution.html" data-page="solution" aria-current="page">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.4"/><circle cx="10" cy="10" r="2.1"/><path d="M10 1.6v2.8M10 15.6v2.8M1.6 10h2.8M15.6 10h2.8"/></svg>
+                <span>召回策略</span></a></li>
+            <li><a class="nav-link" href="validation.html" data-page="retention" aria-current="false">
+                <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l6.2 2v5.1c0 3.2-2.7 5.7-6.2 7.7-3.5-2-6.2-4.5-6.2-7.7V4.6z"/><path d="M7.2 10.2l2 2 3.6-4.2"/></svg>
+                <span>留存追踪</span></a></li>
+        </ul>
+        <div class="ops-meta">
+            <span class="ops-range-wrap">
+                <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
+                    <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>
+                    <span id="rangeLabel">10.16 – 11.14</span>
+                    <svg class="ops-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.6l3 3 3-3"/></svg>
+                </button>
+                <ul class="ops-range-menu" id="rangeMenu" role="listbox" aria-label="统计时间范围" hidden>
+                    <li><button type="button" role="option" data-range="7d" data-label="11.08 – 11.14" aria-selected="false">近 7 天<em>11.08–11.14</em></button></li>
+                    <li><button type="button" role="option" data-range="30d" data-label="10.16 – 11.14" aria-selected="true">近 30 天<em>10.16–11.14</em></button></li>
+                    <li><button type="button" role="option" data-range="90d" data-label="8.17 – 11.14" aria-selected="false">近 90 天<em>8.17–11.14</em></button></li>
+                </ul>
+            </span>
+            <span class="ops-live"><i aria-hidden="true"></i>LIVE<span class="ops-signal" aria-hidden="true"><b></b><b></b><b></b><b></b></span></span>
+            <span class="ops-clock" id="timeDisplay"></span>
         </div>
     </div>
-    <div data-live-ticker style="margin:0 12px 10px;flex:none"></div>
+</nav>
 
-    <footer>
-        游戏流失·召回·留存闭环分析系统 &nbsp;|&nbsp; v2.4.1
-    </footer>
+<main class="board">
 
-    <script>
-    function updateTime() {
-        const now = new Date();
-        const pad = n => String(n).padStart(2,'0');
-        document.getElementById('timeDisplay').textContent =
-            `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    }
-    updateTime();
-    setInterval(updateTime, 1000);
+    <section class="stage" aria-label="召回决策工作台">
 
-    function createParticles() {
-        const container = document.getElementById('particles');
-        const colors = ['rgba(255,68,68', 'rgba(255,221,0', 'rgba(68,136,255', 'rgba(0,221,255'];
-        for (let i = 0; i < 25; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            const size = Math.random() * 2.5 + 0.8;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const drift = (Math.random() - 0.5) * 100;
-            p.style.cssText = `
-                width:${size}px; height:${size}px;
-                left:${Math.random()*100}%;
-                background:${color},0.7);
-                box-shadow:0 0 ${size*4}px ${color},0.5);
-                animation-duration:${Math.random()*6+4}s;
-                animation-delay:${Math.random()*5}s;
-                --drift:${drift}px;
-            `;
-            container.appendChild(p);
-        }
-    }
-    createParticles();
+        <!-- ============ 左：流失风险识别 ============ -->
+        <div class="wing wing--left">
 
-    let currentAiType = 'npc';
-    function fillPrompt(text) {
-        const ta = document.getElementById('modelPrompt');
-        ta.value = text;
-        ta.focus();
-        ta.style.borderColor = 'var(--cosmic-accent)';
-        setTimeout(() => ta.style.borderColor = '', 1000);
-    }
-
-    // 图表实例（提升到外部作用域供 resize 使用）
-    let strategyChartEl, effectChartEl;
-
-    const SILICONFLOW_API_KEY = 'sk-vnirgdbagqoltrkcbxojxkvdnabjkuwqnzajdtpxyfkoeiaa';
-    const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
-    const SILICONFLOW_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
-
-    document.getElementById('generateStrategy').addEventListener('click', async function() {
-        const prompt = document.getElementById('modelPrompt').value.trim();
-        if (!prompt) {
-            document.getElementById('modelPrompt').style.borderColor = 'rgba(255,68,68,0.5)';
-            setTimeout(() => document.getElementById('modelPrompt').style.borderColor = '', 2000);
-            return;
-        }
-        this.innerHTML = '<div class="btn-spinner"></div><span>AI分析中...</span>';
-        this.disabled = true;
-
-        try {
-            const res = await fetch(SILICONFLOW_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${SILICONFLOW_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: SILICONFLOW_MODEL,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: '你是一名专业的游戏运营策略师，擅长分析玩家流失原因并制定精准召回方案。请根据用户描述的场景，给出简洁、有针对性的召回策略建议，包含：①核心问题诊断 ②召回策略推荐（2-3条）③预期效果评估。回复控制在200字以内，语言简练专业。'
-                        },
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 400
-                })
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error?.message || `HTTP ${res.status}`);
-            }
-
-            const data = await res.json();
-            const strategy = data.choices?.[0]?.message?.content || '未获取到有效回复';
-            showAiResponse(strategy);
-        } catch (err) {
-            console.error('SiliconFlow API 调用失败:', err);
-            showAiResponse(`【调用失败】${err.message}\n\n请检查网络连接后重试。`);
-        } finally {
-            this.innerHTML = '<span>生成召回方案</span>';
-            this.disabled = false;
-        }
-    });
-
-    function showAiResponse(text) {
-        document.getElementById('responseContent').textContent = text;
-    }
-
-    // ── 召回策略排行榜数据 ──
-    // 策略类型配置（统一管理，便于维护和扩展）
-    const STRATEGY_TYPE = {
-        ai_companion:     { label: 'AI陪玩',   color: '#22D3EE' },
-        targeted_benefit: { label: '定向福利', color: '#5B8DEF' },
-        emotional_email:  { label: '情感邮件', color: '#818CF8' },
-        vip_service:     { label: '专属客服', color: '#8B5CF6' },
-        social_invite:    { label: '社交邀请', color: '#3B82F6' },
-        holiday_event:    { label: '节日活动', color: '#EC4899' }
-    };
-    // 趋势图标 + 语义配置
-    const TREND_CONFIG = {
-        up:    { icon: '⇧', color: '#22C55E', label: '较上周上升' },
-        down:  { icon: '⇩', color: '#EF4444', label: '较上周下降' },
-        stable:{ icon: '•', color: 'rgba(255,255,255,0.75)', label: '较上周持平' }
-    };
-    // 原始数据（按召回率降序排列）
-    const rankData = [
-        { id: 'ai_001',      name: 'AI智能陪玩精准触达',    type: 'ai_companion',     rate: 45.3, trend: 'up' },
-        { id: 'vip_001',     name: '专属客服深度回访',      type: 'vip_service',      rate: 40.1, trend: 'up' },
-        { id: 'benefit_001', name: 'VIP礼包定向唤醒',       type: 'targeted_benefit', rate: 32.7, trend: 'stable' },
-        { id: 'email_001',   name: '情感化邮件老玩家唤回',  type: 'emotional_email',  rate: 28.4, trend: 'up' },
-        { id: 'benefit_002', name: '社群活动限时返场',      type: 'targeted_benefit', rate: 26.9, trend: 'down' },
-        { id: 'ai_002',      name: 'AI个性化陪聊引导',       type: 'ai_companion',     rate: 24.5, trend: 'up' },
-        { id: 'benefit_003', name: '技能挑战活动复归',       type: 'targeted_benefit', rate: 22.1, trend: 'stable' },
-        { id: 'email_002',   name: '组队邀请好友拉回',      type: 'emotional_email',  rate: 20.8, trend: 'up' },
-        { id: 'ai_003',      name: '赛季新版本召回推送',    type: 'ai_companion',     rate: 19.3, trend: 'up' },
-        { id: 'vip_002',     name: '专属客服电话跟进',       type: 'vip_service',      rate: 17.6, trend: 'down' },
-        { id: 'social_001',  name: '好友组队邀请回归奖励',  type: 'social_invite',    rate: 16.8, trend: 'up' },
-        { id: 'ai_004',      name: '流失预警智能推送',       type: 'ai_companion',     rate: 13.9, trend: 'up' },
-        { id: 'email_003',   name: '生日祝福专属权益触达',  type: 'emotional_email',  rate: 12.5, trend: 'stable' },
-        { id: 'holiday_001', name: '节日庆典限时回归礼包',  type: 'holiday_event',    rate: 11.5, trend: 'stable' },
-        { id: 'benefit_005', name: '登录签到连续奖励召回',  type: 'targeted_benefit', rate: 11.2, trend: 'up' },
-        { id: 'ai_005',      name: 'AI剧情对话沉浸召回',    type: 'ai_companion',     rate: 10.1, trend: 'down' },
-        { id: 'vip_003',     name: 'VIP等级特权续期提醒',   type: 'vip_service',      rate: 9.3,  trend: 'stable' },
-        { id: 'social_002',  name: '跨服联赛组队回归激励',  type: 'social_invite',    rate: 8.8,  trend: 'up' },
-        { id: 'benefit_006', name: '限时免费皮肤体验活动',  type: 'targeted_benefit', rate: 7.8,  trend: 'stable' },
-        { id: 'ai_006',      name: 'AI语音互动情感唤回',    type: 'ai_companion',     rate: 6.9,  trend: 'up' },
-        { id: 'holiday_002', name: '春节红包雨回归活动',    type: 'holiday_event',    rate: 5.6,  trend: 'stable' }
-    ];
-
-    function buildRankList() {
-        const list = document.getElementById('rankList');
-        // 数据翻倍实现无缝滚动
-        const doubled = [...rankData, ...rankData];
-        list.innerHTML = doubled.map((item, i) => {
-            const rank = (i % rankData.length) + 1;
-            const numClass  = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : 'other';
-            const medals   = { 1: '🥇', 2: '🥈', 3: '🥉' };
-            const rankBadge = medals[rank] || '';
-
-            // 结构化配置取值
-            const typeConf    = STRATEGY_TYPE[item.type] || { label: item.type, color: '#818CF8' };
-            const trendConf   = TREND_CONFIG[item.trend] || TREND_CONFIG['stable'];
-            const rateColor   = item.trend === 'up' ? '#22C55E' : item.trend === 'down' ? '#EF4444' : '#E2E8F0';
-
-            // 无障碍标签
-            const a11yRank   = medals[rank] ? `第${rank}名 ${rankBadge}` : `第${rank}名`;
-            const a11yTrend  = trendConf.label;
-
-            return `
-            <div class="rank-row" role="listitem">
-                <span class="rank-num ${numClass}" aria-label="${a11yRank}">
-                    ${rankBadge ? `<span class="medal">${rankBadge}</span>` : ''}
-                    ${!rankBadge ? `<span class="num-val">${rank}</span>` : ''}
-                </span>
-                <span class="rank-name" title="${item.name}">${item.name}</span>
-                <span class="rank-type-tag"
-                      style="background:${typeConf.color}18;color:${typeConf.color};border-color:${typeConf.color}33;"
-                      aria-label="策略类型：${typeConf.label}">${typeConf.label}</span>
-                <span class="rank-rate" style="color:${rateColor};">${item.rate}%</span>
-                <span class="rank-trend"
-                      style="color:${trendConf.color};"
-                      aria-label="${a11yTrend}"
-                      title="${a11yTrend}">${trendConf.icon}</span>
-            </div>`;
-        }).join('');
-
-        // 动态设置动画时长：行高约 40px × 条目数
-        const rowH = 40;
-        const duration = rankData.length * rowH / 40; // 40px/s 滚动速度
-        list.style.animationDuration = duration + 's';
-    }
-
-    buildRankList();
-
-    function initCharts() {
-        // 柱状图 - 策略召回率对比
-        strategyChartEl = echarts.init(document.getElementById('strategyChart'));
-        strategyChartEl.setOption({
-            backgroundColor: 'transparent',
-            tooltip: { 
-                trigger: 'axis', 
-                axisPointer: { 
-                    type: 'line', 
-                    lineStyle: { color: 'rgba(129,140,248,0.5)', width: 1, type: 'dashed' }
-                }, 
-                backgroundColor: 'rgba(2,8,16,0.97)', 
-                borderColor: 'rgba(99,102,241,0.5)', 
-                borderWidth: 1,
-                textStyle: { color: '#E8F4F8', fontSize: 11 },
-                extraCssText: 'box-shadow: 0 0 16px rgba(99,102,241,0.2);'
-            },
-            legend: { show: false },
-            grid: { top: 10, right: 30, bottom: 30, left: 40 },
-            xAxis: { 
-                type: 'category', 
-                data: ['AI', '福利', '邮件', '客服', '邀请', '节日'],
-                axisLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: 600 },
-                axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
-                axisTick: { show: false }
-            },
-            yAxis: [
-                { 
-                    type: 'value', 
-                    name: '召回率(%)',
-                    min: 0, 
-                    max: 60,
-                    axisLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9 },
-                    axisLine: { show: false }, 
-                    axisTick: { show: false },
-                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
-                    nameTextStyle: { color: 'rgba(255,255,255,0.5)', fontSize: 8 }
-                },
-                { 
-                    type: 'value', 
-                    name: 'ROI',
-                    min: 0, 
-                    max: 8,
-                    axisLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9 },
-                    axisLine: { show: false }, 
-                    axisTick: { show: false },
-                    splitLine: { show: false },
-                    nameTextStyle: { color: 'rgba(255,255,255,0.5)', fontSize: 8 }
-                }
-            ],
-            series: [
-                { 
-                    name: '召回率', 
-                    type: 'bar', 
-                    data: [
-                        { value: 45, itemStyle: { color: 'rgba(34,211,238,0.15)', borderColor: '#22D3EE', borderWidth: 2, borderRadius: [6, 6, 0, 0] } },
-                        { value: 32, itemStyle: { color: 'rgba(91,141,239,0.15)', borderColor: '#5B8DEF', borderWidth: 2, borderRadius: [6, 6, 0, 0] } },
-                        { value: 28, itemStyle: { color: 'rgba(129,140,248,0.15)', borderColor: '#818CF8', borderWidth: 2, borderRadius: [6, 6, 0, 0] } },
-                        { value: 40, itemStyle: { color: 'rgba(139,92,246,0.15)', borderColor: '#8B5CF6', borderWidth: 2, borderRadius: [6, 6, 0, 0] } },
-                        { value: 25, itemStyle: { color: 'rgba(59,130,246,0.15)', borderColor: '#3B82F6', borderWidth: 2, borderRadius: [6, 6, 0, 0] } },
-                        { value: 18, itemStyle: { color: 'rgba(236,72,153,0.15)', borderColor: '#EC4899', borderWidth: 2, borderRadius: [6, 6, 0, 0] } }
-                    ],
-                    barWidth: '38%',
-                    barGap: '20%'
-                },
-                { 
-                    name: 'ROI', 
-                    type: 'line', 
-                    yAxisIndex: 1, 
-                    data: [3.1, 4.5, 2.8, 5.8, 3.2, 2.1],
-                    smooth: 0.5, 
-                    symbol: 'circle', 
-                    symbolSize: 10,
-                    lineStyle: { 
-                        color: '#818CF8', 
-                        width: 2,
-                        shadowColor: 'rgba(129,140,248,0.4)',
-                        shadowBlur: 6
-                    },
-                    itemStyle: { 
-                        color: 'rgba(129,140,248,0.15)',
-                        borderColor: '#818CF8',
-                        borderWidth: 2,
-                        shadowColor: 'rgba(129,140,248,0.6)',
-                        shadowBlur: 8
-                    }
-                }
-            ]
-        });
-
-        // 饼图 - 策略效果分布
-        effectChartEl = echarts.init(document.getElementById('effectChart'));
-        effectChartEl.setOption({
-            backgroundColor: 'transparent',
-            tooltip: { 
-                trigger: 'item', 
-                formatter: '{b}: {d}%',
-                backgroundColor: 'rgba(1,8,16,0.95)', 
-                borderColor: 'rgba(68,136,255,0.4)', 
-                textStyle: { color: '#fff', fontSize: 11 }
-            },
-            legend: { show: false },
-            series: [{
-                type: 'pie',
-                radius: ['55%', '82%'],
-                center: ['50%', '50%'],
-                avoidLabelOverlap: true,
-                padAngle: 3,
-                itemStyle: {
-                    borderRadius: 6,
-                    borderColor: 'rgba(2, 8, 16, 0.8)',
-                    borderWidth: 2
-                },
-                label: {
-                    show: true,
-                    position: 'outside',
-                    formatter: '{b}  {d}%',
-                    color: 'rgba(226,232,240,0.9)',
-                    fontSize: 11,
-                    backgroundColor: 'rgba(1, 8, 16, 0.75)',
-                    padding: [4, 8],
-                    borderRadius: 4,
-                    borderWidth: 1,
-                    borderColor: 'rgba(91,141,239,0.25)'
-                },
-                labelLine: {
-                    show: true,
-                    lineStyle: {
-                        color: 'rgba(255, 255, 255, 0.5)',
-                        type: 'solid',
-                        width: 1
-                    },
-                    length: 8,
-                    length2: 12,
-                    smooth: 0.2
-                },
-                data: [
-                    { value: 45, name: 'AI陪玩',   itemStyle: { color: 'rgba(34,211,238,0.15)', borderColor: '#22D3EE', borderWidth: 2 } },
-                    { value: 32, name: '定向福利', itemStyle: { color: 'rgba(91,141,239,0.15)', borderColor: '#5B8DEF', borderWidth: 2 } },
-                    { value: 28, name: '情感邮件', itemStyle: { color: 'rgba(129,140,248,0.15)', borderColor: '#818CF8', borderWidth: 2 } },
-                    { value: 40, name: '专属客服', itemStyle: { color: 'rgba(139,92,246,0.15)', borderColor: '#8B5CF6', borderWidth: 2 } },
-                    { value: 25, name: '社交邀请', itemStyle: { color: 'rgba(59,130,246,0.15)', borderColor: '#3B82F6', borderWidth: 2 } },
-                    { value: 18, name: '节日活动', itemStyle: { color: 'rgba(236,72,153,0.15)', borderColor: '#EC4899', borderWidth: 2 } }
-                ],
-                emphasis: {
-                    itemStyle: { shadowBlur: 10, shadowColor: 'rgba(255,255,255,0.15)' },
-                    scale: true,
-                    scaleSize: 6
-                }
-            }]
-        });
-    } // 结束 initCharts 函数
-
-    window.addEventListener('resize', () => {
-        if (strategyChartEl && effectChartEl) {
-            [strategyChartEl, effectChartEl].forEach(c => c.resize());
-        }
-    });
-
-    // 精灵系统
-    // 音效系统
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    let audioContext;
-    
-    function playSound(frequency, duration, type = 'sine') {
-        if (!audioContext) {
-            audioContext = new AudioContext();
-        }
-        
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = frequency;
-        oscillator.type = type;
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + duration);
-    }
-    
-    // 胶囊点击事件
-    const capsules = document.querySelectorAll('.capsule');
-    const capsule = capsules[0] || document.createElement('div'); // body部分的精灵球
-    const navCapsule = capsules[1]; // 导航栏部分的精灵球
-    const sprite = document.getElementById('sprite') || document.createElement('div');
-    const speechBubble = document.getElementById('speechBubble') || document.createElement('div');
-    const costume = document.getElementById('costume') || document.createElement('div');
-    
-    let isHatched = false;
-    
-    // 胶囊悬停效果
-    capsules.forEach(c => {
-        c.addEventListener('mouseenter', function() {
-            if (!isHatched) {
-                // 生成3-5个旋转粒子
-                const particlesContainer = this.querySelector('.capsule-particles');
-                particlesContainer.innerHTML = '';
-                
-                const particleCount = Math.floor(Math.random() * 3) + 3; // 3-5个粒子
-                for (let i = 0; i < particleCount; i++) {
-                    const particle = document.createElement('div');
-                    particle.style.position = 'absolute';
-                    particle.style.width = '4px';
-                    particle.style.height = '4px';
-                    particle.style.background = 'rgba(0, 240, 255, 0.8)';
-                    particle.style.borderRadius = '50%';
-                    particle.style.boxShadow = '0 0 10px rgba(0, 240, 255, 0.8)';
-                    particle.style.top = '50%';
-                    particle.style.left = '50%';
-                    particle.style.transform = 'translate(-50%, -50%)';
-                    particle.style.animation = `particleRotate ${2 + i}s linear infinite`;
-                    particlesContainer.appendChild(particle);
-                }
-                
-                // 播放嗡鸣音效（频率随放大升高）
-                playSound(440, 0.3, 'sine', 0.5);
-            }
-        });
-        
-        // 胶囊鼠标离开效果
-        c.addEventListener('mouseleave', function() {
-            if (!isHatched) {
-                // 清除粒子
-                const particlesContainer = this.querySelector('.capsule-particles');
-                particlesContainer.innerHTML = '';
-            }
-        });
-    });
-    
-    // 精灵球点击事件
-    capsule.addEventListener('click', function() {
-        if (!isHatched) {
-            // 播放hover嗡鸣音效
-            playSound(440, 0.5, 'sine');
-            
-            // 1. 捕捉锁定
-            const pokeball = document.querySelector('.pokeball');
-            const pokeballTop = document.querySelector('.pokeball-top');
-            const pokeballBottom = document.querySelector('.pokeball-bottom');
-            const pokeballButton = document.querySelector('.pokeball-button');
-            const buttonInner = document.querySelector('.button-inner');
-            const redCircuit = document.querySelector('.red-circuit');
-            const whiteCircuit = document.querySelector('.white-circuit');
-            const spriteSilhouette = document.querySelector('.sprite-silhouette');
-            
-            // 按钮红光全亮
-            buttonInner.style.background = '#ff0000';
-            buttonInner.style.boxShadow = '0 0 20px rgba(255, 0, 0, 1), 0 0 30px rgba(255, 0, 0, 0.8)';
-            
-            // 电路纹逆向流动
-            redCircuit.style.animation = 'redCircuitFlow 0.5s linear infinite reverse';
-            whiteCircuit.style.animation = 'whiteCircuitFlow 0.5s linear infinite';
-            
-            // 球内光团显精灵剪影
-            spriteSilhouette.style.opacity = '1';
-            spriteSilhouette.style.boxShadow = '0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(0, 240, 255, 0.8)';
-            
-            // 播放捕捉音效
-            playSound(1000, 0.8, 'sawtooth');
-            
-            // 2. 开球释放
-            setTimeout(() => {
-                // 播放开球音效
-                playSound(1200, 0.5, 'sine');
-                
-                // 两半向两侧滑开
-                pokeballTop.style.animation = 'pokeballOpenTop 0.5s ease-out forwards';
-                pokeballBottom.style.animation = 'pokeballOpenBottom 0.5s ease-out forwards';
-                
-                // 光团爆发强光
-                spriteSilhouette.style.boxShadow = '0 0 40px rgba(255, 255, 255, 1), 0 0 60px rgba(0, 240, 255, 1), 0 0 80px rgba(147, 51, 234, 0.8)';
-                
-                // 生成光粒效果
-                for (let i = 0; i < 20; i++) {
-                    const particle = document.createElement('div');
-                    particle.className = 'light-particle';
-                    particle.style.top = Math.random() * 100 + '%';
-                    particle.style.left = Math.random() * 100 + '%';
-                    pokeball.appendChild(particle);
-                }
-            }, 800);
-            
-            // 3. 精灵栖息
-            setTimeout(() => {
-                // 播放孵化啾声（啾~）
-                playSound(1500, 0.3, 'sine');
-                
-                // 精灵出现动画
-                sprite.style.animation = 'spriteAppear 0.5s ease forwards';
-                
-                // 翅膀扇动动画
-                const leftWing = document.querySelector('.wing.left');
-                const rightWing = document.querySelector('.wing.right');
-                leftWing.style.animation = 'wingFlap 1s ease-in-out infinite';
-                rightWing.style.animation = 'wingFlapRight 1s ease-in-out infinite';
-                
-                // 播放翅膀“哗啦”音效
-                setTimeout(() => {
-                    playSound(800, 0.3, 'square');
-                }, 100);
-                
-                // 播放磁吸“咔哒”音效
-                setTimeout(() => {
-                    playSound(400, 0.2, 'square');
-                }, 300);
-                
-                // 隐藏精灵球
-                capsules.forEach(c => {
-                    c.style.opacity = '0';
-                    c.style.pointerEvents = 'none';
-                });
-                
-                // 设置精灵为已孵化状态
-                isHatched = true;
-                
-                // 存储孵化状态到localStorage，确保在其他页面也能保持状态
-                localStorage.setItem('spriteHatched', 'true');
-                
-                // 显示初始服饰（首页）
-                updateCostume('solution');
-                bindEasterEggs();
-            }, 1800);
-        }
-    });
-    
-    // 精灵双击事件
-    sprite.addEventListener('dblclick', function() {
-        if (isHatched) {
-            // 创建对话框
-            const dialog = document.createElement('div');
-            dialog.className = 'sprite-dialog';
-            dialog.innerHTML = `
-                <div class="dialog-content">
-                    <p>你想让我回到胶囊里去嘛？</p>
-                    <div class="dialog-buttons">
-                        <button id="yesBtn">是的</button>
-                        <button id="noBtn">不是</button>
+            <article class="panel" style="--hair:rgba(240,83,107,.5)">
+                <div class="p-head">
+                    <h2 class="p-title" style="--accent:var(--red)">流失风险概览</h2>
+                    <span class="p-meta">风险池</span>
+                </div>
+                <div class="p-body">
+                    <div class="risk-top">
+                        <div class="risk-ring">
+                            <svg viewBox="0 0 120 120" role="img" aria-label="高风险玩家占风险池 23.4%">
+                                <defs>
+                                    <linearGradient id="riskGrad" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0" stop-color="#FF8A96"/><stop offset="1" stop-color="#F0536B"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle class="track" cx="60" cy="60" r="50" fill="none" stroke-width="9" pathLength="100"/>
+                                <circle class="arc" id="riskArc" cx="60" cy="60" r="50" fill="none" stroke-width="9"
+                                        pathLength="100" style="--off:76.6"/>
+                            </svg>
+                            <div class="cap">
+                                <b id="riskPct">23.4%</b>
+                                <span>高风险占比</span>
+                                <em id="riskDelta">▲ 1.2pp</em>
+                            </div>
+                        </div>
+                        <div class="risk-list">
+                            <div class="risk-row" style="--c:var(--red)">
+                                <i aria-hidden="true"></i><span>高风险玩家</span><b id="vHigh">8,780</b>
+                            </div>
+                            <div class="risk-row" style="--c:var(--amber)">
+                                <i aria-hidden="true"></i><span>潜在流失玩家</span><b id="vPotential">28,740</b>
+                            </div>
+                            <div class="risk-row" style="--c:var(--cyan)">
+                                <i aria-hidden="true"></i><span>可召回玩家</span><b id="vReachable">24,190</b>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="risk-bar">
+                        <div class="rb-head"><span>可召回覆盖率</span><b id="vCover">64.5%</b></div>
+                        <div class="rb-track"><div class="rb-fill" id="rbFill"></div></div>
+                    </div>
+                    <div class="risk-foot">
+                        <span>风险池合计</span>
+                        <b id="vPool">37,520</b>
                     </div>
                 </div>
-            `;
-            document.body.appendChild(dialog);
-            
-            // 添加对话框样式
-            const style = document.createElement('style');
-            style.textContent = `
-                .sprite-dialog {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.5);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 10000;
-                }
-                .dialog-content {
-                    background: rgba(0, 240, 255, 0.9);
-                    padding: 20px;
-                    border-radius: 10px;
-                    box-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
-                    text-align: center;
-                    min-width: 300px;
-                }
-                .dialog-content p {
-                    font-size: 16px;
-                    margin-bottom: 20px;
-                    color: #000;
-                }
-                .dialog-buttons {
-                    display: flex;
-                    justify-content: space-around;
-                }
-                .dialog-buttons button {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    background: rgba(147, 51, 234, 0.8);
-                    color: white;
-                    transition: all 0.3s ease;
-                }
-                .dialog-buttons button:hover {
-                    background: rgba(147, 51, 234, 1);
-                    transform: scale(1.05);
-                }
-            `;
-            document.head.appendChild(style);
-            
-            // 是的按钮点击事件
-            document.getElementById('yesBtn').addEventListener('click', function() {
-                // 精灵回到胶囊动画
-                sprite.style.animation = 'spriteDisappear 0.5s ease forwards';
-                
-                // 播放精灵消失音效
-                playSound(800, 0.3, 'square');
-                
-                // 延迟显示精灵球
-                setTimeout(() => {
-                    // 重置精灵球状态
-                    const pokeball = document.querySelector('.pokeball');
-                    const pokeballTop = document.querySelector('.pokeball-top');
-                    const pokeballBottom = document.querySelector('.pokeball-bottom');
-                    const buttonInner = document.querySelector('.button-inner');
-                    const redCircuit = document.querySelector('.red-circuit');
-                    const whiteCircuit = document.querySelector('.white-circuit');
-                    const spriteSilhouette = document.querySelector('.sprite-silhouette');
-                    
-                    // 重置精灵球各部分
-                    pokeballTop.style.animation = '';
-                    pokeballBottom.style.animation = '';
-                    
-                    // 重置按钮颜色
-                    buttonInner.style.background = '#00f0ff';
-                    buttonInner.style.boxShadow = '0 0 8px rgba(0, 240, 255, 1)';
-                    
-                    // 重置电路纹动画
-                    redCircuit.style.animation = 'redCircuitFlow 3s linear infinite';
-                    whiteCircuit.style.animation = 'whiteCircuitFlow 3s linear infinite reverse';
-                    
-                    // 重置精灵剪影
-                    spriteSilhouette.style.opacity = '0';
-                    spriteSilhouette.style.boxShadow = '';
-                    
-                    // 显示精灵球
-                    capsules.forEach(c => {
-                        c.style.opacity = '1';
-                        c.style.pointerEvents = 'auto';
-                    });
-                    
-                    // 清除光粒子
-                    const lightParticles = document.querySelectorAll('.light-particle');
-                    lightParticles.forEach(particle => particle.remove());
-                    
-                    // 重置精灵状态
-                    sprite.style.opacity = '0';
-                    sprite.style.transform = 'scale(0) rotate(-45deg)';
-                    sprite.style.animation = '';
-                    
-                    // 设置精灵为未孵化状态
-                    isHatched = false;
-                    
-                    // 清除孵化状态到localStorage
-                    localStorage.removeItem('spriteHatched');
-                    
-                    // 移除对话框
-                    document.body.removeChild(dialog);
-                    document.head.removeChild(style);
-                }, 500);
-            });
-            
-            // 不是按钮点击事件
-            document.getElementById('noBtn').addEventListener('click', function() {
-                // 移除对话框
-                document.body.removeChild(dialog);
-                document.head.removeChild(style);
-            });
+            </article>
+
+            <article class="panel" style="--hair:rgba(146,117,255,.5)">
+                <div class="p-head">
+                    <h2 class="p-title" style="--accent:var(--violet)">目标人群细分</h2>
+                    <span class="p-meta" id="segMeta">全量</span>
+                </div>
+                <div class="p-body">
+                    <div class="seg" role="group" aria-label="人群筛选">
+                        <button class="seg-btn is-on" type="button" data-seg="all" aria-pressed="true">全部</button>
+                        <button class="seg-btn" type="button" data-seg="high" aria-pressed="false">高风险</button>
+                        <button class="seg-btn" type="button" data-seg="silent" aria-pressed="false">沉默用户</button>
+                        <button class="seg-btn" type="button" data-seg="back" aria-pressed="false">回流用户</button>
+                    </div>
+                    <div class="seg-wrap">
+                        <div class="seg-donut">
+                            <svg id="segDonut" viewBox="0 0 120 120" role="img" aria-label="目标人群构成占比"></svg>
+                            <div class="cap">
+                                <b id="segTotal">37.5K</b>
+                                <span id="segTotalLabel">风险池</span>
+                            </div>
+                        </div>
+                        <div class="legend" id="segLegend"></div>
+                    </div>
+                </div>
+            </article>
+
+        </div>
+
+        <!-- ============ 中：AI 召回引擎 ============ -->
+        <section class="engine-col" aria-label="AI 智能召回引擎">
+            <div class="engine-head">
+                <h2 class="engine-title">AI 智能召回引擎</h2>
+                <p class="engine-sub">基于热点情感与玩家行为的个性化召回方案</p>
+            </div>
+
+            <div class="engine">
+                <div class="node node--l node--tl" style="--c:var(--cyan)">
+                    <span class="node-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M3 17l4.6-5.4 3.2 3.1L20 6.6"/><path d="M15.4 6.6H20v4.4"/><path d="M3 21h18"/></svg>
+                    </span>
+                    <div class="node-txt"><b>热点分析</b><span>识别流失诱因</span></div>
+                </div>
+
+                <div class="node node--l node--bl" style="--c:var(--violet)">
+                    <span class="node-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.4 20c.5-3.6 3.2-5.7 6.6-5.7s6.1 2.1 6.6 5.7"/></svg>
+                    </span>
+                    <div class="node-txt"><b>玩家画像</b><span>精准定位人群</span></div>
+                </div>
+
+                <div class="core" aria-hidden="true">
+                    <div class="core-orbit o1"></div>
+                    <div class="core-orbit o2"></div>
+                    <div class="core-plate"></div>
+                    <div class="core-hex">
+                        <span class="hex hex--glow"></span>
+                        <span class="hex hex--out"></span>
+                        <span class="hex hex--in"></span>
+                        <b class="core-ai">AI</b>
+                    </div>
+                </div>
+
+                <div class="node node--r node--tr" style="--c:var(--blue)">
+                    <span class="node-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4.2"/><path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+                    </span>
+                    <div class="node-txt"><b>策略生成</b><span>多方案编排</span></div>
+                </div>
+
+                <div class="node node--r node--br" style="--c:var(--green)">
+                    <span class="node-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7.5 15.5l4-5 3 2.6 4.5-6"/></svg>
+                    </span>
+                    <div class="node-txt"><b>效果预测</b><span>预估召回收益</span></div>
+                </div>
+            </div>
+
+            <div class="engine-status" id="engineStatus">
+                <span class="dot" aria-hidden="true"></span>
+                <span id="engineStatusText">正在生成最优召回方案…</span>
+            </div>
+        </section>
+
+        <!-- ============ 右：AI 生成方案 ============ -->
+        <div class="wing wing--right">
+            <article class="panel" style="--hair:rgba(240,168,60,.55)">
+                <div class="p-head">
+                    <h2 class="p-title" style="--accent:#F0A83C">AI 生成方案</h2>
+                    <span class="badge-rec">推荐方案</span>
+                </div>
+                <div class="p-body">
+                    <span class="p-meta" id="planId">PLAN-01 · 热点回流组合</span>
+                    <h3 class="plan-title" id="planTitle">「热点回流 + 专属福利」组合策略</h3>
+                    <p class="plan-desc" id="planDesc">结合近期热门话题与流失玩家行为，输出可执行的个性化召回动作。</p>
+
+                    <div class="plan-visual" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <defs>
+                                <linearGradient id="giftBody" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0" stop-color="#C4AEFF"/><stop offset="1" stop-color="#7B5BF0"/>
+                                </linearGradient>
+                                <linearGradient id="giftLid" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0" stop-color="#E6DCFF"/><stop offset="1" stop-color="#9C82FF"/>
+                                </linearGradient>
+                            </defs>
+                            <rect x="12" y="28" width="40" height="26" rx="4" fill="url(#giftBody)"/>
+                            <rect x="9" y="20" width="46" height="11" rx="3.4" fill="url(#giftLid)"/>
+                            <rect x="28.4" y="20" width="7.2" height="34" fill="#8FF0FF" opacity=".92"/>
+                            <path d="M32 20c-3.4-6.2-9.6-7.4-11.6-4.2-1.9 3.1 1.9 5.6 11.6 4.2z" fill="#8FF0FF" opacity=".85"/>
+                            <path d="M32 20c3.4-6.2 9.6-7.4 11.6-4.2 1.9 3.1-1.9 5.6-11.6 4.2z" fill="#8FF0FF" opacity=".85"/>
+                            <circle cx="50" cy="16" r="1.7" fill="#BFF3FF"/>
+                            <circle cx="14" cy="49" r="1.3" fill="#BFF3FF" opacity=".8"/>
+                            <circle cx="47" cy="52" r="1" fill="#E6DCFF" opacity=".7"/>
+                        </svg>
+                    </div>
+
+                    <div class="plan-metrics">
+                        <div class="pm-row" style="--c:var(--green)">
+                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 3.4 3.4L21 6"/><path d="M15.6 6H21v5.4"/></svg></span>
+                            <span>预计召回率</span><b id="mRecall">27.3%</b><em id="mRecallDelta">↑ 1.4pp</em>
+                        </div>
+                        <div class="pm-row" style="--c:var(--cyan)">
+                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.2c.6-3.1 3.1-5 6.2-5s5.6 1.9 6.2 5"/><circle cx="17" cy="7" r="2.4"/><path d="M16.4 12.6c2.6.3 4.3 2 4.8 4.6"/></svg></span>
+                            <span>预计回流玩家</span><b id="mReach">6,601</b>
+                        </div>
+                        <div class="pm-row" style="--c:var(--violet)">
+                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.4-3.8L14 13.4 19 7.6"/></svg></span>
+                            <span>预计留存提升</span><b id="mRetention">12.3%</b>
+                        </div>
+                    </div>
+
+                    <div class="steps">
+                        <div class="steps-head"><span>策略详情</span><span id="stepHint">4 步执行</span></div>
+                        <div class="steps-track" id="stepsTrack"></div>
+                    </div>
+
+                    <details class="ai-fold">
+                        <summary>AI 生成依据（可选，模型调用）</summary>
+                        <div class="ai-body">
+                            <textarea id="modelPrompt" placeholder="描述场景，例如：北美高流失风险玩家、竞技平衡性争议升温，给出召回动作"></textarea>
+                            <button class="btn-ai" type="button" id="generateStrategy">生成召回依据</button>
+                            <div class="ai-out" id="responseContent" aria-live="polite"></div>
+                        </div>
+                    </details>
+
+                    <button class="btn-deploy" type="button" id="deployBtn">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+                        <span id="deployLabel">部署该策略</span>
+                    </button>
+                </div>
+            </article>
+        </div>
+
+    </section>
+
+    <!-- ============ 底部：多策略横向比较 ============ -->
+    <section class="strategies" aria-label="多种召回策略方案">
+        <div class="strat-head">
+            <h2 class="strat-title">多种召回策略方案</h2>
+            <div class="seg" role="group" aria-label="排序方式">
+                <button class="seg-btn is-on" type="button" data-sort="mix" aria-pressed="true">综合推荐</button>
+                <button class="seg-btn" type="button" data-sort="effect" aria-pressed="false">按效果排序</button>
+                <button class="seg-btn" type="button" data-sort="cost" aria-pressed="false">按成本排序</button>
+            </div>
+        </div>
+        <div class="strat-grid" id="strategyGrid"></div>
+    </section>
+
+    <p class="foot">
+        <b>口径</b> · 示例数据集（<code>js/dashboard-data.js</code>）｜ 风险池 = 高风险 + 潜在流失 ｜ 可召回 = 风险池中近 30 天可触达人群 ｜ 尚未接入 <code>/api/churn-retention</code>
+    </p>
+
+    <div data-live-ticker></div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================================
+   召回策略页 —— 数值均由 dashboard-data.js 派生；交互为本地演示，不下发真实触达
+   ========================================================================= */
+(function () {
+    'use strict';
+
+    var D = window.DashboardData;
+    var $ = function (id) { return document.getElementById(id); };
+
+    /* 高风险玩家占风险池的固定比例：用来把总览页的高危人数还原成风险池口径 */
+    var HIGH_SHARE = 0.234;
+    var REACHABLE_RATE = 0.645;
+
+    function baseNumbers(range) {
+        var k = D ? D.kpis(range) : null;
+        var high = k ? k.atRiskPlayers.value : 8780;
+        var pool = Math.round(high / HIGH_SHARE);
+        return {
+            high: high,
+            pool: pool,
+            potential: pool - high,
+            reachable: Math.round(pool * REACHABLE_RATE)
+        };
+    }
+
+    function fmt(n) { return n.toLocaleString('en-US'); }
+
+    /* ---------- 四种策略 ---------- */
+    var STRATEGIES = [
+        {
+            id: 'hotspot', name: '热点回流策略', short: '热点回流', tag: '高匹配',
+            color: '#9275FF',
+            desc: '结合近期热门话题，定向召回与热点强关联的沉默玩家',
+            recall: 27.3, cost: 3, retention: 12.3, match: 0.94,
+            plan: { code: 'PLAN-01 · 热点回流组合', title: '「热点回流 + 专属福利」组合策略',
+                    desc: '结合近期热门话题与流失玩家行为，输出可执行的个性化召回动作。' },
+            steps: [
+                { t: '热点引流', ico: 'flame', c: '#F0536B' },
+                { t: '专属活动', ico: 'gift', c: '#9275FF' },
+                { t: '情感触达', ico: 'mail', c: '#318BFF' },
+                { t: '效果追踪', ico: 'chart', c: '#35D399' }
+            ],
+            spark: [38, 41, 39, 47, 52, 49, 58, 63, 61, 72]
+        },
+        {
+            id: 'benefit', name: '专属福利策略', short: '专属福利', tag: '',
+            color: '#35D9F2',
+            desc: '为高风险玩家发放梯度福利包，用即时收益换取回流窗口',
+            recall: 25.1, cost: 1, retention: 10.6, match: 0.86,
+            plan: { code: 'PLAN-02 · 福利驱动', title: '「梯度福利包 + 限时领取」召回策略',
+                    desc: '按风险分档投放差异化福利，压缩决策成本，提升即时回流率。' },
+            steps: [
+                { t: '人群分档', ico: 'layers', c: '#35D9F2' },
+                { t: '福利配置', ico: 'gift', c: '#9275FF' },
+                { t: '限时推送', ico: 'mail', c: '#318BFF' },
+                { t: '效果追踪', ico: 'chart', c: '#35D399' }
+            ],
+            spark: [30, 34, 33, 38, 44, 47, 45, 53, 58, 62]
+        },
+        {
+            id: 'level', name: '等级召回策略', short: '等级召回', tag: '',
+            color: '#FFB45F',
+            desc: '对流失边缘的高等级玩家触发专属成长任务与段位保护',
+            recall: 22.5, cost: 2, retention: 14.8, match: 0.78,
+            plan: { code: 'PLAN-03 · 成长驱动', title: '「等级成长任务 + 段位保护」召回策略',
+                    desc: '以沉没成本与成长预期为杠杆，激活高等级流失边缘人群。' },
+            steps: [
+                { t: '等级识别', ico: 'layers', c: '#FFB45F' },
+                { t: '任务编排', ico: 'flame', c: '#F0536B' },
+                { t: '段位保护', ico: 'shield', c: '#318BFF' },
+                { t: '效果追踪', ico: 'chart', c: '#35D399' }
+            ],
+            spark: [44, 42, 46, 43, 49, 47, 52, 50, 56, 59]
+        },
+        {
+            id: 'emotion', name: '情感安抚策略', short: '情感安抚', tag: '',
+            color: '#35D399',
+            desc: '针对负面情绪集中的玩家推送回应式内容与人工关怀',
+            recall: 20.8, cost: 2, retention: 18.4, match: 0.71,
+            plan: { code: 'PLAN-04 · 情感修复', title: '「负面情绪回应 + 人工关怀」召回策略',
+                    desc: '以官方回应与一对一触达修复情感裂痕，降低二次流失。' },
+            steps: [
+                { t: '情绪识别', ico: 'flame', c: '#35D399' },
+                { t: '内容回应', ico: 'mail', c: '#318BFF' },
+                { t: '人工关怀', ico: 'user', c: '#9275FF' },
+                { t: '效果追踪', ico: 'chart', c: '#35D399' }
+            ],
+            spark: [26, 29, 27, 33, 31, 37, 40, 38, 44, 48]
         }
-    });
-    
-    function stageFx(type) {
-        const fx = document.createElement('div');
-        fx.className = `sprite-stage-fx ${type} active`;
-        sprite.appendChild(fx);
-        setTimeout(() => fx.remove(), 620);
+    ];
+
+    var ICONS = {
+        flame: '<path d="M12 3c3.2 3.4 5.2 5.6 5.2 8.7A5.2 5.2 0 0 1 12 17a5.2 5.2 0 0 1-5.2-5.3C6.8 8.6 8.8 6.4 12 3z"/>',
+        gift: '<rect x="4" y="10" width="16" height="9.4" rx="1.8"/><path d="M3.2 9.4h17.6v3.2H3.2z"/><path d="M12 9.4v10"/><path d="M12 9.4c-.9-2.6-2.6-3.6-3.9-3.2-1.5.5-1.3 2.5 3.9 3.2z"/><path d="M12 9.4c.9-2.6 2.6-3.6 3.9-3.2 1.5.5 1.3 2.5-3.9 3.2z"/>',
+        mail: '<rect x="3" y="5.6" width="18" height="12.8" rx="2"/><path d="M3.4 7l8.6 6 8.6-6"/>',
+        chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M7.6 15.4l3.8-4.6 3 2.6 4.5-5.6"/>',
+        layers: '<path d="M12 3.4l8 4.3-8 4.3-8-4.3z"/><path d="M4 12.2l8 4.3 8-4.3"/><path d="M4 16.4l8 4.3 8-4.3"/>',
+        shield: '<path d="M12 3.2l7 2.2v5.4c0 4-3 7-7 8.8-4-1.8-7-4.8-7-8.8V5.4z"/><path d="M9 11.6l2.2 2.2 3.9-4.4"/>',
+        user: '<circle cx="12" cy="8.4" r="3.4"/><path d="M5.6 20c.5-3.6 3.1-5.7 6.4-5.7s5.9 2.1 6.4 5.7"/>'
+    };
+
+    function svg(path) {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>';
     }
 
-    function pageLine(from, to) {
-        return `${from}→${to}`;
+    /* ---------- 迷你面积图（内联 SVG，不引入图表库） ---------- */
+    function sparkBand(vals) {
+        var w = 120, h = 30;
+        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+        var span = (max - min) || 1;
+        var pts = vals.map(function (v, i) {
+            var x = (i / (vals.length - 1)) * w;
+            var y = h - ((v - min) / span) * (h - 4) - 2;
+            return x.toFixed(1) + ' ' + y.toFixed(1);
+        });
+        var line = 'M' + pts.join('L');
+        return { line: line, area: line + 'L' + w + ' ' + h + 'L0 ' + h + 'Z', w: w, h: h };
     }
 
-    function cinematicTransform(fromPage, toPage) {
-        if (!isHatched || fromPage === toPage) return;
-        const chain = [
-            () => {
-                sprite.classList.add('cinema-break');
-                stageFx('break');
-                createDissipationParticles();
-                playSound(680, 0.14, 'sawtooth');
-            },
-            () => {
-                sprite.classList.remove('cinema-break');
-                sprite.classList.add('cinema-rebuild');
-                stageFx('rebuild');
-                createLoadingParticles();
-                playSound(1080, 0.16, 'triangle');
-            },
-            () => {
-                sprite.classList.remove('cinema-rebuild');
-                updateCostume(toPage);
-                sprite.classList.add('cinema-born');
-                stageFx('born');
-                playSound(1480, 0.2, 'sine');
-                speechBubble.textContent = `电影变身：${pageLine(fromPage, toPage)}`;
-                speechBubble.style.opacity = '1';
-                speechBubble.style.transform = 'translateX(-50%) translateY(-10px)';
-                setTimeout(() => {
-                    speechBubble.style.opacity = '0';
-                    speechBubble.style.transform = 'translateX(-50%) translateY(0)';
-                    sprite.classList.remove('cinema-born');
-                }, 1200);
-            }
+    function sparkSvg(vals, color, uid) {
+        var p = sparkBand(vals);
+        return '<svg viewBox="0 0 ' + p.w + ' ' + p.h + '" preserveAspectRatio="none" aria-hidden="true">' +
+            '<defs><linearGradient id="sp-' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="' + color + '" stop-opacity=".22"/>' +
+            '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
+            '</linearGradient></defs>' +
+            '<path d="' + p.area + '" fill="url(#sp-' + uid + ')"/>' +
+            '<path d="' + p.line + '" fill="none" stroke="' + color + '" stroke-width="1.6" ' +
+            'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+            '</svg>';
+    }
+
+    function hexA(hex, a) {
+        var h = hex.replace('#', '');
+        return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' +
+            parseInt(h.slice(4, 6), 16) + ',' + a + ')';
+    }
+
+    var state = { range: '30d', seg: 'all', sort: 'mix', selected: 'hotspot' };
+
+    /* ==================== 左：风险概览 ==================== */
+    function renderRisk() {
+        var n = baseNumbers(state.range);
+        $('vHigh').textContent = fmt(n.high);
+        $('vPotential').textContent = fmt(n.potential);
+        $('vReachable').textContent = fmt(n.reachable);
+        $('vPool').textContent = fmt(n.pool);
+        $('riskPct').textContent = (HIGH_SHARE * 100).toFixed(1) + '%';
+        var cover = n.pool ? (n.reachable / n.pool * 100) : 0;
+        $('vCover').textContent = cover.toFixed(1) + '%';
+        $('rbFill').style.width = cover.toFixed(1) + '%';
+    }
+
+    /* ==================== 左：人群细分 ==================== */
+    function segments() {
+        var n = baseNumbers(state.range);
+        return [
+            { k: 'high', name: '高风险玩家', pct: 23.4, v: n.high, c: '#F0536B' },
+            { k: 'silent', name: '沉默用户', pct: 45.8, v: Math.round(n.pool * 0.458), c: '#9275FF' },
+            { k: 'back', name: '流失边缘', pct: 30.8, v: Math.round(n.pool * 0.308), c: '#35D9F2' }
         ];
-        let i = 0;
-        const run = () => {
-            if (i >= chain.length) return;
-            chain[i++]();
-            requestAnimationFrame(() => setTimeout(run, 260));
-        };
-        run();
     }
 
-    // 导航栏点击事件
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            if (!isHatched) return;
-            const toPage = this.getAttribute('data-page');
-            const fromPage = Array.from(sprite.classList).find(c => c.startsWith('theme-'))?.replace('theme-', '') || 'home';
-            cinematicTransform(fromPage, toPage);
+    function renderSegments() {
+        var all = segments();
+        var hi = state.seg;
+        var C = 2 * Math.PI * 46;
+        var acc = 0;
+
+        $('segDonut').innerHTML = all.map(function (s) {
+            var len = C * s.pct / 100 - 4;
+            var on = hi === 'all' || hi === s.k;
+            var ring = '<circle cx="60" cy="60" r="46" fill="none" stroke="' + s.c + '" stroke-width="13"' +
+                ' opacity="' + (on ? 1 : 0.22) + '"' +
+                ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"' +
+                ' stroke-dashoffset="' + (-C * acc / 100).toFixed(2) + '"' +
+                ' transform="rotate(-90 60 60)"/>';
+            acc += s.pct;
+            return ring;
+        }).join('');
+
+        var total = all.reduce(function (a, s) { return a + s.v; }, 0);
+        var picked = all.filter(function (s) { return s.k === hi; })[0];
+        $('segTotal').textContent = (total / 1000).toFixed(1) + 'K';
+        $('segTotalLabel').textContent = picked ? picked.name : '风险池';
+        $('segMeta').textContent = picked ? picked.name : '全量';
+
+        $('segLegend').innerHTML = all.map(function (s) {
+            var on = hi === 'all' || hi === s.k;
+            return '<div class="legend-row" style="--c:' + s.c + ';opacity:' + (on ? 1 : .38) + '">' +
+                '<i aria-hidden="true"></i><span>' + s.name + '</span>' +
+                '<b>' + s.pct.toFixed(1) + '%</b></div>';
+        }).join('');
+    }
+
+    /* ==================== 右：方案 ==================== */
+    function byId(id) {
+        return STRATEGIES.filter(function (s) { return s.id === id; })[0] || STRATEGIES[0];
+    }
+
+    function renderPlan() {
+        var s = byId(state.selected);
+        var n = baseNumbers(state.range);
+        $('planId').textContent = s.plan.code;
+        $('planTitle').textContent = s.plan.title;
+        $('planDesc').textContent = s.plan.desc;
+        $('mRecall').textContent = s.recall.toFixed(1) + '%';
+        $('mReach').textContent = fmt(Math.round(n.reachable * s.recall / 100));
+        $('mRetention').textContent = s.retention.toFixed(1) + '%';
+        $('stepHint').textContent = s.steps.length + ' 步执行';
+
+        $('stepsTrack').innerHTML = s.steps.map(function (st) {
+            return '<div class="step" style="--c:' + st.c + '">' +
+                '<span class="step-ico" aria-hidden="true">' + svg(ICONS[st.ico] || ICONS.chart) + '</span>' +
+                '<span>' + st.t + '</span></div>';
+        }).join('');
+
+        Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
+            c.classList.toggle('is-active', c.dataset.id === s.id);
         });
+    }
+
+    /* ==================== 底部：策略卡 ==================== */
+    function sortedList() {
+        var arr = STRATEGIES.slice();
+        if (state.sort === 'effect') arr.sort(function (a, b) { return b.recall - a.recall; });
+        else if (state.sort === 'cost') arr.sort(function (a, b) { return b.cost - a.cost; });
+        else arr.sort(function (a, b) { return b.match - a.match; });
+        return arr;
+    }
+
+    function stars(n) {
+        var s = '';
+        for (var i = 0; i < 3; i++) s += i < n ? '★' : '☆';
+        return '<span class="stars" aria-label="成本指数 ' + n + ' 星">' + s + '</span>';
+    }
+
+    var CARD_ICON = { hotspot: 'flame', benefit: 'gift', level: 'layers', emotion: 'shield' };
+
+    function renderCards() {
+        var n = baseNumbers(state.range);
+        var list = sortedList();
+
+        $('strategyGrid').innerHTML = list.map(function (s, i) {
+            var reach = Math.round(n.reachable * s.recall / 100);
+            var badge = s.tag || (state.sort === 'mix' && i === 0 ? '首选' : '');
+            return '<article class="card' + (s.id === state.selected ? ' is-active' : '') + '"' +
+                ' data-id="' + s.id + '"' +
+                ' style="--c:' + s.color + ';--tint:' + hexA(s.color, .1) + '">' +
+                '<div class="card-top">' +
+                    '<span class="card-ico" aria-hidden="true">' + svg(ICONS[CARD_ICON[s.id]]) + '</span>' +
+                    '<h3 class="card-name">' + s.name + '</h3>' +
+                    (badge ? '<span class="tag-match">' + badge + '</span>' : '') +
+                '</div>' +
+                '<p class="card-desc">' + s.desc + '</p>' +
+                '<div class="card-spark">' + sparkSvg(s.spark, s.color, s.id) + '</div>' +
+                '<div class="card-metrics">' +
+                    '<div class="cm"><i>预计召回率</i><b>' + s.recall.toFixed(1) + '%</b></div>' +
+                    '<div class="cm"><i>预期回流</i><b>' + fmt(reach) + '</b></div>' +
+                    '<div class="cm"><i>成本指数</i><b>' + stars(s.cost) + '</b></div>' +
+                '</div>' +
+                '<div class="card-foot">' +
+                    '<button class="btn-view" type="button" data-view="' + s.id + '">查看方案 <span aria-hidden="true">→</span></button>' +
+                '</div>' +
+            '</article>';
+        }).join('');
+    }
+
+    /* ==================== 交互 ==================== */
+    function toast(msg) {
+        var t = $('toast');
+        t.textContent = msg;
+        t.classList.add('on');
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.classList.remove('on'); }, 2400);
+    }
+
+    function bindChips(selector, key, after) {
+        Array.prototype.forEach.call(document.querySelectorAll(selector), function (b) {
+            b.addEventListener('click', function () {
+                state[key] = b.dataset[key === 'seg' ? 'seg' : 'sort'];
+                Array.prototype.forEach.call(document.querySelectorAll(selector), function (x) {
+                    var on = x === b;
+                    x.classList.toggle('is-on', on);
+                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                after();
+            });
+        });
+    }
+
+    bindChips('.seg-btn[data-seg]', 'seg', renderSegments);
+    bindChips('.seg-btn[data-sort]', 'sort', renderCards);
+
+    function select(id) {
+        state.selected = id;
+        renderPlan();
+    }
+
+    $('strategyGrid').addEventListener('click', function (ev) {
+        var view = ev.target.closest('[data-view]');
+        if (view) {
+            select(view.dataset.view);
+            toast('已载入「' + byId(view.dataset.view).name + '」到右侧方案');
+            return;
+        }
+        var card = ev.target.closest('.card');
+        if (card) select(card.dataset.id);
     });
-    
-    // 更新服饰函数
-    function updateCostume(page) {
-        costume.className = `costume costume-${page}`;
-        sprite.classList.remove('theme-home', 'theme-analysis', 'theme-solution', 'theme-retention', 'theme-comments');
-        sprite.classList.add(`theme-${page}`);
 
-        const themeColorMap = {
-            home: '#34d9ff',
-            analysis: '#b76dff',
-            solution: '#38f7a4',
-            retention: '#4ec8ff',
-            comments: '#ff75c8'
-        };
-        sprite.style.setProperty('--theme-color', themeColorMap[page] || '#34d9ff');
-
-        switch(page) {
-            case 'home':
-                costume.innerHTML = '<div class="theme-tag">数据指挥官</div><div class="armor-core"></div><div class="holo-board">全球玩家 12.8亿</div><div class="heatmap-grid"></div><div class="mag-boots"><span></span><span></span></div>';
-                break;
-            case 'analysis':
-                costume.innerHTML = '<div class="theme-tag">逻辑侦探</div><div class="detective-cape"></div><div class="prism-lens"></div><div class="question-badge">?</div><div class="clue-flow"></div>';
-                break;
-            case 'solution':
-                costume.innerHTML = '<div class="theme-tag">行动特工</div><div class="tactical-vest"></div><div class="strategy-cards"><span>联动</span><span>补偿</span><span>UGC</span></div><div class="energy-band"><i></i></div><div class="thruster-boots"><b></b><b></b></div>';
-                break;
-            case 'retention':
-                costume.innerHTML = '<div class="theme-tag">数据分析师</div><div class="data-robe"></div><div class="ar-glasses"></div><div class="retention-badge">留存↑ 82.6%</div><div class="trend-line"></div>';
-                break;
-            case 'comments':
-                costume.innerHTML = '<div class="theme-tag">社交官</div><div class="social-hoodie"></div><div class="bubble-pack">高赞: 角色建模超酷</div><div class="emotion-band"></div><div class="wifi-signal"></div>';
-                break;
-        }
-
-        sprite.style.transform = 'scale(1) rotate(360deg)';
-        setTimeout(() => {
-            sprite.style.transform = 'scale(1) rotate(0deg)';
-        }, 500);
-    }
-    
-    // 创建数据消散粒子效果
-    function createDissipationParticles() {
-        const particlesContainer = document.createElement('div');
-        particlesContainer.className = 'particles-container';
-        sprite.appendChild(particlesContainer);
-        
-        for (let i = 0; i < 20; i++) {
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-            particle.style.left = Math.random() * 80 + 'px';
-            particle.style.top = Math.random() * 100 + 'px';
-            particle.style.background = 'rgba(255, 255, 255, 0.8)';
-            particle.style.boxShadow = '0 0 5px rgba(255, 255, 255, 0.8)';
-            particle.style.animation = 'particleSplash 1s ease-out forwards';
-            particlesContainer.appendChild(particle);
-        }
-        
-        // 1秒后移除粒子容器
-        setTimeout(() => {
-            if (particlesContainer.parentNode) {
-                particlesContainer.parentNode.removeChild(particlesContainer);
-            }
-        }, 1000);
-    }
-    
-    // 创建数据加载光点汇聚效果
-    function createLoadingParticles() {
-        const particlesContainer = document.createElement('div');
-        particlesContainer.className = 'particles-container';
-        sprite.appendChild(particlesContainer);
-        
-        for (let i = 0; i < 20; i++) {
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-            particle.style.left = (Math.random() * 200 - 60) + 'px';
-            particle.style.top = (Math.random() * 200 - 50) + 'px';
-            particle.style.background = 'rgba(0, 240, 255, 0.8)';
-            particle.style.boxShadow = '0 0 5px rgba(0, 240, 255, 0.8)';
-            particle.style.animation = 'particleFlow 1s ease-out forwards';
-            particlesContainer.appendChild(particle);
-        }
-        
-        // 1秒后移除粒子容器
-        setTimeout(() => {
-            if (particlesContainer.parentNode) {
-                particlesContainer.parentNode.removeChild(particlesContainer);
-            }
-        }, 1000);
-    }
-    
-    // 精灵点击事件
-    sprite.addEventListener('click', function() {
-        if (isHatched) {
-            // 精灵转身面向用户
-            sprite.style.transform = 'scale(1) rotateY(180deg)';
-            
-            // 眼睛显示文字
-            const eyes = document.querySelectorAll('.eye');
-            eyes.forEach(eye => {
-                eye.style.background = 'rgba(0, 0, 0, 0.8)';
-                eye.innerHTML = '<span style="position: absolute; top: 2px; left: 1px; font-size: 8px; color: #00f0ff;">你好！</span>';
-            });
-            
-            // 翅膀展开
-            const wings = document.querySelectorAll('.wing');
-            wings.forEach(wing => {
-                wing.style.transform = wing.classList.contains('left') ? 'rotate(-60deg)' : 'rotate(60deg)';
-            });
-            
-            // 播放翅膀展开音效
-            playSound(800, 0.3, 'square');
-            
-            // 显示对话气泡
-            speechBubble.textContent = '你好！我是小E~';
-            speechBubble.style.opacity = '1';
-            speechBubble.style.transform = 'translateX(-50%) translateY(-10px)';
-
-            // 3秒语音问候
-            if ('speechSynthesis' in window) {
-                const utter = new SpeechSynthesisUtterance('你好，我是数据之灵小E。');
-                utter.lang = 'zh-CN';
-                utter.rate = 1.05;
-                utter.pitch = 1.2;
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utter);
-            }
-            
-            // 3秒后恢复正常状态
-            setTimeout(() => {
-                sprite.style.transform = 'scale(1) rotateY(0deg)';
-                eyes.forEach(eye => {
-                    eye.style.background = 'rgba(255, 255, 255, 0.9)';
-                    eye.innerHTML = '';
-                });
-                wings.forEach(wing => {
-                    wing.style.transform = wing.classList.contains('left') ? 'rotate(-30deg)' : 'rotate(30deg)';
-                });
-                speechBubble.style.opacity = '0';
-                speechBubble.style.transform = 'translateX(-50%) translateY(0)';
-            }, 3000);
-        }
+    $('deployBtn').addEventListener('click', function () {
+        var s = byId(state.selected);
+        this.classList.add('is-done');
+        this.disabled = true;
+        $('deployLabel').textContent = '已加入部署队列';
+        $('engineStatusText').textContent = '方案已部署 · ' + s.short + '｜等待触达窗口';
+        $('engineStatus').classList.add('is-done');
+        toast('「' + s.name + '」已加入部署队列（本地演示，未下发真实触达）');
     });
-    
-    // 常态互动（闲置状态）
-    function initIdleInteractions() {
-        // 每隔10秒精灵眨眼睛、摇尾巴
-        setInterval(() => {
-            if (isHatched) {
-                // 眨眼睛
-                const eyes = document.querySelectorAll('.eye');
-                eyes.forEach(eye => {
-                    eye.style.animation = 'none';
-                    setTimeout(() => {
-                        eye.style.animation = 'eyeBlink 0.5s ease-in-out';
-                    }, 100);
-                });
-                
-                // 摇尾巴（这里假设精灵有尾巴元素）
-                const tail = document.querySelector('.tail');
-                if (tail) {
-                    tail.style.animation = 'tailWag 1s ease-in-out';
-                    setTimeout(() => {
-                        tail.style.animation = '';
-                    }, 1000);
-                }
-            }
-        }, 10000);
+
+    /* ==================== 模型调用（可选） ==================== */
+    var KEY_STORAGE = 'liusheng.siliconflow.key';
+    var API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
+    var MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+
+    function resolveApiKey() {
+        var key = '';
+        try { key = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch (e) { /* 隐私模式 */ }
+        if (key) return key;
+        var input = window.prompt('首次使用需填入 SiliconFlow API Key。\n密钥只保存在本机浏览器，不会写入仓库。');
+        key = (input || '').trim();
+        if (key) { try { localStorage.setItem(KEY_STORAGE, key); } catch (e) {} }
+        return key;
     }
 
-    function bindEasterEggs() {
-        const body = sprite.querySelector('.sprite-body');
-        if (!body || body.querySelector('.hotspot-antenna')) return;
-        const antenna = document.createElement('div');
-        antenna.className = 'easter-hotspot hotspot-antenna';
-        const center = document.createElement('div');
-        center.className = 'easter-hotspot hotspot-body';
-        const particle = document.createElement('div');
-        particle.className = 'easter-hotspot hotspot-particle';
-        body.appendChild(antenna);
-        body.appendChild(center);
-        body.appendChild(particle);
+    $('generateStrategy').addEventListener('click', async function () {
+        var s = byId(state.selected);
+        var prompt = $('modelPrompt').value.trim() || ('当前策略：' + s.name + '。场景：' + s.desc);
 
-        const secretData = {
-            home: '首页：我发现评委刚刚看了这里 3 秒。',
-            analysis: '问题分析：热点与流失相关度正在升高。',
-            solution: '召回策略：联动卡触发率 28%。',
-            retention: '留存查询：次日留存曲线出现抬升。',
-            comments: '评论区：正向情绪弹幕占比 72%。'
-        };
-        const funnyMove = {
-            home: '指挥官踢正步！',
-            analysis: '侦探脚下一滑！',
-            solution: '特工战术滑步！',
-            retention: '分析师扶眼镜！',
-            comments: '社交官即兴热舞！'
-        };
+        var apiKey = resolveApiKey();
+        if (!apiKey) {
+            $('responseContent').textContent =
+                '未配置 API Key，无法调用大模型。\n再次点击并输入密钥即可；密钥仅保存在本机浏览器（localStorage: ' +
+                KEY_STORAGE + '），不会写入仓库。';
+            return;
+        }
 
-        antenna.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const page = Array.from(sprite.classList).find(c => c.startsWith('theme-'))?.replace('theme-', '') || 'home';
-            speechBubble.textContent = secretData[page];
-            speechBubble.style.opacity = '1';
-            playSound(1220, 0.12, 'triangle');
-            setTimeout(() => speechBubble.style.opacity = '0', 1800);
-        });
-        center.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const page = Array.from(sprite.classList).find(c => c.startsWith('theme-'))?.replace('theme-', '') || 'home';
-            speechBubble.textContent = funnyMove[page];
-            speechBubble.style.opacity = '1';
-            sprite.style.transform = 'scale(1) rotate(-18deg)';
-            setTimeout(() => sprite.style.transform = 'scale(1) rotate(12deg)', 140);
-            setTimeout(() => sprite.style.transform = 'scale(1) rotate(0deg)', 320);
-            setTimeout(() => speechBubble.style.opacity = '0', 1500);
-        });
-        particle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            createLoadingParticles();
-            playSound(1540, 0.14, 'sine');
-        });
-    }
-    
-    // 初始化精灵状态
-    window.addEventListener('load', function() {
-        // 初始化图表
-        initCharts();
-        
-        // 粒子随机位置
-        const particles = document.querySelectorAll('.sprite .particle');
-        particles.forEach((particle, index) => {
-            const x = Math.random() * 80;
-            const y = Math.random() * 100;
-            particle.style.left = x + 'px';
-            particle.style.top = y + 'px';
-            particle.style.animationDelay = index * 0.5 + 's';
-        });
-        
-        // 胶囊点击事件
-        const capsules = document.querySelectorAll('.capsule');
-        const capsule = capsules[0] || document.createElement('div'); // body部分的精灵球
-        const navCapsule = capsules[1]; // 导航栏部分的精灵球
-        const sprite = document.getElementById('sprite') || document.createElement('div');
-        const speechBubble = document.getElementById('speechBubble') || document.createElement('div');
-        const costume = document.getElementById('costume') || document.createElement('div');
-        
-        let isHatched = false;
-        
-        // 检查是否已经孵化过
-        const hatched = localStorage.getItem('spriteHatched');
-        if (hatched === 'true') {
-            // 隐藏胶囊
-            capsules.forEach(c => {
-                c.style.opacity = '0';
-                c.style.pointerEvents = 'none';
+        this.disabled = true;
+        this.textContent = '生成中…';
+        $('engineStatusText').textContent = '正在生成最优召回方案…';
+
+        try {
+            var res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                body: JSON.stringify({
+                    model: MODEL,
+                    messages: [
+                        { role: 'system', content: '你是游戏运营策略师。基于给定场景输出：①核心诊断 ②2-3 条召回动作 ③预期效果。180 字内，中文，简洁专业。' },
+                        { role: 'user', content: prompt }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 380
+                })
             });
-            
-            // 显示精灵
-            sprite.style.transform = 'scale(1)';
-            sprite.style.opacity = '1';
-            
-            // 翅膀扇动动画
-            const leftWing = document.querySelector('.wing.left');
-            const rightWing = document.querySelector('.wing.right');
-            leftWing.style.animation = 'wingFlap 1s ease-in-out infinite';
-            rightWing.style.animation = 'wingFlapRight 1s ease-in-out infinite';
-            
-            // 设置精灵为已孵化状态
-            isHatched = true;
-            
-            // 显示当前页面的服饰
-            const currentPage = window.location.pathname.split('/').pop().split('.')[0];
-            let pageType = 'home';
-            switch(currentPage) {
-                case 'analysis':
-                    pageType = 'analysis';
-                    break;
-                case 'solution':
-                    pageType = 'solution';
-                    break;
-                case 'validation':
-                    pageType = 'retention';
-                    break;
-                case 'implementation':
-                    pageType = 'comments';
-                    break;
+            if (!res.ok) {
+                var err = await res.json().catch(function () { return {}; });
+                throw new Error((err.error && err.error.message) || ('HTTP ' + res.status));
             }
-            updateCostume(pageType);
-            
-            // 初始化闲置互动
-            initIdleInteractions();
-            bindEasterEggs();
+            var data = await res.json();
+            var txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            $('responseContent').textContent = txt || '未获取到有效回复';
+            $('engineStatusText').textContent = '方案已生成 · ' + s.short;
+            $('engineStatus').classList.add('is-done');
+        } catch (err) {
+            $('responseContent').textContent = '【调用失败】' + err.message + '\n\n请检查网络或密钥后重试。';
+        } finally {
+            this.disabled = false;
+            this.textContent = '生成召回依据';
         }
     });
-    </script>
 
-    </body>
+    /* ==================== 时间范围联动 ==================== */
+    window.addEventListener('rangechange', function (ev) {
+        state.range = (ev.detail && ev.detail.range) || '30d';
+        renderRisk();
+        renderSegments();
+        renderPlan();
+        renderCards();
+    });
+
+    /* ==================== 初始化 ==================== */
+    renderRisk();
+    renderSegments();
+    renderCards();
+    renderPlan();
+
+    setTimeout(function () {
+        if ($('engineStatus').classList.contains('is-done')) return;
+        $('engineStatusText').textContent = '已就绪 · 4 个环节 · 等待选择策略';
+    }, 2600);
+})();
+</script>
+
+</body>
 </html>

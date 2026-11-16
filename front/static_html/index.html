@@ -2022,7 +2022,8 @@ body::after{
         if (window.DashboardCharts) window.DashboardCharts.setRange(range);
         refreshKpis(range);
         renderRegions(range);       /* §5：范围变化 → 排行同步 */
-        if (stage) stage.setRiskPillars(D.regionsFor(range));
+        /* 本块与地球初始化块是两个 IIFE，stage 不在作用域内，统一走公开 API */
+        if (window.GlobeStage) window.GlobeStage.setRiskPillars(D.regionsFor(range));
         /* 反向同步：告诉导航下拉当前档位，避免"文案 90 天、选中态 30 天" */
         window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: range } }));
     }

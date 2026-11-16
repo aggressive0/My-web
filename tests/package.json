@@ -1,0 +1,13 @@
+{
+  "name": "liusheng-smoke",
+  "private": true,
+  "type": "module",
+  "description": "「留声」静态站冒烟测试（Playwright 无头渲染）",
+  "scripts": {
+    "smoke": "node smoke.mjs",
+    "postinstall": "playwright install chromium --only-shell"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}
