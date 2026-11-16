@@ -160,19 +160,22 @@ node smoke.mjs              # 自动起服务，退出码 0 = 全绿
 
 | 环节 | 位置 |
 |---|---|
-| 采集 | `backend/collectors/steam_collector.py`（CCU 时序 + 成就快照 → `backend/data/steam.db`） |
-| 导出 | `backend/collectors/export_ccu_json.py` → `front/static_html/json/steam-ccu.json` |
-| 消费 | `dashboard-data.js` 的 `loadRealCcu()`，拿到 ≥8 个采样点就接管图表，否则回退演示序列 |
+| 本地采集 | `backend/collectors/steam_collector.py`（CCU 时序 + 成就快照 → `backend/data/steam.db`，5 分钟级） |
+| 本地导出 | `backend/collectors/export_ccu_json.py`（SQLite → JSON，用于离线快照） |
+| 线上采集 | `.github/workflows/collect-ccu.yml` 每小时运行 `backend/collectors/ci_publish.py`，写入独立的 **`data` 分支** |
+| 消费 | `dashboard-data.js` 的 `loadRealCcu()`：先拉 `raw.githubusercontent.com/<repo>/data/steam-ccu.json`，失败再退回仓库内快照，再不行回落演示序列 |
 
 ```bash
-python backend/collectors/steam_collector.py --appids 1203220 --once --export front/static_html/json/steam-ccu.json
-python backend/collectors/funnel.py --appid 1203220        # 成就漏斗
+python backend/collectors/steam_collector.py --appids 1203220 --once   # 本地落库
+python backend/collectors/funnel.py --appid 1203220                   # 成就漏斗
+python backend/collectors/export_ccu_json.py                          # 刷新离线快照
 ```
 
-两个必须知道的限制：
+三个必须知道的限制：
 
 1. **口径**：CCU 是某一时刻的同时在线人数，不是 DAU，也不能与演示数据里的「活跃玩家」混为一谈。
-2. **采集需要常驻**：本机注册了计划任务 `NEXUS-SteamCCU`，每 5 分钟采样并刷新 JSON。机器关机或睡眠期间会出现数据缺口；线上站点看到的是最后一次提交的 JSON 快照。
+2. **数据与代码分仓**：数据在 `data` 分支，`main` 只放代码。每小时更新一次，不会污染提交历史，也不会让 `dev` 与 `main` 产生冲突。页面运行时跨域读取，`raw.githubusercontent.com` 缓存约 5 分钟。
+3. **离线退化**：断网或 raw 域名不可达时，页面退回仓库内的 `front/static_html/json/steam-ccu.json` 快照（该文件只在手动执行导出时更新）。
 
 上游接口有 `Cache-Control: max-age≈647`（约 11 分钟）的 CDN 缓存，采集器已加入缓存穿透参数与 `no-cache` 请求头——否则会采到一条水平直线。
 

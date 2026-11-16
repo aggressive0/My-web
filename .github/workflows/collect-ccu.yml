@@ -1,13 +1,17 @@
 name: Collect Steam CCU
 
-# 每小时采集永劫无间的同时在线人数，写回 front/static_html/json/steam-ccu.json 并发布。
+# 每小时采集永劫无间的同时在线人数，写入独立的 data 分支。
 #
-# 为什么这里要自己发布 Pages：
-#   用默认 GITHUB_TOKEN 推送的提交不会触发新的工作流（GitHub 防递归机制），
-#   所以数据提交不会让 deploy.yml 跑起来，线上 JSON 会永远停在旧版本。
-#   因此本工作流提交后自行执行一次 Pages 发布。
+# 为什么单独开 data 分支：
+#   数据每小时提交一次，放在 main 会污染历史，并让 dev/main 在数据文件上持续分叉。
+#   改到 data 分支后，main 只承载代码，数据随时更新且永不冲突。
 #
-# Runner 在境外，可直连 api.steampowered.com，不需要代理。
+# 页面侧读取：
+#   https://raw.githubusercontent.com/aggressive0/My-web/data/steam-ccu.json
+#   该域名返回 Access-Control-Allow-Origin: *，可跨域直接 fetch。
+#
+# 这里不再发布 Pages：数据不在站点目录里，站点无需重新构建。
+# Runner 在境外可直连 api.steampowered.com，不需要代理。
 
 on:
   schedule:
@@ -16,48 +20,23 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write      # 提交数据文件
-  pages: write         # 发布到 Pages
-  id-token: write      # deploy-pages 用 OIDC 换一次性令牌
+  contents: write      # 写 data 分支
 
 concurrency:
-  group: pages
+  group: collect-ccu
   cancel-in-progress: false
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
-      - name: Collect CCU
-        run: python3 backend/collectors/ci_collect.py
-
-      - name: Commit data
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add front/static_html/json/steam-ccu.json
-          if git diff --staged --quiet; then
-            echo "数据无变化，跳过提交"
-            exit 0
-          fi
-          git commit -m "chore(data): CCU $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v6.0.0
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5.0.0
-        with:
-          path: ./front/static_html
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5.0.1
+      - name: Collect and publish to data branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STEAM_APPID: '1203220'
+          WINDOW_HOURS: '72'
+        run: python3 backend/collectors/ci_publish.py
