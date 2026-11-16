@@ -46,6 +46,12 @@ STATUS = "collection-status.json"
 # 本身就隔了几个月，30 天窗口会把它们全部裁成 0 条，页面显示成「没有评论」，
 # 而实际上数据一直都在。按「最近 N 个有数据的日期」保留更诚实。
 MAX_DAYS_KEPT = int(os.environ.get("REVIEW_DAYS_KEPT", "180"))
+
+# 重建模式（环境变量 REVIEW_REBUILD=1）：忽略已有聚合与去重集合，
+# 用「本次抓到的这批」重新生成。用于口径修正 ——
+# 例如早期按固定天数裁剪，把稀疏游戏的聚合裁成了 0 条。
+# 注意：只能覆盖本次抓取窗口内的评论，更早的评论需要先 backfill 再重建。
+# 在 main() 里读取而不是模块级读取，是为了让测试能直接改环境变量验证。
 SEEN_CAP = 3000          # 每款游戏记住多少个已计数的 review_id
 SAMPLES_CAP = 3000       # 样本文件总行数上限
 MAX_PAGES = 3            # 每款每次最多翻几页（每页 100 条）
@@ -164,6 +170,7 @@ def main():
     if not token:
         raise SystemExit("缺少 GITHUB_TOKEN")
 
+    rebuild = os.environ.get("REVIEW_REBUILD") == "1"
     cfg = game_config.load_games(os.environ.get("GAMES_CONFIG"))
     targets = [g for g in cfg["games"] if g["enabled"]]
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -182,6 +189,12 @@ def main():
     state, sha_state = P.get_remote(STATE, repo, token)
     state = state or {"seen": {}}
     seen_all = {str(k): list(v) for k, v in (state.get("seen") or {}).items()}
+
+    if rebuild:
+        print("重建模式：忽略已有聚合与去重集合，按本次抓取结果重算")
+        daily = {"days_kept_cap": MAX_DAYS_KEPT, "games": []}
+        by_appid = {}
+        seen_all = {}
 
     sample_text, sha_samples = get_text(SAMPLES, repo, token)
     sample_lines = [ln for ln in (sample_text or "").splitlines() if ln.strip()]
@@ -203,7 +216,7 @@ def main():
             print("  %-16s 失败：%s" % (name, entry["error"]))
             continue
 
-        seen = set(seen_all.get(str(appid), []))
+        seen = set() if rebuild else set(seen_all.get(str(appid), []))
         fresh = [r for r in reviews if r["review_id"] not in seen]
         entry["fetched"] = len(reviews)
 

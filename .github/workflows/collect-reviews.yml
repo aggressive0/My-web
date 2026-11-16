@@ -18,6 +18,12 @@ on:
   schedule:
     - cron: '20 */2 * * *'
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: '忽略已有聚合与去重集合，按本次抓取重算（口径修正用）'
+        type: choice
+        options: ['0', '1']
+        default: '0'
 
 permissions:
   contents: write      # 写 data 分支
@@ -37,4 +43,5 @@ jobs:
       - name: Collect and publish to data branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVIEW_REBUILD: ${{ inputs.rebuild || '0' }}
         run: python3 backend/collectors/reviews_publish.py
