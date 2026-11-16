@@ -56,3 +56,24 @@ jobs:
           path: tests/artifacts
           if-no-files-found: ignore
           retention-days: 7
+
+  # 后端测试：配置校验、schema 幂等、失败隔离、API 契约、评论聚合。
+  # 与冒烟分开成一个 job，是为了并行跑（前端 ~1.5min，后端 ~40s），
+  # 且失败原因一眼能分清是「页面坏了」还是「数据层坏了」。
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Install backend deps
+        run: pip install -r backend/requirements.txt
+
+      - name: Run unittest
+        run: python -m unittest discover -s tests -p "test_*.py" -v
