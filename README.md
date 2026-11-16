@@ -199,6 +199,30 @@ python backend/collectors/export_snapshot.py                         # 刷新离
 3. **离线退化**：断网或 raw 域名不可达时，页面退回仓库内的 JSON 快照（只在手动执行 `export_snapshot.py` 时更新）。
 4. **横轴是时间轴**，不是等距类目轴：采样存在停机缺口（几十分钟到数小时），等距绘制会谎报事件间隔。曲线也不做平滑，避免在缺口处凭空画出趋势。
 
+### 真实数据：评论采集（Phase 2）
+
+| 环节 | 位置 |
+|---|---|
+| 采集器 | `backend/collectors/steam_reviews_collector.py`（新接口 `IUserReviewsService/GetAppReviews/v1`，失败降级旧 `/appreviews`） |
+| 本地库 | `steam_reviews` 表，主键 `(appid, review_id)`，重复采集幂等 |
+| CI 发布 | `backend/collectors/reviews_publish.py` → `data` 分支 `reviews-daily.json` / `reviews-samples.jsonl` / `collection-status.json` / `reviews-state.json` |
+| 工作流 | `.github/workflows/collect-reviews.yml`，每 2 小时第 20 分 |
+
+```bash
+python backend/collectors/steam_reviews_collector.py --once                       # 按配置采集一轮
+python backend/collectors/steam_reviews_collector.py --mode backfill --pages 5    # 回溯历史
+python backend/collectors/steam_reviews_collector.py --status                     # 看库里已有多少
+```
+
+三条实测行为（文档没写，但不遵守就会踩坑）：
+
+1. `num_per_page` **只在 `filter=all` 时生效**（100 条/页）；`filter=recent` 固定返回 5 条。
+2. 没有新数据时服务端会**原样返回你发过去的 cursor** —— 不判「游标没前进」就是死循环。
+3. `language=` 被忽略（传 `schinese` 仍返回 english 评论），语言过滤只能落库后按 `review.language` 做。
+
+口径：`query_summary.total_reviews` 是该应用的全站评论总量，与「本次返回条数」是两件事；
+页面展示推荐率时必须同时给出样本量与日期范围，否则就是个孤零零的假精确数字。
+
 ---
 
 ## 后端接口

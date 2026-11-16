@@ -99,6 +99,11 @@ def put_remote(path, doc, sha, repo, token, message):
             raise
 
 
+# 显式不使用环境代理：Actions runner 无代理变量，而本机常有 https_proxy 指向
+# 已死的端口，默认 opener 会把它当成代理，导致「直连」时报 502 Tunnel failed。
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def fetch_json(url, retries=3):
     last = None
     for i in range(retries):
@@ -113,7 +118,7 @@ def fetch_json(url, retries=3):
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=25) as r:
+            with OPENER.open(req, timeout=25) as r:
                 return json.loads(r.read().decode("utf-8"))
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as e:
             last = e

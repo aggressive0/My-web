@@ -47,10 +47,10 @@ DB = os.environ.get("STEAM_DB", store.DEFAULT_DB)
 
 
 def make_opener(proxy):
-    handlers = []
-    if proxy:
-        handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
-    op = urllib.request.build_opener(*handlers)
+    # 显式传入代理字典（无代理时传空字典），否则 urllib 会去读环境变量
+    # https_proxy —— 本机那个代理端口时常是死的，会让「直连」变成 502。
+    mapping = {"http": proxy, "https": proxy} if proxy else {}
+    op = urllib.request.build_opener(urllib.request.ProxyHandler(mapping))
     op.addheaders = [
         ("User-Agent", "NEXUS-retention-demo/1.0 (student research; contact: local)"),
         # 上游 CDN 会给 CCU 接口加 Cache-Control: max-age≈647（约 11 分钟）。
