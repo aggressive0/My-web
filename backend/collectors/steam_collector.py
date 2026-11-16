@@ -203,8 +203,6 @@ def main():
                     help="auto 自动探测（默认）/ none 直连 / http://127.0.0.1:7897 指定代理")
     ap.add_argument("--db", default=os.environ.get("STEAM_DB", DEFAULT_DB))
     ap.add_argument("--log", default=None, help="日志文件路径；计划任务下建议指定")
-    ap.add_argument("--export", default=None,
-                    help="采样后同步导出前端 JSON 的路径，例如 front/static_html/json/steam-ccu.json")
     args = ap.parse_args()
 
     if args.log:
@@ -248,16 +246,6 @@ def main():
         if args.minutes and (time.time() - start) > args.minutes * 60:
             break
         time.sleep(args.interval)
-
-    # 采样结束后同步导出前端 JSON，保证页面看到的永远是最新一次采样
-    if args.export:
-        try:
-            from export_ccu_json import export_json
-            out = args.export if os.path.isabs(args.export) else os.path.join(ROOT_DIR, args.export)
-            n = export_json(DB, out, appids[0], hours=72)
-            print("导出 %d 个采样点 → %s" % (n, out), flush=True)
-        except Exception as e:
-            print("导出失败: %s" % e, flush=True)
 
     print("done.", flush=True)
 
