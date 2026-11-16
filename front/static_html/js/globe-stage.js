@@ -131,22 +131,30 @@
             .width(el.clientWidth)
             .height(el.clientHeight);
 
-        /* Phase 4：按 globe.gl 默认 MeshPhongMaterial 的真实属性调校材质。
-           不再写入 Phong 材质不支持的 roughness / metalness，避免无效配置。 */
-        var mat = globe.globeMaterial();
-        if (mat) {
-            /* 夜景贴图保留原始色彩，降低自发光强度，为方向光留出明暗层次 */
+        /* Phase 4.1：globeImageUrl 的贴图是异步加载的，init 执行到这里时 mat.map 仍为 null，
+           原先 `if (mat.emissive && mat.map)` 会整块跳过 —— emissive / emissiveMap / emissiveIntensity
+           从未生效（运行态恒为 #000000 / null / 1）。改为拆两步：不依赖贴图的属性立即应用，
+           贴图就绪后再补一次自发光，用有界 rAF 轮询兜住异步时序。 */
+        function applyGlobeMaterial() {
+            var mat = globe.globeMaterial();
+            if (!mat) return false;
             if (mat.color && mat.color.set) mat.color.set('#ffffff');
             if ('bumpScale' in mat) mat.bumpScale = 0.14;
             if (mat.specular && mat.specular.set) mat.specular.set('#315d86');
             if ('shininess' in mat) mat.shininess = 16;
-            if (mat.emissive && mat.map) {
-                mat.emissive.set('#244d75');
-                mat.emissiveMap = mat.map;
-                mat.emissiveIntensity = 0.38;
-            }
+            if (!mat.map) return false;                 // 贴图未就绪，等待下一帧
+            /* 夜景灯带只做微弱自发光，暗面保留方向光塑造的明暗层次 */
+            if (mat.emissive) mat.emissive.set('#1b3a58');
+            mat.emissiveMap = mat.map;
+            mat.emissiveIntensity = 0.2;
             mat.needsUpdate = true;
+            return true;
         }
+        applyGlobeMaterial();
+        (function waitForMap(n) {
+            if (applyGlobeMaterial() || n <= 0) return;
+            requestAnimationFrame(function () { waitForMap(n - 1); });
+        })(180);
 
         /* Phase 4：微调 globe.gl 已创建的默认灯光，不额外创建灯源或增加渲染通道。
            环境光负责保留暗部细节，方向光提供球体受光面与边缘的明暗对比。 */
