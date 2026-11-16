@@ -369,18 +369,36 @@
         meta: META,
 
         /* 真实 CCU 时序（Steam 同时在线）。
-           由 backend/collectors/export_ccu_json.py 生成，页面按需异步加载：
-           拿到数据就用真实曲线，拿不到就退回内置演示序列。
-           返回 null 表示不可用（文件缺失、点数太少、版本过旧）。 */
+           数据由 GitHub Actions 每小时写入独立 data 分支，页面运行时从
+           raw.githubusercontent.com 跨域拉取（该域返回 Access-Control-Allow-Origin: *）。
+           远程不可用时退回仓库内的离线快照，再不行就回落内置演示序列。
+           返回 null 表示都不可用。 */
         loadRealCcu: function (minPoints) {
             var need = minPoints || 8;
-            return fetch('json/steam-ccu.json', { cache: 'no-store' })
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (j) {
-                    if (!j || !j.points || j.points.length < need) return null;
-                    return j;
-                })
-                .catch(function () { return null; });
+            var REMOTE = 'https://raw.githubusercontent.com/aggressive0/My-web/data/steam-ccu.json';
+
+            function usable(j) {
+                return !!(j && j.points && j.points.length >= need);
+            }
+
+            function grab(url, timeoutMs) {
+                var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+                return fetch(url, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .catch(function () { return null; })
+                    .then(function (j) {
+                        if (timer) clearTimeout(timer);
+                        return j;
+                    });
+            }
+
+            return grab(REMOTE, 4000).then(function (j) {
+                if (usable(j)) return j;
+                return grab('json/steam-ccu.json', 4000).then(function (k) {
+                    return usable(k) ? k : null;
+                });
+            });
         },
 
         regions: REGIONS,
