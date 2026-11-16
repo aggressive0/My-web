@@ -285,6 +285,22 @@ class PublishFlowTest(unittest.TestCase):
         self.assertEqual(len(writes[RP.STATUS]["games"]), 6)
 
 
+class SampleDedupeTest(unittest.TestCase):
+    def test_duplicate_ids_are_collapsed_keeping_last(self):
+        lines = [
+            json.dumps({"appid": 1, "id": "a", "text": "old"}),
+            json.dumps({"appid": 1, "id": "b", "text": "x"}),
+            json.dumps({"appid": 1, "id": "a", "text": "new"}),   # 同 id 后出现，应保留这条
+        ]
+        out = RP.dedupe_samples(lines)
+        self.assertEqual(len(out), 2)
+        self.assertIn("new", out[-1])
+
+    def test_broken_lines_are_dropped_not_crashing(self):
+        out = RP.dedupe_samples(['{"appid":1,"id":"a"}', "not json", ""])
+        self.assertEqual(len(out), 1)
+
+
 class RebuildTest(unittest.TestCase):
     """口径修正时必须有可重复的「重算」路径，而不是靠手工删文件。"""
 
