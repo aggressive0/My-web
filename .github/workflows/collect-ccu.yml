@@ -1,0 +1,41 @@
+name: Collect Steam CCU
+
+# 每小时采集永劫无间的同时在线人数，写回 front/static_html/json/steam-ccu.json。
+# GitHub Runner 在境外，可直连 api.steampowered.com，不需要代理。
+# 该提交只改数据文件，deploy.yml 会触发、smoke.yml 由 paths-ignore 跳过。
+
+on:
+  schedule:
+    # GitHub 的 cron 是 UTC，且高峰期会延迟几分钟到十几分钟，属正常现象
+    - cron: '5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write      # 需要提交数据文件
+
+concurrency:
+  group: collect-ccu
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Collect CCU
+        run: python3 backend/collectors/ci_collect.py
+
+      - name: Commit data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add front/static_html/json/steam-ccu.json
+          if git diff --staged --quiet; then
+            echo "数据无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(data): CCU $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
