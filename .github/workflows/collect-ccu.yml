@@ -1,6 +1,6 @@
 name: Collect Steam CCU
 
-# 每小时采集永劫无间的同时在线人数，写入独立的 data 分支。
+# 每小时采集 backend/config/games.yaml 里所有启用游戏的同时在线人数，写入独立的 data 分支。
 #
 # 为什么单独开 data 分支：
 #   数据每小时提交一次，放在 main 会污染历史，并让 dev/main 在数据文件上持续分叉。
@@ -37,6 +37,5 @@ jobs:
       - name: Collect and publish to data branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STEAM_APPID: '1203220'
           WINDOW_HOURS: '72'
         run: python3 backend/collectors/ci_publish.py

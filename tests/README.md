@@ -84,7 +84,9 @@ HTML —— 静态节点永远存在，断言它等于什么都没测。
 契约由 `tests/test_phase1.py` 覆盖（23 项，全部离线，不发真实网络请求）。
 
 ```bash
-.venv/Scripts/python.exe -m unittest tests.test_phase1 -v
+.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py" -v
+# 或只跑某一阶段
+.venv/Scripts/python.exe -m unittest tests.test_phase1 tests.test_phase2 -v
 ```
 
 | 组 | 覆盖 |
@@ -93,6 +95,7 @@ HTML —— 静态节点永远存在，断言它等于什么都没测。
 | `DatabaseTest` | schema 五张表；`init_db` 幂等；`sync_games` upsert 不碰历史；采集日志记录成功与失败 |
 | `MergeTest` | 一款失败不影响其余；失败保留旧点；停用游戏保留历史且不再打接口；窗口裁剪；同分钟覆盖 |
 | `ApiTest` | `meta` 契约、单款查询、`GAME_NOT_FOUND` / `INVALID_APPID`、库缺失时标 `unavailable` 而非伪造 0 |
+| `test_phase2.py` | 评论解析容错（缺字段/超长文本/差评）、游标不前进即停、页内去重、旧接口降级、时长分档、按日聚合与窗口裁剪、去重集合 FIFO、发布链路四文件端到端 |
 
 **为什么必须离线**：测试要验证的是「失败时系统怎么表现」，把网络拉进来只会让
 失败原因变成「Steam 今天不稳定」，而不是代码错在哪。采集函数在测试里被 monkeypatch 替换。

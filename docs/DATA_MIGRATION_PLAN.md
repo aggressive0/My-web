@@ -12,13 +12,13 @@
 |---|---|---|---|
 | 0 审计 | 三份文档 + 备份 | ✅ 完成 | — |
 | 1 多游戏 CCU | `games` 配置 + 表 + 列表 API + 前端选择器 | ✅ 完成：6 款配置化、schema 落库、API 上线、切换器由配置生成、23 项离线测试 | — |
-| 2 评论采集 | Collector + cursor + upsert + 日志 | **完全空白** | 全新开发（接口已验证可用） |
+| 2 评论采集 | Collector + cursor + upsert + 日志 | ✅ 完成：采集器 + 两处降级 + 无状态发布 + 19 项离线测试 | — |
 | 3 情感与热点 | 模型分类 + 主题 + 可追溯 | 仅关键词表打分，且无输入数据 | 重写分析层 |
 | 4 风险与策略 | 分量公式 + 每日快照 + 建议状态 | 无 | 全新开发 |
 | 5 前端接 API | 全部走 API，无静默 mock | 3 个板块真实，25 个 mock | 逐页改造 |
 | 6 联调测试 | 测试 + 文档 + Demo | 冒烟 86 项（仅前端静态）+ Phase 1 后端 23 项 | 采集器单测、API contract 扩展 |
 
-结论：**Phase 1 已完成，Phase 2 之后仍为零**。原估算 9–15 个工作日对本仓库偏乐观，主要成本在 Phase 2/3 的模型选型与持久化方案。
+结论：**Phase 1、2 已完成，Phase 3 之后仍为零**。原估算 9–15 个工作日对本仓库偏乐观，主要成本在 Phase 2/3 的模型选型与持久化方案。
 
 Phase 1 额外收益：`collection_logs` 这张表让「哪款游戏何时挂了、挂多久」第一次变成可查询的事实，
 而不是靠翻控制台输出猜测——Phase 2 的采集健康度看板直接复用它。
@@ -107,24 +107,51 @@ Phase 1 额外收益：`collection_logs` 这张表让「哪款游戏何时挂了
    库里三张表无人读写，但删除要动 SQLAlchemy 模型与 `create_all()`，
    与本阶段目标无关；随 Phase 5 前端改造一并废弃更安全。
 
-### Phase 2：评论采集（2–3 天）
+### Phase 2：评论采集（2–3 天）✅ 已完成（2026-11-16）
 
-| 动作 | 文件 | 说明 |
+| 动作 | 文件 | 结果 |
 |---|---|---|
-| 新增 Collector | `backend/collectors/steam_reviews_collector.py` | 封装 `IUserReviewsService/GetAppReviews/v1`；保留旧 `/appreviews` 作为降级 |
-| 运行时临时库 | SQLite 表 `steam_reviews` + `collection_cursors` | 按方案 §4.3 建表 |
-| 聚合导出 | `backend/collectors/reviews_publish.py` | 写 `reviews-daily.json` + `reviews-sample.jsonl.gz` 到 `data` 分支 |
-| 新工作流 | `.github/workflows/collect-reviews.yml` | `cron 20 */2 * * *`，独立 concurrency group |
-| 采集日志 | `data` 分支 `collection-status.json` | 每游戏最后一次成功时间、条数、错误码 |
+| 新增 Collector | `backend/collectors/steam_reviews_collector.py` | 封装 `IUserReviewsService/GetAppReviews/v1`，失败降级到旧 `/appreviews`；页内按 id 去重；游标不前进即停 |
+| 建表 | `backend/data/schema.sql` | `steam_reviews`（主键 `appid+review_id`，重复采集幂等）+ `collection_cursors` |
+| 聚合与发布 | `backend/collectors/reviews_publish.py` | 无状态：读 data 分支 → 合并 → 写回 `reviews-daily.json` / `reviews-samples.jsonl` / `collection-status.json` / `reviews-state.json` |
+| 新工作流 | `.github/workflows/collect-reviews.yml` | `cron 20 */2 * * *`，`concurrency: collect-reviews`（与 CCU 任务分开，避免互相排队） |
+| 测试 | `tests/test_phase2.py` | 19 项全离线：解析容错、游标终止、降级、聚合、去重上限、发布链路端到端 |
 
-关键实现点（实测得出）：
+#### 实测推翻了三条文档假设
 
-- 接口**无需 API Key**。
-- `cursor` 必须持久化；`filter=recent`（增量）与 `filter=updated`（追评）两条流。
-- 网络不稳定：本机实测同一接口出现过 HTTP 000 / 302，必须重试 + 降级。
-- 每轮设上限（建议 ≤ 200 条/游戏），避免 Actions 超时。
+| 文档/直觉 | 实测 | 后果 |
+|---|---|---|
+| `num_per_page` 可控制每页条数 | 只在 `filter=all` 时生效；**`filter=recent` 固定 5 条**（带 `day_range` 时更少） | 增量靠「多翻几页」，不能指望一次拿 100 |
+| 游标会一直向前 | 没有新数据时服务端**原样返回你发过去的游标**且 reviews 为空 | 不判「游标没前进」就是死循环；已加双重终止条件 + 页内去重 |
+| `language=` 可服务端过滤 | 传 `schinese` 仍返回 english 评论 | 语言不做服务端过滤，落库后按 `review.language` 聚合 |
 
-验收：重复采集不重复入库；中断后能续采；追评能覆盖并触发重分析。
+另外两条工程结论：
+
+1. **`filter=recent` 的排序不严格按创建时间**（Path of Exile 一次翻页的跨度从 2017 到 2026）。
+   因此聚合一律以 `timestamp_created` 分日，不依赖返回顺序。
+2. **网络抖动是逐连接的**：同一时刻 CCU 端点超时、评论端点 200。
+   所以不要「换个端点绕」，而是指数退避重试（1.5s/3s/6s），4 次仍失败才降级旧接口。
+
+#### 与计划的两处偏离
+
+1. **样本文件用 `reviews-samples.jsonl`，不是 `.jsonl.gz`。**
+   gz 是二进制，每次重写都会在 Git 里产生一个全新 blob（无法 delta），一天 12 次 = 12 份完整副本；
+   文本 JSONL 能被正常 delta 压缩，配合 3000 行上限，仓库增长反而更可控。
+2. **没有落 `filter=updated` 这条流。**
+   追评识别已用 `updated_ts` 字段（存了就不用再采一条流）；等 Phase 3 做「情感重算」时再按需开启，
+   现在开只会每天多写一遍相同的 id。
+
+#### 去重的取舍
+
+`reviews-state.json` 每款游戏记 3000 个已计数 `review_id`（FIFO 淘汰）。
+超出容量后被淘汰的旧 id 若再次出现会计重一次 —— 这是容量与精确度的折中：
+按实测的评论量级（每款每两小时几十条），3000 条覆盖约 10 天，重采同一批的概率极低。
+
+验收对照：
+
+- **重复采集不重复入库** → `merge_seen` + `reviews-state.json`，`test_seen_set_dedupes` / `test_seen_set_is_fifo_capped` 证明；
+- **中断后能续采** → 状态在 data 分支，runner 无状态也能接着来；`test_main_writes_four_files_with_expected_shape` 验证四个文件齐全；
+- **追评覆盖** → `steam_reviews` 用 `ON CONFLICT DO UPDATE` 覆盖 `updated_ts`（本地库路径，Phase 3 用）。
 
 ### Phase 3：情感与热点（2–3 天）
 

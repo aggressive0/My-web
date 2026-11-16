@@ -51,6 +51,9 @@ env/
 __pycache__/
 *.pyc
 
+# 临时探针脚本（tests/_*.cjs 是排查用的一次性脚本，不该入库）
+tests/_*.cjs
+
 # 临时文件
 *.tmp
 *.temp

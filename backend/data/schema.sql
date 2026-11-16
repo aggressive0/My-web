@@ -71,3 +71,24 @@ CREATE TABLE IF NOT EXISTS collection_cursors (
     updated_at TEXT    NOT NULL,
     PRIMARY KEY (appid, stream)
 );
+
+-- 原始评论（Phase 2）：只落本地库，不进 Git。
+-- 主键用 Steam 的 recommendationid，重复采集天然幂等；
+-- 追评（timestamp_updated 变化）靠 updated_ts 与 fetched_at 对比识别。
+CREATE TABLE IF NOT EXISTS steam_reviews (
+    appid            INTEGER NOT NULL,
+    review_id        TEXT    NOT NULL,
+    created_ts       TEXT    NOT NULL,        -- UTC ISO8601
+    updated_ts       TEXT,
+    voted_up         INTEGER NOT NULL,        -- 1 推荐 / 0 不推荐
+    language         TEXT,
+    playtime_minutes INTEGER,                 -- 写评论时的游戏时长
+    votes_up         INTEGER,                 -- 这条评论获得的「有用」
+    refunded         INTEGER,
+    text             TEXT,
+    fetched_at       TEXT    NOT NULL,
+    PRIMARY KEY (appid, review_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_created ON steam_reviews(appid, created_ts);
+CREATE INDEX IF NOT EXISTS idx_reviews_updated ON steam_reviews(appid, updated_ts);
