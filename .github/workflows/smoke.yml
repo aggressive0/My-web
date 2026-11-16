@@ -6,8 +6,13 @@ name: Smoke test (static site)
 
 on:
   pull_request:
+    paths-ignore:
+      - 'front/static_html/json/steam-ccu.json'
   push:
     branches: [main, dev]
+    paths-ignore:
+      # 每小时的数据提交不跑冒烟（deploy.yml 仍会正常触发）
+      - 'front/static_html/json/steam-ccu.json'
   workflow_dispatch:
 
 permissions:

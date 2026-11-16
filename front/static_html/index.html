@@ -1647,11 +1647,110 @@ body::after{
         };
     }
 
+    /* ---------- 真实 CCU：拿到 Steam 同时在线时序就接管活跃趋势图 ---------- */
+    var realCcu = null;
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+    function ccuOption(real) {
+        var pts = real.points;
+        var labels = pts.map(function (p) {
+            var d = new Date(p.ts);
+            return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+        });
+        var vals = pts.map(function (p) { return +(p.p / 1000).toFixed(2); });
+
+        var lo = Math.min.apply(null, vals);
+        var hi = Math.max.apply(null, vals);
+        var span = Math.max(hi - lo, 0.4);
+        var min = Math.max(0, +(lo - span * 0.35).toFixed(1));
+        var max = +(hi + span * 0.35).toFixed(1);
+
+        return {
+            grid: { left: 34, right: 20, top: 24, bottom: 20 },
+            tooltip: Object.assign({
+                trigger: 'axis',
+                axisPointer: { type: 'line', lineStyle: { color: 'rgba(53,217,242,.4)' } },
+                formatter: function (ps) {
+                    var i = ps[0].dataIndex;
+                    var d = new Date(pts[i].ts);
+                    var head = '<div style="font-family:' + MONO + ';font-size:9.5px;letter-spacing:.1em;color:#637A96;margin-bottom:5px">' +
+                        pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>';
+                    return head + '<div style="display:flex;gap:14px;justify-content:space-between"><span>' +
+                        ps[0].marker + '同时在线</span><b style="font-family:' + MONO + '">' +
+                        pts[i].p.toLocaleString('en-US') + '</b></div>';
+                }
+            }, tip),
+            legend: {
+                right: 0, top: 0, itemWidth: 7, itemHeight: 7, icon: 'circle',
+                textStyle: { color: '#9EB1CA', fontSize: 10, fontFamily: MONO },
+                data: ['同时在线']
+            },
+            xAxis: {
+                type: 'category', boundaryGap: false, data: labels,
+                axisLine: { lineStyle: { color: 'rgba(68,155,209,.2)' } },
+                axisTick: { show: false },
+                axisLabel: {
+                    color: AXIS, fontSize: 9, fontFamily: MONO,
+                    interval: Math.max(0, Math.ceil(labels.length / 7) - 1)
+                }
+            },
+            yAxis: {
+                type: 'value', min: min, max: max, splitNumber: 4,
+                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, formatter: '{value}K' },
+                splitLine: { lineStyle: { color: 'rgba(68,155,209,.1)', type: 'dashed' } }
+            },
+            series: [{
+                name: '同时在线', type: 'line', smooth: .28, symbol: 'none',
+                data: vals,
+                lineStyle: { width: 2, color: '#35D9F2', shadowColor: 'rgba(53,217,242,.5)', shadowBlur: 12 },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(53,217,242,.26)' },
+                        { offset: 1, color: 'rgba(53,217,242,0)' }
+                    ])
+                }
+            }]
+        };
+    }
+
+    function applyRealCcu(real) {
+        var pts = real.points;
+        var latest = pts[pts.length - 1].p;
+        var first = pts[0].p;
+        var pct = first ? (latest - first) / first * 100 : 0;
+        var up = pct >= 0;
+
+        var kpi = document.getElementById('kpiActive');
+        if (kpi) {
+            kpi.innerHTML = (latest / 1000).toFixed(1) + '<span class="u">K</span>' +
+                '<span class="kpi-delta" style="color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
+                (up ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%</span>';
+        }
+
+        /* 真实序列是分钟级、覆盖数小时，7/30/90 天档位对它无意义，隐藏面板内分段控件
+           （导航右侧的时间范围仍可切换，用于页面其余部分） */
+        var seg = document.querySelector('.seg');
+        if (seg) seg.style.display = 'none';
+
+        var el = document.getElementById('activityChart');
+        if (el) {
+            el.setAttribute('aria-label',
+                real.game + ' 同时在线人数曲线：最新 ' + latest.toLocaleString('en-US') +
+                ' 人，区间 ' + first.toLocaleString('en-US') + ' 至 ' +
+                Math.max.apply(null, pts.map(function (p) { return p.p; })).toLocaleString('en-US') + ' 人。');
+        }
+    }
+
     function safeRender() {
         /* 各模块独立容错：单个图表失败不拖垮整页 */
         try {
-            var d = DashboardData.series(current.range, current.region || null);
-            act.setOption(activityOption(d.activity), true);
+            if (realCcu) {
+                act.setOption(ccuOption(realCcu), true);
+            } else {
+                var d = DashboardData.series(current.range, current.region || null);
+                act.setOption(activityOption(d.activity), true);
+            }
         } catch (e) {
             console.warn('活跃趋势渲染失败，已降级为占位状态', e);
             actEl.innerHTML = '<div class="chart-empty">活跃趋势数据暂不可用</div>';
@@ -1674,6 +1773,18 @@ body::after{
     };
 
     safeRender();
+
+    /* 异步加载真实 CCU：有数据就接管，没有就保持演示序列，不阻塞首屏 */
+    if (DashboardData.loadRealCcu) {
+        DashboardData.loadRealCcu(8).then(function (real) {
+            if (!real) return;
+            realCcu = real;
+            applyRealCcu(real);
+            safeRender();
+            act.resize();
+        });
+    }
+
     window.addEventListener('resize', function () { act.resize(); senti.resize(); });
 })();
 
