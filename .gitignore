@@ -5,6 +5,8 @@ node_modules/
 backend/data/before/
 backend/data/cleaned/
 backend/data/*.json
+backend/data/*.db
+backend/data/*.db-journal
 
 # 环境变量文件
 .env
