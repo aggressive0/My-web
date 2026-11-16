@@ -42,7 +42,10 @@ STATE = "reviews-state.json"
 SAMPLES = "reviews-samples.jsonl"
 STATUS = "collection-status.json"
 
-WINDOW_DAYS = 30
+# 保留多少个「有数据的日期」。不按固定天数往回裁 —— 实测 PUBG/PoE 的最新评论
+# 本身就隔了几个月，30 天窗口会把它们全部裁成 0 条，页面显示成「没有评论」，
+# 而实际上数据一直都在。按「最近 N 个有数据的日期」保留更诚实。
+MAX_DAYS_KEPT = int(os.environ.get("REVIEW_DAYS_KEPT", "180"))
 SEEN_CAP = 3000          # 每款游戏记住多少个已计数的 review_id
 SAMPLES_CAP = 3000       # 样本文件总行数上限
 MAX_PAGES = 3            # 每款每次最多翻几页（每页 100 条）
@@ -113,7 +116,7 @@ def empty_day(date):
 
 
 def merge_into_daily(game_doc, reviews):
-    """把新评论并入按日聚合。返回实际新增条数（去重后）。"""
+    """把新评论并入按日聚合。返回本次计入的条数。"""
     days = {d["date"]: d for d in game_doc.get("days", [])}
     added = 0
     for r in reviews:
@@ -132,17 +135,10 @@ def merge_into_daily(game_doc, reviews):
         d["playtime"][b] = d["playtime"].get(b, 0) + 1
         added += 1
 
-    # 只保留窗口内的日期，按时间升序
-    today = datetime.now(timezone.utc).date()
-    keep = []
-    for date, d in sorted(days.items()):
-        try:
-            age = (today - datetime.strptime(date, "%Y-%m-%d").date()).days
-        except ValueError:
-            continue
-        if age <= WINDOW_DAYS:
-            keep.append(d)
-    game_doc["days"] = keep
+    # 按日期升序，只保留最近 MAX_DAYS_KEPT 个「有数据的日期」
+    valid = {k: v for k, v in days.items()
+             if len(k) == 10 and k[4] == "-" and k[7] == "-"}
+    game_doc["days"] = [valid[k] for k in sorted(valid)[-MAX_DAYS_KEPT:]]
     return added
 
 
@@ -173,7 +169,9 @@ def main():
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     daily, sha_daily = P.get_remote(DAILY, repo, token)
-    daily = daily or {"window_days": WINDOW_DAYS, "games": []}
+    daily = daily or {"days_kept_cap": MAX_DAYS_KEPT, "games": []}
+    daily["days_kept_cap"] = MAX_DAYS_KEPT
+    daily.pop("window_days", None)       # 清掉旧版本留下的字段，避免两个口径并存
     by_appid = {}
     for g in daily.get("games", []):
         try:

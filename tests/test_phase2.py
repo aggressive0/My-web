@@ -186,10 +186,32 @@ class AggregateTest(unittest.TestCase):
         self.assertEqual(day["playtime"]["<1h"], 1)
         self.assertEqual(day["playtime"]["10-50h"], 1)
 
-    def test_old_days_are_trimmed_out_of_window(self):
+    def test_old_reviews_are_kept_because_some_games_are_sparse(self):
+        """实测 PUBG / PoE 的最新评论本身就隔了几个月。
+
+        早先按「30 天窗口」裁剪，结果这几款游戏的聚合全变成 0 条 ——
+        数据明明采到了，页面上却像没数据。改为按「最近 N 个有数据的日期」保留。
+        """
         doc = {"days": []}
-        RP.merge_into_daily(doc, [R.parse_review(raw_review("70", days_ago=RP.WINDOW_DAYS + 5))])
-        self.assertEqual(doc["days"], [], "超出窗口的日期不应保留")
+        RP.merge_into_daily(doc, [R.parse_review(raw_review("70", days_ago=200))])
+        self.assertEqual(len(doc["days"]), 1)
+        self.assertEqual(doc["days"][0]["total"], 1)
+
+    def test_day_cap_keeps_only_most_recent(self):
+        doc = {"days": []}
+        rows = [R.parse_review(raw_review("c%d" % i, days_ago=i)) for i in range(5)]
+        RP.merge_into_daily(doc, rows)
+        self.assertEqual(len(doc["days"]), 5)
+
+        orig = RP.MAX_DAYS_KEPT
+        RP.MAX_DAYS_KEPT = 3
+        try:
+            RP.merge_into_daily(doc, [])          # 空批次也会执行裁剪
+        finally:
+            RP.MAX_DAYS_KEPT = orig
+        self.assertEqual(len(doc["days"]), 3)
+        dates = [d["date"] for d in doc["days"]]
+        self.assertEqual(dates, sorted(dates), "输出必须按日期升序，前端直接当时间轴用")
 
     def test_totals_and_positive_rate(self):
         doc = {"days": []}
