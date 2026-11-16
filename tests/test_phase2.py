@@ -285,6 +285,49 @@ class PublishFlowTest(unittest.TestCase):
         self.assertEqual(len(writes[RP.STATUS]["games"]), 6)
 
 
+class RebuildTest(unittest.TestCase):
+    """口径修正时必须有可重复的「重算」路径，而不是靠手工删文件。"""
+
+    def test_rebuild_ignores_state_and_existing_aggregates(self):
+        written = {}
+        existing_daily = {"days_kept_cap": 180, "games": [
+            {"appid": 1203220, "slug": "naraka", "name": "永劫无间", "color": "#35D9F2",
+             "days": [], "totals": {"total": 0, "positive": 0, "negative": 0,
+                                    "positive_rate": None, "days": 0}},
+        ]}
+        existing_state = {"seen": {"1203220": ["9" "1203220", "other"]}}
+
+        def fake_get_remote(path, repo, token):
+            if path == RP.DAILY:
+                return existing_daily, "sha1"
+            if path == RP.STATE:
+                return existing_state, "sha2"
+            return None, None
+
+        saved = (RP.P.get_remote, RP.P.put_remote, RP.get_text, RP.put_text, RP.R.collect)
+        RP.P.get_remote = fake_get_remote
+        RP.P.put_remote = lambda path, doc, sha, repo, token, msg: written.__setitem__(path, doc)
+        RP.get_text = lambda *a: (None, None)
+        RP.put_text = lambda path, text, sha, repo, token, msg: written.__setitem__(path, text)
+        RP.R.collect = lambda appid, **kw: (
+            [R.parse_review(raw_review("91203220"))], "*", {})
+        RP.__dict__["print"] = lambda *a, **k: None
+        os.environ["GITHUB_TOKEN"] = "dummy"
+        os.environ["GITHUB_REPOSITORY"] = "test/repo"
+        os.environ["REVIEW_REBUILD"] = "1"
+        try:
+            RP.main()
+        finally:
+            (RP.P.get_remote, RP.P.put_remote, RP.get_text,
+             RP.put_text, RP.R.collect) = saved
+            RP.__dict__.pop("print", None)
+            os.environ.pop("REVIEW_REBUILD", None)
+
+        naraka = [g for g in written[RP.DAILY]["games"] if g["appid"] == 1203220][0]
+        # 该 id 在旧的 seen 里，重建模式下必须照样计入
+        self.assertEqual(naraka["totals"]["total"], 1)
+
+
 class WorkflowTest(unittest.TestCase):
     """配置文件与工作流必须自洽 —— 这类错误只在 CI 上炸，本地看不出来。"""
 
