@@ -1296,11 +1296,12 @@ body::after{
             <article class="panel" style="--hair:rgba(34,211,238,.55)">
                 <div class="p-head">
                     <h2 class="p-title" style="--accent:#22D3EE">玩家活跃趋势</h2>
-                    <div class="seg" role="group" aria-label="时间范围切换">
-                        <button class="seg-btn" type="button" data-range="7d" aria-pressed="false">7天</button>
-                        <button class="seg-btn is-on" type="button" data-range="30d" aria-pressed="true">30天</button>
-                        <button class="seg-btn" type="button" data-range="90d" aria-pressed="false">90天</button>
-                    </div>
+                <div class="seg" role="group" aria-label="时间范围切换">
+                    <button class="seg-btn" type="button" data-range="7d" aria-pressed="false">7天</button>
+                    <button class="seg-btn is-on" type="button" data-range="30d" aria-pressed="true">30天</button>
+                    <button class="seg-btn" type="button" data-range="90d" aria-pressed="false">90天</button>
+                </div>
+                <select class="mini-select" id="gamePick" hidden aria-label="选择查看的游戏"></select>
                 </div>
                 <div class="p-body">
                     <div id="activityChart" style="position:absolute;inset:0" role="img"
@@ -1647,44 +1648,110 @@ body::after{
         };
     }
 
-    /* ---------- 真实 CCU：拿到 Steam 同时在线时序就接管活跃趋势图 ---------- */
-    var realCcu = null;
+    /* ---------- 真实 CCU：多游戏归一化对比 ---------- */
+    var realCcu = null;       // {games:[{appid,name,color,points,summary}], updated_at}
+    var realMode = 'index';   // 'index' = 全部归一化对比 | appid 字符串 = 单游戏绝对值
 
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
-    function ccuOption(real) {
-        var pts = real.points;
-        var labels = pts.map(function (p) {
-            var d = new Date(p.ts);
-            return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-        });
-        var vals = pts.map(function (p) { return +(p.p / 1000).toFixed(2); });
+    function tsLabel(ts) {
+        var d = new Date(ts);
+        return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
 
-        var lo = Math.min.apply(null, vals);
-        var hi = Math.max.apply(null, vals);
-        var span = Math.max(hi - lo, 0.4);
-        var min = Math.max(0, +(lo - span * 0.35).toFixed(1));
-        var max = +(hi + span * 0.35).toFixed(1);
+    function hexA(hex, a) {
+        var h = String(hex || '#35D9F2').replace('#', '');
+        if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' +
+            parseInt(h.slice(4, 6), 16) + ',' + a + ')';
+    }
+
+    function ccuOption(real, mode) {
+        var games = real.games || [];
+        var single = (mode !== 'index')
+            ? games.filter(function (g) { return String(g.appid) === String(mode); })[0]
+            : null;
+        var shown = single ? [single] : games;
+
+        /* 各游戏采样秒数不同但通常同处一分钟，按分钟归并，避免 x 轴出现重复刻度 */
+        function minuteKey(ts) { return String(ts).slice(0, 16); }
+
+        var tsSet = {};
+        shown.forEach(function (g) {
+            (g.points || []).forEach(function (p) { tsSet[minuteKey(p.ts)] = 1; });
+        });
+        var tsList = Object.keys(tsSet).sort();
+        var labels = tsList.map(function (k) { return k.slice(11, 16); });
+
+        var rawByName = {};
+        var allVals = [];
+
+        var series = shown.map(function (g) {
+            var map = {};
+            (g.points || []).forEach(function (p) { map[minuteKey(p.ts)] = p.p; });
+            rawByName[g.name] = map;
+            var mean = (g.summary && g.summary.mean) ? g.summary.mean : 1;
+
+            var data = tsList.map(function (t) {
+                var v = map[t];
+                if (v === undefined) return null;
+                return single ? +(v / 1000).toFixed(2) : +(v / mean * 100).toFixed(1);
+            });
+            data.forEach(function (v) { if (v !== null) allVals.push(v); });
+
+            var s = {
+                name: g.name,
+                type: 'line',
+                smooth: .28,
+                symbol: 'none',
+                connectNulls: true,
+                data: data,
+                lineStyle: {
+                    width: single ? 2 : 1.6,
+                    color: g.color,
+                    shadowColor: hexA(g.color, .55),
+                    shadowBlur: single ? 12 : 6
+                },
+                itemStyle: { color: g.color }
+            };
+            if (single) {
+                s.areaStyle = {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: hexA(g.color, .26) },
+                        { offset: 1, color: hexA(g.color, 0) }
+                    ])
+                };
+            }
+            return s;
+        });
+
+        var lo = Math.min.apply(null, allVals.length ? allVals : [0]);
+        var hi = Math.max.apply(null, allVals.length ? allVals : [1]);
+        var span = Math.max((hi - lo) * 0.28, single ? 0.4 : 2);
 
         return {
-            grid: { left: 34, right: 20, top: 24, bottom: 20 },
+            grid: { left: 34, right: 16, top: 30, bottom: 20 },
             tooltip: Object.assign({
                 trigger: 'axis',
                 axisPointer: { type: 'line', lineStyle: { color: 'rgba(53,217,242,.4)' } },
                 formatter: function (ps) {
-                    var i = ps[0].dataIndex;
-                    var d = new Date(pts[i].ts);
+                    var ts = tsList[ps[0].dataIndex];
                     var head = '<div style="font-family:' + MONO + ';font-size:9.5px;letter-spacing:.1em;color:#637A96;margin-bottom:5px">' +
-                        pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</div>';
-                    return head + '<div style="display:flex;gap:14px;justify-content:space-between"><span>' +
-                        ps[0].marker + '同时在线</span><b style="font-family:' + MONO + '">' +
-                        pts[i].p.toLocaleString('en-US') + '</b></div>';
+                        tsLabel(ts) + '</div>';
+                    return head + ps.map(function (p) {
+                        var r = rawByName[p.seriesName] && rawByName[p.seriesName][ts];
+                        var txt = (r === undefined) ? '—'
+                            : (r.toLocaleString('en-US') + (single ? '' : ' · 指数 ' + p.value));
+                        return '<div style="display:flex;gap:14px;justify-content:space-between"><span>' +
+                            p.marker + p.seriesName + '</span><b style="font-family:' + MONO + '">' + txt + '</b></div>';
+                    }).join('');
                 }
             }, tip),
             legend: {
-                right: 0, top: 0, itemWidth: 7, itemHeight: 7, icon: 'circle',
-                textStyle: { color: '#9EB1CA', fontSize: 10, fontFamily: MONO },
-                data: ['同时在线']
+                right: 0, top: 0, itemWidth: 7, itemHeight: 7, itemGap: 9, icon: 'circle',
+                type: 'scroll', pageIconSize: 8,
+                textStyle: { color: '#9EB1CA', fontSize: 9.5, fontFamily: MONO },
+                data: shown.map(function (g) { return g.name; })
             },
             xAxis: {
                 type: 'category', boundaryGap: false, data: labels,
@@ -1692,61 +1759,104 @@ body::after{
                 axisTick: { show: false },
                 axisLabel: {
                     color: AXIS, fontSize: 9, fontFamily: MONO,
-                    interval: Math.max(0, Math.ceil(labels.length / 7) - 1)
+                    interval: Math.max(0, Math.ceil(labels.length / 6) - 1)
                 }
             },
             yAxis: {
-                type: 'value', min: min, max: max, splitNumber: 4,
-                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, formatter: '{value}K' },
+                type: 'value',
+                min: +(Math.max(0, lo - span)).toFixed(1),
+                max: +(hi + span).toFixed(1),
+                splitNumber: 4,
+                axisLabel: {
+                    color: AXIS, fontSize: 9, fontFamily: MONO,
+                    formatter: single ? '{value}K' : '{value}'
+                },
                 splitLine: { lineStyle: { color: 'rgba(68,155,209,.1)', type: 'dashed' } }
             },
-            series: [{
-                name: '同时在线', type: 'line', smooth: .28, symbol: 'none',
-                data: vals,
-                lineStyle: { width: 2, color: '#35D9F2', shadowColor: 'rgba(53,217,242,.5)', shadowBlur: 12 },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(53,217,242,.26)' },
-                        { offset: 1, color: 'rgba(53,217,242,0)' }
-                    ])
-                }
-            }]
+            series: series
         };
     }
 
     function applyRealCcu(real) {
-        var pts = real.points;
-        var latest = pts[pts.length - 1].p;
-        var first = pts[0].p;
-        var pct = first ? (latest - first) / first * 100 : 0;
-        var up = pct >= 0;
+        var games = real.games || [];
+        if (!games.length) return;
 
-        var kpi = document.getElementById('kpiActive');
-        if (kpi) {
-            kpi.innerHTML = (latest / 1000).toFixed(1) + '<span class="u">K</span>' +
-                '<span class="kpi-delta" style="color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
-                (up ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%</span>';
+        /* 切换器：指数对比 + 各游戏 */
+        var pick = document.getElementById('gamePick');
+        if (pick) {
+            var opts = ['<option value="index">指数对比</option>'];
+            games.forEach(function (g) {
+                opts.push('<option value="' + g.appid + '">' + g.name + '</option>');
+            });
+            pick.innerHTML = opts.join('');
+            pick.value = 'index';
+            pick.hidden = false;
+            pick.onchange = function () {
+                realMode = pick.value;
+                updateKpi();
+                safeRender();
+            };
         }
 
         /* 真实序列是分钟级、覆盖数小时，7/30/90 天档位对它无意义，隐藏面板内分段控件
            （导航右侧的时间范围仍可切换，用于页面其余部分） */
         var seg = document.querySelector('.seg');
         if (seg) seg.style.display = 'none';
+    }
+
+    function updateKpi() {
+        if (!realCcu) return;
+        var games = realCcu.games || [];
+        var kpi = document.getElementById('kpiActive');
+        if (!kpi) return;
+        var labelEl = kpi.parentElement ? kpi.parentElement.querySelector('.kpi-label') : null;
+
+        var single = (realMode !== 'index')
+            ? games.filter(function (g) { return String(g.appid) === String(realMode); })[0]
+            : null;
+
+        var latest, first, label;
+        if (single) {
+            var pts = single.points || [];
+            latest = pts.length ? pts[pts.length - 1].p : 0;
+            first = pts.length ? pts[0].p : 0;
+            label = single.name + ' 在线';
+        } else {
+            latest = games.reduce(function (s, g) {
+                var p = g.points || [];
+                return s + (p.length ? p[p.length - 1].p : 0);
+            }, 0);
+            first = games.reduce(function (s, g) {
+                var p = g.points || [];
+                return s + (p.length ? p[0].p : 0);
+            }, 0);
+            label = '四款合计在线';
+        }
+
+        var pct = first ? (latest - first) / first * 100 : 0;
+        var up = pct >= 0;
+
+        if (labelEl) labelEl.textContent = label;
+        kpi.innerHTML = (latest / 1000).toFixed(1) + '<span class="u">K</span>' +
+            '<span class="kpi-delta" style="color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
+            (up ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%</span>';
 
         var el = document.getElementById('activityChart');
         if (el) {
             el.setAttribute('aria-label',
-                real.game + ' 同时在线人数曲线：最新 ' + latest.toLocaleString('en-US') +
-                ' 人，区间 ' + first.toLocaleString('en-US') + ' 至 ' +
-                Math.max.apply(null, pts.map(function (p) { return p.p; })).toLocaleString('en-US') + ' 人。');
+                '多游戏同时在线曲线：' + games.map(function (g) {
+                    var p = g.points || [];
+                    return g.name + ' ' + (p.length ? p[p.length - 1].p.toLocaleString('en-US') : '—');
+                }).join('，') + ' 人。');
         }
     }
+
 
     function safeRender() {
         /* 各模块独立容错：单个图表失败不拖垮整页 */
         try {
             if (realCcu) {
-                act.setOption(ccuOption(realCcu), true);
+                act.setOption(ccuOption(realCcu, realMode), true);
             } else {
                 var d = DashboardData.series(current.range, current.region || null);
                 act.setOption(activityOption(d.activity), true);
@@ -1780,6 +1890,7 @@ body::after{
             if (!real) return;
             realCcu = real;
             applyRealCcu(real);
+            updateKpi();
             safeRender();
             act.resize();
         });

@@ -365,39 +365,97 @@
         return regionCache[r];
     }
 
+    /* ===== 真实数据加载：data 分支（raw 跨域）→ 仓库内快照 → 上方演示序列 ===== */
+    var DATA_BASE = 'https://raw.githubusercontent.com/aggressive0/My-web/data/';
+
+    function grabJson(url, timeoutMs) {
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+        return fetch(url, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; })
+            .then(function (j) {
+                if (timer) clearTimeout(timer);
+                return j;
+            });
+    }
+
+    /* 统一成 {games:[{appid,name,color,points,summary}]}；兼容早期单游戏结构 */
+    function normalizeGames(payload) {
+        if (!payload) return null;
+        if (Array.isArray(payload.games) && payload.games.length) return payload;
+        if (Array.isArray(payload.points) && payload.points.length) {
+            var s = payload.summary || {};
+            return {
+                updated_at: payload.generated_at,
+                games: [{
+                    appid: payload.appid,
+                    name: payload.game || 'Steam',
+                    color: '#35D9F2',
+                    points: payload.points,
+                    summary: {
+                        latest: s.latest, high: s.high, low: s.low,
+                        mean: s.mean || (function () {
+                            var v = payload.points.map(function (p) { return p.p; });
+                            return v.reduce(function (a, b) { return a + b; }, 0) / (v.length || 1);
+                        })(),
+                        count: payload.points.length
+                    }
+                }]
+            };
+        }
+        return null;
+    }
+
+
     var api = {
         meta: META,
-
-        /* 真实 CCU 时序（Steam 同时在线）。
+        /* 真实 CCU：多游戏同时在线时序。
            数据由 GitHub Actions 每小时写入独立 data 分支，页面运行时从
            raw.githubusercontent.com 跨域拉取（该域返回 Access-Control-Allow-Origin: *）。
-           远程不可用时退回仓库内的离线快照，再不行就回落内置演示序列。
-           返回 null 表示都不可用。 */
+           远程不可用时退回仓库内离线快照，再不行回落本文件的演示序列。
+           返回 null 表示都不可用；可用时只保留有点位的游戏。 */
         loadRealCcu: function (minPoints) {
             var need = minPoints || 8;
-            var REMOTE = 'https://raw.githubusercontent.com/aggressive0/My-web/data/steam-ccu.json';
 
             function usable(j) {
-                return !!(j && j.points && j.points.length >= need);
-            }
-
-            function grab(url, timeoutMs) {
-                var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-                var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
-                return fetch(url, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
-                    .then(function (r) { return r.ok ? r.json() : null; })
-                    .catch(function () { return null; })
-                    .then(function (j) {
-                        if (timer) clearTimeout(timer);
-                        return j;
-                    });
-            }
-
-            return grab(REMOTE, 4000).then(function (j) {
-                if (usable(j)) return j;
-                return grab('json/steam-ccu.json', 4000).then(function (k) {
-                    return usable(k) ? k : null;
+                var n = normalizeGames(j);
+                if (!n) return null;
+                var withPts = n.games.filter(function (g) {
+                    return g.points && g.points.length;
                 });
+                if (!withPts.length) return null;
+                var maxLen = Math.max.apply(null, withPts.map(function (g) {
+                    return g.points.length;
+                }));
+                if (maxLen < need) return null;
+                n.games = withPts;
+                return n;
+            }
+
+            return grabJson(DATA_BASE + 'steam-ccu.json', 4000).then(function (j) {
+                var r = usable(j);
+                if (r) return r;
+                return grabJson('json/steam-ccu.json', 4000).then(usable);
+            });
+        },
+
+        /* 真实成就漏斗：各游戏按完成率降序的成就列表 */
+        loadRealFunnels: function () {
+            function usable(j) {
+                if (!j || !Array.isArray(j.games) || !j.games.length) return null;
+                var ok = j.games.filter(function (g) {
+                    return Array.isArray(g.achievements) && g.achievements.length > 3;
+                });
+                if (!ok.length) return null;
+                j.games = ok;
+                return j;
+            }
+
+            return grabJson(DATA_BASE + 'steam-funnels.json', 4000).then(function (j) {
+                var r = usable(j);
+                if (r) return r;
+                return grabJson('json/steam-funnels.json', 4000).then(usable);
             });
         },
 

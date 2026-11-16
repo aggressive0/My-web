@@ -249,6 +249,7 @@ body::before{
 .reason-body{padding:4px 16px 14px}
 
 .reason-chart{height:164px}
+.chart-empty{display:grid;place-items:center;height:100%;color:var(--ink-3);font-size:11px}
 
 .reason-list{
     display:flex;
@@ -535,18 +536,13 @@ body::before{
 
         <article class="panel layer">
             <div class="panel-head">
-                <h2 class="panel-title">流失原因结构</h2>
-                <span class="panel-tag">Churn Drivers</span>
+                <h2 class="panel-title">成就完成漏斗</h2>
+                <span class="panel-tag">Achievement Funnel</span>
             </div>
             <div class="reason-body">
-                <div id="reasonChart" class="reason-chart" role="img"
-                     aria-label="流失原因占比：玩法疲劳 42%，社交流失 28%，版本争议 18%，其他 12%。"></div>
-                <div class="reason-list">
-                    <div class="reason-item"><span class="reason-dot" style="--c:#22D3EE"></span><span>玩法疲劳</span><span class="val">42%</span></div>
-                    <div class="reason-item"><span class="reason-dot" style="--c:#A78BFA"></span><span>社交流失</span><span class="val">28%</span></div>
-                    <div class="reason-item"><span class="reason-dot" style="--c:#F5A524"></span><span>版本争议</span><span class="val">18%</span></div>
-                    <div class="reason-item"><span class="reason-dot" style="--c:#F0536B"></span><span>其他</span><span class="val">12%</span></div>
-                </div>
+                <div id="funnelChart" class="reason-chart" role="img"
+                     aria-label="各游戏成就完成率随推进程度的衰减曲线"></div>
+                <div class="reason-list" id="funnelList"></div>
             </div>
         </article>
     </section>
@@ -746,37 +742,89 @@ body::before{
         ]
     });
 
-    /* ===== 流失原因结构 ===== */
-    var reason = echarts.init(document.getElementById('reasonChart'), null, { renderer: 'canvas' });
-    reason.setOption({
-        tooltip: Object.assign({ trigger: 'item', formatter: '{b}：{d}%' }, tipBase),
-        series: [{
-            type: 'pie',
-            radius: ['60%', '86%'],
-            center: ['50%', '50%'],
-            avoidLabelOverlap: true,
-            itemStyle: { borderRadius: 4, borderColor: '#0A101B', borderWidth: 2 },
-            label: {
-                show: true,
-                position: 'center',
-                formatter: '{a|100%}\n{b|流失样本}',
-                rich: {
-                    a: { fontSize: 21, fontWeight: 600, color: '#E9EFFA', fontFamily: MONO, lineHeight: 25 },
-                    b: { fontSize: 10, color: '#7B8AA0', lineHeight: 15 }
-                }
-            },
-            emphasis: { scale: true, scaleSize: 4 },
-            labelLine: { show: false },
-            data: [
-                { value: 42, name: '玩法疲劳', itemStyle: { color: '#22D3EE' } },
-                { value: 28, name: '社交流失', itemStyle: { color: '#A78BFA' } },
-                { value: 18, name: '版本争议', itemStyle: { color: '#F5A524' } },
-                { value: 12, name: '其他', itemStyle: { color: '#F0536B' } }
-            ]
-        }]
-    });
+    /* ===== 成就完成漏斗（真实数据）=====
+       数据来源 Steam 全球成就完成率；按完成率降序近似推进顺序，
+       横轴为推进进度，纵轴为该档成就的完成率，曲线越陡说明越早劝退。 */
+    var funnelEl = document.getElementById('funnelChart');
+    var funnel = echarts.init(funnelEl, null, { renderer: 'canvas' });
+    var funnelList = document.getElementById('funnelList');
 
-    function resize() { trend.resize(); reason.resize(); }
+    function funnelOption(games) {
+        var series = games.map(function (g) {
+            var achs = g.achievements || [];
+            var n = achs.length;
+            return {
+                name: g.name,
+                type: 'line',
+                smooth: .2,
+                symbol: 'none',
+                data: achs.map(function (a, i) {
+                    var x = n > 1 ? +(i / (n - 1) * 100).toFixed(1) : 0;
+                    return [x, a.p];
+                }),
+                lineStyle: { width: 1.8, color: g.color, shadowColor: g.color, shadowBlur: 6 },
+                itemStyle: { color: g.color }
+            };
+        });
+
+        return {
+            grid: { left: 36, right: 12, top: 12, bottom: 26 },
+            tooltip: Object.assign({
+                trigger: 'axis',
+                formatter: function (ps) {
+                    var head = '<div style="font-family:' + MONO + ';font-size:9.5px;letter-spacing:.1em;color:#637A96;margin-bottom:5px">推进 ' +
+                        ps[0].value[0] + '%</div>';
+                    return head + ps.map(function (p) {
+                        return '<div style="display:flex;gap:14px;justify-content:space-between"><span>' +
+                            p.marker + p.seriesName + '</span><b style="font-family:' + MONO + '">' +
+                            p.value[1] + '%</b></div>';
+                    }).join('');
+                }
+            }, tipBase),
+            xAxis: {
+                type: 'value', min: 0, max: 100, splitNumber: 4,
+                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, formatter: '{value}%' },
+                axisLine: { lineStyle: { color: 'rgba(68,155,209,.2)' } },
+                axisTick: { show: false },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value', min: 0, max: 100, splitNumber: 4,
+                axisLabel: { color: AXIS, fontSize: 9, fontFamily: MONO, formatter: '{value}%' },
+                splitLine: { lineStyle: { color: 'rgba(68,155,209,.1)', type: 'dashed' } }
+            },
+            series: series
+        };
+    }
+
+    function renderFunnels(payload) {
+        var games = (payload && payload.games) || [];
+        if (!games.length) {
+            funnelEl.innerHTML = '<div class="chart-empty">成就数据暂不可用</div>';
+            return;
+        }
+        funnel.setOption(funnelOption(games), true);
+
+        funnelList.innerHTML = games.map(function (g) {
+            return '<div class="reason-item">' +
+                '<span class="reason-dot" style="--c:' + g.color + '"></span>' +
+                '<span>' + g.name + '</span>' +
+                '<span class="val">-' + Number(g.span).toFixed(1) + 'pp</span></div>';
+        }).join('');
+
+        funnelEl.setAttribute('aria-label', '成就完成漏斗：' + games.map(function (g) {
+            return g.name + ' 从 ' + g.first + '% 降至 ' + g.last + '%';
+        }).join('；') + '。');
+    }
+
+    funnelList.innerHTML = '<div class="reason-item"><span>加载中…</span></div>';
+    if (window.DashboardData && DashboardData.loadRealFunnels) {
+        DashboardData.loadRealFunnels().then(function (p) { renderFunnels(p); });
+    } else {
+        renderFunnels(null);
+    }
+
+    function resize() { trend.resize(); funnel.resize(); }
     window.addEventListener('resize', resize);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
 })();

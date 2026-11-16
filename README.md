@@ -154,28 +154,33 @@ node smoke.mjs              # 自动起服务，退出码 0 = 全绿
 
 导航上的日期范围下拉（近 7 / 30 / 90 天）与页面内分段控件双向联动，切换后指标、趋势、排行同步刷新。
 
-### 真实数据：Steam 同时在线（永劫无间）
+### 真实数据：Steam 同时在线与成就漏斗
 
-首页「玩家活跃趋势」与 KPI「活跃玩家」已接入 Steam 公开接口的真实数据，其余指标仍为演示数据。
+首页「玩家活跃趋势」与 KPI「活跃玩家」、流失分析页「成就完成漏斗」已接入 Steam 公开接口的真实数据，其余指标仍为演示数据。采集覆盖四款游戏：永劫无间（1203220）、PUBG（578080）、Warframe（230410）、Path of Exile（238960）。
 
 | 环节 | 位置 |
 |---|---|
 | 本地采集 | `backend/collectors/steam_collector.py`（CCU 时序 + 成就快照 → `backend/data/steam.db`，5 分钟级） |
-| 本地导出 | `backend/collectors/export_ccu_json.py`（SQLite → JSON，用于离线快照） |
-| 线上采集 | `.github/workflows/collect-ccu.yml` 每小时运行 `backend/collectors/ci_publish.py`，写入独立的 **`data` 分支** |
-| 消费 | `dashboard-data.js` 的 `loadRealCcu()`：先拉 `raw.githubusercontent.com/<repo>/data/steam-ccu.json`，失败再退回仓库内快照，再不行回落演示序列 |
+| 本地快照 | `backend/collectors/export_snapshot.py`（生成站点内离线兜底 JSON，也用于本地验证） |
+| 线上采集 | `.github/workflows/collect-ccu.yml` 每小时运行 `backend/collectors/ci_publish.py`，写入 **`data` 分支** 两个文件 |
+| 消费 | `dashboard-data.js` 的 `loadRealCcu()` / `loadRealFunnels()`：远程 → 仓库内快照 → 演示序列 |
+
+两个数据文件位于 `data` 分支根目录：
+
+- `steam-ccu.json`：各游戏同时在线时序（每小时一点，窗口 72h，含 `mean` 供归一化）
+- `steam-funnels.json`：各游戏成就完成率（按完成率降序近似推进顺序）
 
 ```bash
 python backend/collectors/steam_collector.py --appids 1203220 --once   # 本地落库
-python backend/collectors/funnel.py --appid 1203220                   # 成就漏斗
-python backend/collectors/export_ccu_json.py                          # 刷新离线快照
+python backend/collectors/funnel.py --appid 1203220                   # 命令行看单个漏斗
+python backend/collectors/export_snapshot.py                          # 刷新离线快照
 ```
 
 三个必须知道的限制：
 
-1. **口径**：CCU 是某一时刻的同时在线人数，不是 DAU，也不能与演示数据里的「活跃玩家」混为一谈。
-2. **数据与代码分仓**：数据在 `data` 分支，`main` 只放代码。每小时更新一次，不会污染提交历史，也不会让 `dev` 与 `main` 产生冲突。页面运行时跨域读取，`raw.githubusercontent.com` 缓存约 5 分钟。
-3. **离线退化**：断网或 raw 域名不可达时，页面退回仓库内的 `front/static_html/json/steam-ccu.json` 快照（该文件只在手动执行导出时更新）。
+1. **口径**：CCU 是某一时刻的同时在线人数，不是 DAU；成就完成率是全量玩家累计值，用它反推「进度流失」是近似，**不等于留存率**。
+2. **多游戏不做加总**：首页「指数对比」是各游戏除以自身窗口均值后的指数（100 = 该游戏窗口均值），用于比较节奏而非体量。加总会被体量大的游戏吞掉细节。
+3. **离线退化**：断网或 raw 域名不可达时，页面退回仓库内的 JSON 快照（只在手动执行 `export_snapshot.py` 时更新）。
 
 上游接口有 `Cache-Control: max-age≈647`（约 11 分钟）的 CDN 缓存，采集器已加入缓存穿透参数与 `no-cache` 请求头——否则会采到一条水平直线。
 

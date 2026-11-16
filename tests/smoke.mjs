@@ -100,8 +100,11 @@ const PAGES = [
         file: 'analysis.html',
         label: '流失分析',
         canvases: [2, 99],
-        anchors: [['#trendChart', 1], ['#reasonChart', 1], ['#rangeLabel', 1]],
-        nonEmpty: ['#rangeLabel'],
+        anchors: [
+            ['#trendChart', 1], ['#funnelChart', 1], ['#rangeLabel', 1],
+            ['#funnelList .reason-item', 1],
+        ],
+        nonEmpty: ['#rangeLabel', '#funnelList'],
     },
     {
         file: 'solution.html',
