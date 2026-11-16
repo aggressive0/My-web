@@ -47,6 +47,10 @@ Thumbs.db
 .venv/
 env/
 
+# ML 训练缓存（句向量 .npy 可达数十 MB，不入库）
+backend/ml/models/cache/
+*.npy
+
 # Python 字节码
 __pycache__/
 *.pyc

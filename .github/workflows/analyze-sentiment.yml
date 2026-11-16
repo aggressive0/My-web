@@ -1,0 +1,70 @@
+name: Analyze Review Sentiment
+
+# 每天一次：读 data 分支的评论样本 → MiniLM 句向量 → 逻辑回归分类头 → 写 sentiment-daily.json
+#
+# 为什么单独一个工作流而不是塞进 collect-reviews：
+#   评论采集每 2 小时一次，只有几十条新增；情感推理要加载 470MB 模型，
+#   每天跑一次成本最低。两者解耦后，任一方失败都不影响另一方。
+#
+# 为什么不用 GPU / 不微调模型：
+#   样本只有几千条，微调 118M 参数必然过拟合；分类头只有 385 个参数，
+#   CPU 上把 3000 条文本编码完约 10–20 秒，日均成本可忽略。
+
+on:
+  schedule:
+    - cron: '40 2 * * *'
+  workflow_dispatch:
+    inputs:
+      embedder:
+        description: '编码器：st = 真实 MiniLM；hash = 假编码器（仅验证管道）'
+        type: choice
+        options: ['st', 'hash']
+        default: 'st'
+
+permissions:
+  contents: write      # 写 data 分支
+
+concurrency:
+  group: analyze-sentiment
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/ml/requirements.txt
+
+      - name: Cache embedding model
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2
+
+      - name: Install CPU torch
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch
+
+      - name: Install ML deps
+        run: pip install -r backend/ml/requirements.txt
+
+      - name: Analyze and publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ST_EMBEDDER: ${{ inputs.embedder || 'st' }}
+        run: python3 backend/collectors/sentiment_publish.py
+
+      - name: Upload metrics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: sentiment-metrics
+          path: backend/ml/models/*.metrics.json
+          if-no-files-found: ignore

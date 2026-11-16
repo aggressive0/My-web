@@ -1,0 +1,9 @@
+# ML 依赖（仅情感分析用；采集链路仍然零依赖）
+#
+# torch 要装 CPU 版，必须在工作流里单独用 pytorch 的 CPU 索引安装，
+# 否则 pip 会拉 2.5GB 的 CUDA 版本：
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+# 放在本文件里会导致 pip 解析时从默认源再装一次 CUDA 版，故不写在这里。
+sentence-transformers>=3.0
+scikit-learn>=1.5
+joblib>=1.4

@@ -223,6 +223,34 @@ python backend/collectors/steam_reviews_collector.py --status                   
 口径：`query_summary.total_reviews` 是该应用的全站评论总量，与「本次返回条数」是两件事；
 页面展示推荐率时必须同时给出样本量与日期范围，否则就是个孤零零的假精确数字。
 
+### 真实数据：评论情感（Phase 3）
+
+```bash
+# 训练（需要 torch + sentence-transformers，向 UV 下载 ~470MB 句向量模型）
+HF_ENDPOINT=https://hf-mirror.com python backend/ml/train_head.py
+
+# 本地试跑聚合（不写远端）
+python backend/collectors/sentiment_publish.py --dry-run --samples-file <samples.jsonl>
+```
+
+| 部件 | 位置 |
+|---|---|
+| 句向量 | `backend/ml/embedder.py`（MiniLM 多语言，384 维） |
+| 分类头 | `backend/ml/head.py` + `models/sentiment-head-v1.joblib`（3.9KB，逻辑回归） |
+| 训练 | `backend/ml/train_head.py`（5 折 CV，指标写入 `*.metrics.json`） |
+| 推理发布 | `backend/collectors/sentiment_publish.py` → data 分支 `sentiment-daily.json` |
+| 调度 | `.github/workflows/analyze-sentiment.yml`，每天 02:40 UTC |
+
+**真实指标**：1232 条样本（739 推荐 / 493 不推荐），5 折 CV macro-F1 **0.839**、准确率 0.843。
+
+五条口径（页面必须照此标注）：
+
+1. 标签是 `voted_up` 的**弱标签**，模型输出是「推荐倾向」，不是「情绪极性」。
+2. P ∈ [0.4, 0.6] 记为 `neu`，不硬切 —— 弱标签模型在中间区域本就不可信。
+3. `pos_rate`（模型）与 `voted_up_rate`（样本真实投票）并列输出，校准偏差一眼可见。
+4. 每个比例都带 `n` 与 `low_conf_share`。
+5. 当前样本**全部是英文**（接口忽略 `language=`），多语言能力尚未验证。
+
 ---
 
 ## 后端接口
