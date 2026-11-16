@@ -1,0 +1,53 @@
+name: Smoke test (static site)
+
+# 冒烟测试只回答一个问题：四个页面还能不能正常用。
+# 它不判业务数值对错，也不做视觉像素比对 —— 那是另外两层的事。
+# 关键：PR 上必须跑，否则这个仓库会再次出现「部署成功、页面报错」的情况。
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install test deps
+        working-directory: tests
+        run: npm ci
+
+      - name: Install Chromium (headless shell)
+        working-directory: tests
+        run: npx playwright install --with-deps chromium --only-shell
+
+      - name: Run smoke test
+        run: node tests/smoke.mjs
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: tests/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
