@@ -163,6 +163,13 @@ async function checkPage(browser, cfg) {
         links: Array.from(document.querySelectorAll('a[href$=".html"]')).map(a => a.getAttribute('href')),
         overflowX: document.documentElement.scrollWidth - window.innerWidth,
         hasData: typeof window.DashboardData === 'object' && window.DashboardData !== null,
+        cloudLayer: (() => {
+            const globe = window.GlobeStage && window.GlobeStage.instance && window.GlobeStage.instance();
+            if (!globe || !globe.scene) return false;
+            let found = false;
+            globe.scene().traverse(obj => { if (obj && obj.userData && obj.userData.globeCloudLayer) found = true; });
+            return found;
+        })(),
         counts: {}, texts: {}
     }));
 
@@ -170,6 +177,9 @@ async function checkPage(browser, cfg) {
     record(cfg.label, 'L2', `canvas 数 ${dom.canvases} 在 [${cfg.canvases[0]},∞)`, dom.canvases >= cfg.canvases[0], `实际 ${dom.canvases}`);
     record(cfg.label, 'L2', '无横向溢出', dom.overflowX <= 1, `溢出 ${dom.overflowX}px`);
     record(cfg.label, 'L2', '数据层已挂载', dom.hasData, dom.hasData ? '' : 'window.DashboardData 缺失');
+    if (cfg.file === 'index.html') {
+        record(cfg.label, 'L2', '地球云层纹理已挂载', dom.cloudLayer, dom.cloudLayer ? '' : 'cloud mesh 未进入 globe scene');
+    }
     record(cfg.label, 'L2', '导航互链 4 条', new Set(dom.links).size >= 4, `实际 ${new Set(dom.links).size} 条`);
 
     for (const [sel, min] of cfg.anchors) {
