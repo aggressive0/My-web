@@ -69,47 +69,19 @@ body::before{
     padding:12px clamp(16px,2.2vw,34px) 8px;
 }
 
-/* ============ 页首 ============ */
-.page-head{
-    display:flex;
-    align-items:flex-end;
-    justify-content:space-between;
-    gap:24px;
-    flex-wrap:wrap;
-    padding-bottom:11px;
-}
-
-.page-title{
-    margin:0;
-    font-size:clamp(23px,2vw,29px);
-    font-weight:600;
-    letter-spacing:.01em;
-    line-height:1.2;
-    background:linear-gradient(92deg,#FFFFFF 6%,#CBE7FF 56%,#9EC9FF 100%);
-    -webkit-background-clip:text;
-    background-clip:text;
-    color:transparent;
-}
-
-.page-sub{
-    margin:6px 0 0;
-    font-size:12.5px;
-    color:var(--ink-3);
-}
-
-.page-meta{
-    display:flex;
-    align-items:center;
-    gap:13px;
-    font-family:var(--mono);
-    font-size:10px;
-    letter-spacing:.15em;
-    text-transform:uppercase;
-    color:var(--ink-3);
+/* ============ 无障碍：保留页面主标题，但不占视觉空间 ============ */
+.sr-only{
+    position:absolute;
+    width:1px;
+    height:1px;
+    margin:-1px;
+    padding:0;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    clip-path:inset(50%);
     white-space:nowrap;
+    border:0;
 }
-
-.page-meta .sep{width:1px;height:13px;background:var(--line)}
 
 /* ============ 通用面板 ============ */
 .panel{
@@ -257,6 +229,19 @@ body::before{
     grid-template-columns:minmax(0,2.02fr) minmax(0,1fr);
     gap:12px;
     margin-top:10px;
+}
+
+/* 左右两个面板同步伸缩，避免内容撑高页面 */
+.mid > .panel{
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+}
+.mid > .panel:last-child .reason-body{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
 }
 
 .chart{width:100%;height:222px}
@@ -416,7 +401,6 @@ body::before{
 @media (max-width:760px){
     .kpi{grid-template-columns:minmax(0,1fr)}
     .bottom{grid-template-columns:minmax(0,1fr)}
-    .page-meta{display:none}
     .corr{grid-template-columns:88px minmax(0,1fr) 36px 30px;gap:8px}
     .row{grid-template-columns:64px minmax(0,1fr) 38px;gap:9px}
 }
@@ -485,17 +469,7 @@ body::before{
 
 <main class="page">
 
-    <header class="page-head">
-        <div>
-            <h1 class="page-title">玩家流失深度分析</h1>
-            <p class="page-sub">定位流失发生在哪里、由什么触发，以及哪些玩家最值得挽回</p>
-        </div>
-        <div class="page-meta">
-            <span>14 Nov 2026</span>
-            <span class="sep" aria-hidden="true"></span>
-            <span>近 30 天窗口</span>
-        </div>
-    </header>
+    <h1 class="sr-only">玩家流失深度分析</h1>
 
     <!-- ================= 顶部：流失率 / 风险区域 / 热点强度 / 覆盖量 ================= -->
     <section class="kpi" aria-label="核心指标">
