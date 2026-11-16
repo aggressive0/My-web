@@ -1,43 +1,49 @@
 """
-Steam 公开数据采集器（路线 A：真实 CCU 时序 + 成就漏斗）
+Steam 公开数据采集器（本机侧：细粒度 CCU + 成就快照 → SQLite）
+
+与 CI 侧的分工：
+    本机  5 分钟级采样 → backend/data/steam.db（细粒度分析、成就漏斗）
+    CI    每小时一次   → data 分支 JSON（线上展示）
 
 数据来源（均无需 API Key）：
   - 同时在线人数  ISteamUserStats/GetNumberOfCurrentPlayers/v1?appid=
   - 成就完成率    ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2?gameid=
-  - 游戏名        store.steampowered.com/api/appdetails?appids=（可选，部分网络环境被挡）
 
-口径说明（写进答辩时的必备前提）：
+游戏列表来自 backend/config/games.yaml（唯一事实来源），不再硬编码 AppID。
+
+口径说明（写进答辩的必备前提）：
   - CCU = 某一时刻的同时在线人数，不是 DAU，也不是活跃玩家数。
   - 成就完成率 = 全量玩家中的累计完成百分比，用它反推「进度流失」是近似，
     不能等同于留存率。
 
 用法：
-  python steam_collector.py --appids 578080,1203220 --interval 60 --minutes 0
-  python steam_collector.py --once            # 只采一轮，用于验证环境
+  python steam_collector.py --once                 # 按配置采一轮（计划任务用这个）
+  python steam_collector.py --interval 300         # 常驻循环
+  python steam_collector.py --appids 1203220 --once  # 临时只采某款，绕过配置
 
 环境变量：
-  STEAM_PROXY   代理地址，默认 http://127.0.0.1:7897；留空则直连
+  GAMES_CONFIG  配置文件路径，默认 backend/config/games.yaml
+  STEAM_PROXY   代理地址；留空则直连（--proxy 优先）
   STEAM_DB      SQLite 路径，默认 backend/data/steam.db
 """
 
 import argparse
 import json
 import os
-import sqlite3
 import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+import db as store
+import game_config
+
 CCU_URL = "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
 ACH_URL = "https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/"
 
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = os.path.dirname(BACKEND_DIR)
-DEFAULT_DB = os.path.join(BACKEND_DIR, "data", "steam.db")
 PROXY = os.environ.get("STEAM_PROXY", "http://127.0.0.1:7897")
-DB = os.environ.get("STEAM_DB", DEFAULT_DB)
+DB = os.environ.get("STEAM_DB", store.DEFAULT_DB)
 
 
 def make_opener(proxy):
@@ -97,26 +103,6 @@ def get_json(url, timeout=25, retries=2):
     raise RuntimeError("request failed: %s (%s)" % (url, last))
 
 
-def init_db(path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with sqlite3.connect(path) as c:
-        c.execute("""CREATE TABLE IF NOT EXISTS ccu(
-            appid      INTEGER NOT NULL,
-            ts_utc     TEXT    NOT NULL,
-            players    INTEGER NOT NULL,
-            PRIMARY KEY(appid, ts_utc)
-        )""")
-        c.execute("""CREATE TABLE IF NOT EXISTS achievements(
-            appid       INTEGER NOT NULL,
-            ach_name    TEXT    NOT NULL,
-            percent     REAL,
-            snapshot_ts TEXT    NOT NULL,
-            PRIMARY KEY(appid, ach_name, snapshot_ts)
-        )""")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_ccu_ts ON ccu(appid, ts_utc)")
-    return path
-
-
 def now_utc():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -140,30 +126,51 @@ class _Tee:
                 pass
 
 
-def sample_ccu(appid):
-    # _= 时间戳用于穿透 CDN 缓存（见文件顶部 OPENER 处的说明）
-    url = CCU_URL + "?appid=%d&_=%d" % (appid, int(time.time() * 1000))
-    d = get_json(url)
-    n = int(d["response"]["player_count"])
-    ts = now_utc()
-    with sqlite3.connect(DB) as c:
-        c.execute("INSERT OR REPLACE INTO ccu VALUES(?,?,?)", (appid, ts, n))
-    return n
+def collect_ccu(appid):
+    """采一次 CCU：写 ccu 表 + 记一条日志。失败抛异常，由调用方隔离。"""
+    started = time.time()
+    try:
+        # _= 时间戳用于穿透 CDN 缓存（见文件顶部 OPENER 处的说明）
+        url = CCU_URL + "?appid=%d&_=%d" % (appid, int(time.time() * 1000))
+        d = get_json(url)
+        n = int(d["response"]["player_count"])
+        ts = now_utc()
+        with store.session(DB) as conn:
+            conn.execute("INSERT OR REPLACE INTO ccu VALUES(?,?,?)", (appid, ts, n))
+            store.log_collection(conn, appid, "ccu", "ok", ts,
+                                 duration_ms=int((time.time() - started) * 1000), rows=1)
+        return n
+    except Exception as e:
+        with store.session(DB) as conn:
+            store.log_collection(conn, appid, "ccu", "error", now_utc(),
+                                 duration_ms=int((time.time() - started) * 1000),
+                                 error=str(e)[:500])
+        raise
 
 
 def snapshot_achievements(appid):
-    """成就完成率变化极慢，抓一次就能用很久；建议每天快照一次。"""
-    d = get_json(ACH_URL + "?gameid=%d" % appid)
-    rows = d.get("achievementpercentages", {}).get("achievements", [])
-    if not rows:
-        return 0
-    ts = now_utc()
-    with sqlite3.connect(DB) as c:
-        c.executemany(
-            "INSERT OR REPLACE INTO achievements VALUES(?,?,?,?)",
-            [(appid, a.get("name", "?"), _f(a.get("percent")), ts) for a in rows],
-        )
-    return len(rows)
+    """成就完成率变化极慢，抓一次就能用很久；默认 12 小时快照一次。"""
+    started = time.time()
+    try:
+        d = get_json(ACH_URL + "?gameid=%d" % appid)
+        rows = d.get("achievementpercentages", {}).get("achievements", [])
+        if not rows:
+            raise RuntimeError("成就列表为空（该游戏可能未开放成就接口）")
+        ts = now_utc()
+        with store.session(DB) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO achievements VALUES(?,?,?,?)",
+                [(appid, a.get("name", "?"), _f(a.get("percent")), ts) for a in rows],
+            )
+            store.log_collection(conn, appid, "achievements", "ok", ts,
+                                 duration_ms=int((time.time() - started) * 1000), rows=len(rows))
+        return len(rows)
+    except Exception as e:
+        with store.session(DB) as conn:
+            store.log_collection(conn, appid, "achievements", "error", now_utc(),
+                                 duration_ms=int((time.time() - started) * 1000),
+                                 error=str(e)[:500])
+        raise
 
 
 def _f(v):
@@ -174,8 +181,8 @@ def _f(v):
 
 
 def last_ach_ts(appid):
-    with sqlite3.connect(DB) as c:
-        r = c.execute(
+    with store.session(DB) as conn:
+        r = conn.execute(
             "SELECT MAX(snapshot_ts) FROM achievements WHERE appid=?", (appid,)
         ).fetchone()
     return r[0] if r and r[0] else None
@@ -192,16 +199,42 @@ def ach_is_stale(appid, hours):
     return (datetime.now(timezone.utc) - prev).total_seconds() > hours * 3600
 
 
+def resolve_targets(args):
+    """--appids 优先（临时排查用）；否则读配置中的 enabled 游戏。"""
+    if args.appids:
+        ids = [int(x) for x in args.appids.split(",") if x.strip()]
+        cfg = None
+        try:
+            cfg = game_config.load_games(args.config)
+        except game_config.GameConfigError:
+            pass
+        known = {g["appid"]: g for g in (cfg["games"] if cfg else [])}
+        return [{"appid": a,
+                 "name": known.get(a, {}).get("name") or str(a),
+                 "interval_minutes": known.get(a, {}).get("interval_minutes")} for a in ids], cfg
+
+    cfg = game_config.load_games(args.config)
+    games = [g for g in cfg["games"] if g["enabled"]]
+    if not games:
+        raise SystemExit("配置里没有 enabled: true 的游戏")
+    return games, cfg
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--appids", default="1203220", help="逗号分隔的 appid 列表")
-    ap.add_argument("--interval", type=int, default=300, help="采样间隔（秒），建议 300")
+    ap.add_argument("--appids", default="",
+                    help="逗号分隔的 appid；留空则读取 backend/config/games.yaml 的启用列表")
+    ap.add_argument("--interval", type=int, default=None,
+                    help="采样间隔（秒）；留空取配置的 defaults.interval_minutes")
     ap.add_argument("--minutes", type=int, default=0, help="运行时长（分钟），0 表示一直跑")
     ap.add_argument("--once", action="store_true", help="只采一轮后退出（供计划任务调用）")
-    ap.add_argument("--ach-hours", type=int, default=12, help="成就快照最小间隔（小时）")
+    ap.add_argument("--ach-hours", type=int, default=None,
+                    help="成就快照最小间隔（小时）；留空取配置；-1 表示不快照")
     ap.add_argument("--proxy", default="auto",
                     help="auto 自动探测（默认）/ none 直连 / http://127.0.0.1:7897 指定代理")
-    ap.add_argument("--db", default=os.environ.get("STEAM_DB", DEFAULT_DB))
+    ap.add_argument("--db", default=os.environ.get("STEAM_DB", store.DEFAULT_DB))
+    ap.add_argument("--config", default=os.environ.get("GAMES_CONFIG"),
+                    help="游戏配置路径，默认 backend/config/games.yaml")
     ap.add_argument("--log", default=None, help="日志文件路径；计划任务下建议指定")
     args = ap.parse_args()
 
@@ -209,51 +242,67 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
         sys.stdout = _Tee(sys.stdout, open(args.log, "a", encoding="utf-8"))
 
-    global DB, OPENER, PROXY
-    DB = init_db(args.db)
-    appids = [int(x) for x in args.appids.split(",") if x.strip()]
+    global DB
+    DB = store.init_db(args.db)
+
+    targets, cfg = resolve_targets(args)
+    defaults = (cfg or {}).get("defaults", game_config.DEFAULT_DEFAULTS)
+    interval = args.interval if args.interval is not None else defaults["interval_minutes"] * 60
+    ach_hours = args.ach_hours if args.ach_hours is not None else defaults["achievement_interval_hours"]
+
+    with store.session(DB) as conn:
+        if cfg:
+            store.sync_games(conn, cfg["games"])
+
+    appids = [t["appid"] for t in targets]
     resolve_opener(args.proxy, appids[0])
 
-    print("DB  : %s" % DB, flush=True)
-    print("代理: %s" % (PROXY or "直连"), flush=True)
-    print("目标: %s" % appids, flush=True)
+    print("DB    : %s" % DB, flush=True)
+    print("配置  : %s" % (cfg["source"] if cfg else "（未使用，--appids 直指定）"), flush=True)
+    print("代理  : %s" % (PROXY or "直连"), flush=True)
+    print("目标  : %s" % ", ".join("%s(%d)" % (t["name"], t["appid"]) for t in targets), flush=True)
+    print("间隔  : %ds | 成就快照间隔 %sh" % (interval, ach_hours), flush=True)
 
-    t0 = time.time()
+    t_start = time.time()
     round_no = 0
 
     while True:
         round_no += 1
-        for appid in appids:
+        for t in targets:
+            appid = t["appid"]
             try:
-                n = sample_ccu(appid)
-                print("[%s] appid=%d  CCU=%s" % (now_utc(), appid, format(n, ",")), flush=True)
+                n = collect_ccu(appid)
+                print("[%s] %-16s CCU=%s" % (now_utc(), t["name"], format(n, ",")), flush=True)
             except Exception as e:
-                print("[%s] appid=%d  CCU 失败: %s" % (now_utc(), appid, e), flush=True)
+                print("[%s] %-16s CCU 失败: %s" % (now_utc(), t["name"], e), flush=True)
 
         # 成就完成率变化极慢：默认 12 小时才快照一次，避免计划任务把表撑爆
-        if args.ach_hours >= 0:
-            for appid in appids:
-                if not ach_is_stale(appid, args.ach_hours):
+        if ach_hours >= 0:
+            for t in targets:
+                appid = t["appid"]
+                if not ach_is_stale(appid, ach_hours):
                     continue
                 try:
                     k = snapshot_achievements(appid)
-                    print("        appid=%d  成就快照 %d 条" % (appid, k), flush=True)
+                    print("        %-16s 成就快照 %d 条" % (t["name"], k), flush=True)
                 except Exception as e:
-                    print("        appid=%d  成就失败: %s" % (appid, e), flush=True)
+                    print("        %-16s 成就失败: %s" % (t["name"], e), flush=True)
 
         if args.once:
             break
-        if args.minutes and (time.time() - start) > args.minutes * 60:
+        if args.minutes and (time.time() - t_start) > args.minutes * 60:
             break
-        time.sleep(args.interval)
+        time.sleep(interval)
 
-    print("done.", flush=True)
+    print("done. 用时 %.1fs" % (time.time() - t_start), flush=True)
 
 
 if __name__ == "__main__":
-    start = time.time()
     try:
         main()
     except KeyboardInterrupt:
         print("\nstopped by user", flush=True)
         sys.exit(0)
+    except game_config.GameConfigError as e:
+        print("配置错误：%s" % e, file=sys.stderr, flush=True)
+        sys.exit(2)

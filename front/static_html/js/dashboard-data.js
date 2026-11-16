@@ -429,7 +429,8 @@
                     return g.points.length;
                 }));
                 if (maxLen < need) return null;
-                n.games = withPts;
+                /* 保留「已配置但还没有点位」的游戏：切换器会把它标成「暂无数据」，
+                   而不是悄悄消失 —— 用户能看出是「还没攒到」而非「没配」。 */
                 return n;
             }
 

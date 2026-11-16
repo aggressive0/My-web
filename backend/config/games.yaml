@@ -1,0 +1,76 @@
+# ============================================================
+# 游戏注册表（唯一事实来源）
+# ------------------------------------------------------------
+# 新增一款游戏只需在 games: 下追加一项，无需改任何代码。
+# 采集器、CI 发布、后端 API、前端切换器都从这里读取。
+#
+# 字段：
+#   appid            Steam AppID，必填，整数
+#   slug             短标识，必填，唯一，仅字母数字与连字符（用于 API 路径 / 前端 key）
+#   name             展示名，必填
+#   color            曲线颜色，可选，缺省按调色板顺序分配
+#   enabled          是否参与采集与展示，可选，默认 true
+#   interval_minutes 该游戏的 CCU 采集间隔（分钟），可选，缺省取 defaults
+#   tags             分组标签，可选
+#
+# 约束（加载器会校验）：
+#   - appid 不得重复，slug 不得重复
+#   - 至少一款 enabled: true
+#   - 本文件刻意只使用扁平结构（列表 + 标量），
+#     因为采集链路坚持零第三方依赖，安装 PyYAML 只为读一个配置不划算。
+#     如确实需要嵌套结构，请先让 CI 安装 PyYAML 再扩展。
+# ============================================================
+
+defaults:
+  interval_minutes: 5          # 本地采集循环间隔（CI 固定每小时）
+  window_hours: 72             # CCU 滚动窗口
+  achievement_interval_hours: 12   # 成就快照最小间隔（变化极慢）
+
+games:
+  # 主选：成就名为中文，答辩可直读；漏斗跨度 63.2pp
+  - appid: 1203220
+    slug: naraka
+    name: 永劫无间
+    color: "#35D9F2"
+    enabled: true
+    tags: [live-service, cn]
+
+  # 大体重对照：28–37 万在线，成就是编号式，仅用于规模对照
+  - appid: 578080
+    slug: pubg
+    name: PUBG
+    color: "#9275FF"
+    enabled: true
+    tags: [live-service]
+
+  # 成就最多的样本（193 个），适合做细粒度漏斗
+  - appid: 230410
+    slug: warframe
+    name: Warframe
+    color: "#FFB45F"
+    enabled: true
+    tags: [live-service]
+
+  # 漏斗跨度最小（47.4pp），作为「劝退较晚」的对照
+  - appid: 238960
+    slug: poe
+    name: Path of Exile
+    color: "#35D399"
+    enabled: true
+    tags: [live-service]
+
+  # 新增：服务型射击，漏斗跨度最小（31.7pp），12 个成就
+  - appid: 1172470
+    slug: apex
+    name: Apex Legends
+    color: "#F0536B"
+    enabled: true
+    tags: [live-service]
+
+  # 新增：单机对照，漏斗跨度最大（83.6pp）——与服务型形成解释性对比
+  - appid: 1091500
+    slug: cyberpunk
+    name: Cyberpunk 2077
+    color: "#A78BFA"
+    enabled: true
+    tags: [single-player]

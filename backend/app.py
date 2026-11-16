@@ -3,6 +3,13 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 import os
+import sys
+from datetime import datetime, timezone
+
+# 采集层的配置与数据库访问（backend/collectors/ 是脚本目录，直接加进 sys.path）
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "collectors"))
+import game_config  # noqa: E402
+import db as store  # noqa: E402
 
 # 加载环境变量
 load_dotenv()
@@ -42,6 +49,123 @@ with app.app_context():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'message': 'Backend service is running'}), 200
+
+
+# ============================================================
+# 游戏注册表 API
+# ------------------------------------------------------------
+# 数据来源分两层：
+#   身份信息（appid/slug/name/color/enabled/tags）← backend/config/games.yaml
+#   运行状态（最近成功时间/点数/最近错误）        ← backend/data/steam.db
+# yaml 是唯一事实来源；数据库缺失时接口仍可用，只是运行状态为 null，
+# 并把 data_type 标成 unavailable —— 不伪造一个「看起来很健康」的状态。
+#
+# 统一响应结构：
+#   成功 { "meta": {...}, "data": ... }
+#   失败 { "error": {"code","message"}, "meta": {...} }
+# meta.data_type: real（有真实采集）| unavailable（无数据）
+# ============================================================
+
+API_VERSION = "v1"
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _meta(count=0, data_type="real", source="backend/config/games.yaml", **extra):
+    m = {
+        "api_version": API_VERSION,
+        "generated_at": _now(),
+        "source": source,
+        "data_type": data_type,
+        "count": count,
+    }
+    m.update(extra)
+    return m
+
+
+def _error(code, message, status, http_status):
+    return jsonify({
+        "error": {"code": code, "message": message},
+        "meta": _meta(count=0, data_type="unavailable", status=status),
+    }), http_status
+
+
+def _stats(appid):
+    """读本地采集库的运行状态；库不存在时返回 None（而不是伪造 0）。"""
+    path = store.resolve_db()
+    if not os.path.exists(path):
+        return None
+    try:
+        with store.session(path) as conn:
+            return store.game_stats(conn, appid)
+    except Exception as e:                      # 库损坏不应让整个接口 500
+        return {"error": "统计读取失败：%s" % e}
+
+
+def _compose(g, stats):
+    return {
+        "appid": g["appid"],
+        "slug": g["slug"],
+        "name": g["name"],
+        "color": g["color"],
+        "enabled": g["enabled"],
+        "interval_minutes": g["interval_minutes"],
+        "tags": g["tags"],
+        "data_type": "real" if (stats and stats.get("last_ccu_ts")) else "unavailable",
+        "collection": stats,
+    }
+
+
+@app.route('/api/games', methods=['GET'])
+def list_games():
+    try:
+        cfg = game_config.load_games()
+    except game_config.GameConfigError as e:
+        return _error("CONFIG_INVALID", str(e), "config_error", 500)
+
+    only_enabled = request.args.get('enabled', '').lower() in ('1', 'true', 'yes')
+    games = [g for g in cfg["games"] if g["enabled"]] if only_enabled else cfg["games"]
+
+    items = [_compose(g, _stats(g["appid"])) for g in games]
+    has_real = any(i["data_type"] == "real" for i in items)
+
+    return jsonify({
+        "meta": _meta(
+            count=len(items),
+            data_type="real" if has_real else "unavailable",
+            source=cfg["source"],
+            defaults=cfg["defaults"],
+            db_available=os.path.exists(store.resolve_db()),
+        ),
+        "data": items,
+    }), 200
+
+
+@app.route('/api/games/<app_id>', methods=['GET'])
+def get_game(app_id):
+    if not app_id.isdigit():
+        return _error("INVALID_APPID", "app_id 必须是正整数，实际收到 %r" % app_id,
+                      "bad_request", 400)
+
+    try:
+        cfg = game_config.load_games()
+    except game_config.GameConfigError as e:
+        return _error("CONFIG_INVALID", str(e), "config_error", 500)
+
+    target = int(app_id)
+    for g in cfg["games"]:
+        if g["appid"] == target:
+            item = _compose(g, _stats(target))
+            return jsonify({
+                "meta": _meta(count=1, data_type=item["data_type"], source=cfg["source"]),
+                "data": item,
+            }), 200
+
+    return _error("GAME_NOT_FOUND", "配置中没有 appid=%d 的游戏" % target,
+                  "not_found", 404)
+
 
 # 获取游戏数据接口
 @app.route('/api/game-data', methods=['GET'])
