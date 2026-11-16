@@ -97,6 +97,28 @@ def day_of(ts):
     return (ts or "")[:10] or "unknown"
 
 
+def dedupe_samples(lines):
+    """样本按 (appid, id) 去重，保留最后一次出现。
+
+    重建模式会重新计入全部抓到的评论，若不去重，样本文件会整体翻倍
+    （首次重建实测：903 条评论写出了 1806 行）。去重集合被 FIFO 淘汰后
+    也可能出现同 id 再次落盘，所以去重放在写入前，而不是只在重建时做。
+    """
+    seen, keep = set(), []
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        key = (d.get("appid"), d.get("id"))
+        if not key[1] or key in seen:
+            continue
+        seen.add(key)
+        keep.append(line)
+    keep.reverse()
+    return keep
+
+
 def playtime_bucket(minutes):
     if minutes is None:
         return "unknown"
@@ -262,7 +284,7 @@ def main():
     # seen 是「这批 id 已经计入聚合」的凭证，必须最后落盘：
     # 若它先写成功、聚合写失败，下一轮就会把这批评论当成已处理而永久漏计。
     P.put_remote(DAILY, daily, sha_daily, repo, token, "data: reviews daily %s" % now)
-    put_text(SAMPLES, "\n".join(sample_lines[-SAMPLES_CAP:]) + "\n",
+    put_text(SAMPLES, "\n".join(dedupe_samples(sample_lines)[-SAMPLES_CAP:]) + "\n",
              sha_samples, repo, token, "data: reviews samples %s" % now)
     P.put_remote(STATUS, status, None, repo, token, "data: collection status %s" % now)
     P.put_remote(STATE, {"updated_at": now, "seen": seen_all},
