@@ -196,6 +196,7 @@
             clouds.scale.copy(earthMesh.scale);
             clouds.renderOrder = (earthMesh.renderOrder || 0) + 1;
             clouds.frustumCulled = false;
+            clouds.userData.globeCloudLayer = true;
             earthMesh.parent.add(clouds);
 
             state.cloudMesh = clouds;
