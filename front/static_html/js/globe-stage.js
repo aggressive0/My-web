@@ -131,24 +131,36 @@
             .width(el.clientWidth)
             .height(el.clientHeight);
 
-        /* 材质：夜景底 + 轻微蓝色偏移，让大陆轮廓可辨 */
+        /* Phase 4：按 globe.gl 默认 MeshPhongMaterial 的真实属性调校材质。
+           不再写入 Phong 材质不支持的 roughness / metalness，避免无效配置。 */
         var mat = globe.globeMaterial();
         if (mat) {
-            /* 贴图本身是夜景灯带，不要再乘色压暗；用自发光让灯带透出来 */
-            mat.color.set('#ffffff');
-            mat.roughness = 0.82;
-            mat.metalness = 0.035;
-            if ('bumpScale' in mat) mat.bumpScale = 0.16;
-            /* 夜景贴图保留自发光；额外的蓝色高光强化球体曲率 */
-            if (mat.specular && mat.specular.set) mat.specular.set('#477eae');
-            if ('shininess' in mat) mat.shininess = 18;
+            /* 夜景贴图保留原始色彩，降低自发光强度，为方向光留出明暗层次 */
+            if (mat.color && mat.color.set) mat.color.set('#ffffff');
+            if ('bumpScale' in mat) mat.bumpScale = 0.14;
+            if (mat.specular && mat.specular.set) mat.specular.set('#315d86');
+            if ('shininess' in mat) mat.shininess = 16;
             if (mat.emissive && mat.map) {
-                mat.emissive.set('#3c79a8');
+                mat.emissive.set('#244d75');
                 mat.emissiveMap = mat.map;
-                mat.emissiveIntensity = 0.72;
+                mat.emissiveIntensity = 0.38;
             }
             mat.needsUpdate = true;
         }
+
+        /* Phase 4：微调 globe.gl 已创建的默认灯光，不额外创建灯源或增加渲染通道。
+           环境光负责保留暗部细节，方向光提供球体受光面与边缘的明暗对比。 */
+        try {
+            (globe.lights() || []).forEach(function (light) {
+                if (light.isAmbientLight) {
+                    if (light.color && light.color.set) light.color.set('#8faecc');
+                    light.intensity = 0.78;
+                } else if (light.isDirectionalLight) {
+                    if (light.color && light.color.set) light.color.set('#d7eaff');
+                    light.intensity = 1.08;
+                }
+            });
+        } catch (e) { /* 灯光调校失败时保留 globe.gl 默认灯光 */ }
 
         state.points = data.playerPoints;
         state.arcs = data.arcs;

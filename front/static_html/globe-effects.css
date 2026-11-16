@@ -280,9 +280,10 @@
         drop-shadow(0 0 22px rgba(35, 122, 220, .18));
 }
 
-/* 球体周围的宽幅外晕由画布透明边缘承接，内层由 globe.gl atmosphere 提供 */
+/* 不在容器父级叠加滤镜，避免把热点按钮与风险柱 HTML 图层一起做离屏合成。
+   外晕只由上方 canvas 的透明边缘承担，交互层保持清晰。 */
 #globeContainer {
-    filter: drop-shadow(0 0 30px rgba(44, 145, 235, .15));
+    filter: none;
 }
 
 @media (max-width: 900px) {
