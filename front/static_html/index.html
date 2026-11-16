@@ -1666,43 +1666,64 @@ body::after{
             parseInt(h.slice(4, 6), 16) + ',' + a + ')';
     }
 
+    /* 只画「启用且有数据点」的游戏：配置里 enabled:false 的仍保留在数据文件中
+       （为了不丢历史），但不该出现在图上；一个点都没有的游戏画不出线。 */
+    function drawableGames(real) {
+        return ((real && real.games) || []).filter(function (g) {
+            return g.enabled !== false && (g.points || []).length > 0;
+        });
+    }
+
     function ccuOption(real, mode) {
-        var games = real.games || [];
+        var games = drawableGames(real);
         var single = (mode !== 'index')
             ? games.filter(function (g) { return String(g.appid) === String(mode); })[0]
             : null;
         var shown = single ? [single] : games;
 
-        /* 各游戏采样秒数不同但通常同处一分钟，按分钟归并，避免 x 轴出现重复刻度 */
+        /* 各游戏采样秒数不同但通常同处一分钟，按分钟归并，避免同一点画两次 */
         function minuteKey(ts) { return String(ts).slice(0, 16); }
+        function hhmm(ms) {
+            var d = new Date(ms);
+            return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+        }
 
         var tsSet = {};
         shown.forEach(function (g) {
             (g.points || []).forEach(function (p) { tsSet[minuteKey(p.ts)] = 1; });
         });
-        var tsList = Object.keys(tsSet).sort();
-        var labels = tsList.map(function (k) { return k.slice(11, 16); });
+        var keys = Object.keys(tsSet).sort();
+        var msOf = {};
+        keys.forEach(function (k) { msOf[k] = Date.parse(k + ':00Z'); });
 
-        var rawByName = {};
+        var rawByName = {};   // 名称 → { 毫秒时间戳: 真实在线人数 }
         var allVals = [];
 
         var series = shown.map(function (g) {
             var map = {};
             (g.points || []).forEach(function (p) { map[minuteKey(p.ts)] = p.p; });
-            rawByName[g.name] = map;
+            var raw = {};
             var mean = (g.summary && g.summary.mean) ? g.summary.mean : 1;
 
-            var data = tsList.map(function (t) {
-                var v = map[t];
+            /* 横轴用时间轴而非类目轴：采样有停机缺口（几十分钟到两小时不等），
+               类目轴会把「17:37 → 19:33」画成与「16:22 → 16:26」等宽，
+               等于谎报事件发生的时间间隔。 */
+            var data = keys.map(function (k) {
+                var v = map[k];
                 if (v === undefined) return null;
-                return single ? +(v / 1000).toFixed(2) : +(v / mean * 100).toFixed(1);
+                raw[msOf[k]] = v;
+                var y = single ? +(v / 1000).toFixed(2) : +(v / mean * 100).toFixed(1);
+                allVals.push(y);
+                return [msOf[k], y];
             });
-            data.forEach(function (v) { if (v !== null) allVals.push(v); });
+            rawByName[g.name] = raw;
 
             var s = {
                 name: g.name,
                 type: 'line',
-                smooth: .28,
+                /* 不做平滑：采样间隙可能长达数小时，曲线一平滑就会在缺口处
+                   凭空画出一段"趋势"，看起来像真实波动，实际是插值假象。 */
+                smooth: false,
                 symbol: 'none',
                 connectNulls: true,
                 data: data,
@@ -1730,37 +1751,42 @@ body::after{
         var span = Math.max((hi - lo) * 0.28, single ? 0.4 : 2);
 
         return {
-            grid: { left: 34, right: 16, top: 30, bottom: 20 },
+            /* 图例移到底部：游戏数会随配置增长（当前 6 款），
+               顶部单行必然被挤成滚动条并压住曲线，底部换行更稳。 */
+            grid: { left: 34, right: 14, top: 10, bottom: 56 },
             tooltip: Object.assign({
                 trigger: 'axis',
                 axisPointer: { type: 'line', lineStyle: { color: 'rgba(53,217,242,.4)' } },
                 formatter: function (ps) {
-                    var ts = tsList[ps[0].dataIndex];
+                    if (!ps.length) return '';
+                    var at = ps[0].value[0];
                     var head = '<div style="font-family:' + MONO + ';font-size:9.5px;letter-spacing:.1em;color:#637A96;margin-bottom:5px">' +
-                        tsLabel(ts) + '</div>';
+                        hhmm(at) + '</div>';
                     return head + ps.map(function (p) {
-                        var r = rawByName[p.seriesName] && rawByName[p.seriesName][ts];
-                        var txt = (r === undefined) ? '—'
-                            : (r.toLocaleString('en-US') + (single ? '' : ' · 指数 ' + p.value));
+                        var raw = rawByName[p.seriesName] && rawByName[p.seriesName][at];
+                        var txt = (raw === undefined) ? '—'
+                            : (raw.toLocaleString('en-US') + (single ? '' : ' · 指数 ' + p.value[1]));
                         return '<div style="display:flex;gap:14px;justify-content:space-between"><span>' +
                             p.marker + p.seriesName + '</span><b style="font-family:' + MONO + '">' + txt + '</b></div>';
                     }).join('');
                 }
             }, tip),
             legend: {
-                right: 0, top: 0, itemWidth: 7, itemHeight: 7, itemGap: 9, icon: 'circle',
-                type: 'scroll', pageIconSize: 8,
-                textStyle: { color: '#9EB1CA', fontSize: 9.5, fontFamily: MONO },
+                left: 0, right: 0, bottom: 0, itemWidth: 7, itemHeight: 7,
+                itemGap: 8, icon: 'circle', padding: [0, 2],
+                textStyle: { color: '#9EB1CA', fontSize: 9, fontFamily: MONO },
                 data: shown.map(function (g) { return g.name; })
             },
             xAxis: {
-                type: 'category', boundaryGap: false, data: labels,
+                type: 'time',
                 axisLine: { lineStyle: { color: 'rgba(68,155,209,.2)' } },
                 axisTick: { show: false },
                 axisLabel: {
                     color: AXIS, fontSize: 9, fontFamily: MONO,
-                    interval: Math.max(0, Math.ceil(labels.length / 6) - 1)
-                }
+                    hideOverlap: true,
+                    formatter: function (v) { return hhmm(v); }
+                },
+                splitLine: { show: false }
             },
             yAxis: {
                 type: 'value',
@@ -1777,19 +1803,42 @@ body::after{
         };
     }
 
-    function applyRealCcu(real) {
-        var games = real.games || [];
-        if (!games.length) return;
+    /* 切换器条目直接来自 payload.games —— 它由 CI 按 config/games.yaml 生成：
+       顺序、名称、颜色、启用状态全部来自配置，页面不写死任何一款游戏。
+       配置里有但还没攒到数据点的游戏也列出来并标注「暂无数据」——
+       藏起来会让人以为没配，列出来才说清「已在采集清单，等待数据」。 */
+    function switcherItems() {
+        return ((realCcu && realCcu.games) || [])
+            .filter(function (g) { return g.enabled !== false; })
+            .map(function (g) {
+                return {
+                    appid: g.appid,
+                    name: g.name,
+                    hasData: (g.points || []).length > 0
+                };
+            });
+    }
 
-        /* 切换器：指数对比 + 各游戏 */
+    function applyRealCcu(real) {
+        if (!drawableGames(real).length) return;
+
+        /* 切换器：指数对比 + 各游戏（顺序来自配置，不再写死在页面里） */
         var pick = document.getElementById('gamePick');
         if (pick) {
+            var items = switcherItems();
             var opts = ['<option value="index">指数对比</option>'];
-            games.forEach(function (g) {
-                opts.push('<option value="' + g.appid + '">' + g.name + '</option>');
+            items.forEach(function (i) {
+                opts.push('<option value="' + i.appid + '"' + (i.hasData ? '' : ' disabled') + '>' +
+                    i.name + (i.hasData ? '' : '（暂无数据）') + '</option>');
             });
             pick.innerHTML = opts.join('');
-            pick.value = 'index';
+
+            /* 之前选中的游戏若已无数据（配置改动 / 数据窗口裁剪），回到指数对比 */
+            var keep = realMode !== 'index' && items.some(function (i) {
+                return String(i.appid) === String(realMode) && i.hasData;
+            });
+            if (!keep) realMode = 'index';
+            pick.value = realMode;
             pick.hidden = false;
             pick.onchange = function () {
                 realMode = pick.value;
@@ -1806,7 +1855,8 @@ body::after{
 
     function updateKpi() {
         if (!realCcu) return;
-        var games = realCcu.games || [];
+        var games = drawableGames(realCcu);
+        if (!games.length) return;
         var kpi = document.getElementById('kpiActive');
         if (!kpi) return;
         var labelEl = kpi.parentElement ? kpi.parentElement.querySelector('.kpi-label') : null;
@@ -1815,11 +1865,12 @@ body::after{
             ? games.filter(function (g) { return String(g.appid) === String(realMode); })[0]
             : null;
 
-        var latest, first, label;
+        var latest, first, label, havePrev;
         if (single) {
             var pts = single.points || [];
             latest = pts.length ? pts[pts.length - 1].p : 0;
             first = pts.length ? pts[0].p : 0;
+            havePrev = pts.length > 1;
             label = single.name + ' 在线';
         } else {
             latest = games.reduce(function (s, g) {
@@ -1830,16 +1881,21 @@ body::after{
                 var p = g.points || [];
                 return s + (p.length ? p[0].p : 0);
             }, 0);
-            label = '四款合计在线';
+            havePrev = games.some(function (g) { return (g.points || []).length > 1; });
+            label = games.length + ' 款合计在线';
         }
 
         var pct = first ? (latest - first) / first * 100 : 0;
         var up = pct >= 0;
 
+        /* 只有一个采样点时首末相同，涨跌是无意义的 0.0% —— 显示「采样中」而不是假涨跌 */
+        var delta = havePrev
+            ? '<span class="kpi-delta" style="color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
+              (up ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%</span>'
+            : '<span class="kpi-delta" style="color:var(--ink-3)">采样中</span>';
+
         if (labelEl) labelEl.textContent = label;
-        kpi.innerHTML = (latest / 1000).toFixed(1) + '<span class="u">K</span>' +
-            '<span class="kpi-delta" style="color:' + (up ? 'var(--green)' : 'var(--red)') + '">' +
-            (up ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%</span>';
+        kpi.innerHTML = (latest / 1000).toFixed(1) + '<span class="u">K</span>' + delta;
 
         var el = document.getElementById('activityChart');
         if (el) {

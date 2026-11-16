@@ -75,3 +75,26 @@ L1 是最容易被忽略、也最致命的一层。页面「看起来正常」�
 
 选择器要选**由 JS 动态填充**的容器（如 `#warnList`、`#rankList`），不要选静态写死的
 HTML —— 静态节点永远存在，断言它等于什么都没测。
+
+---
+
+# 后端测试（Python）
+
+冒烟测试只覆盖前端静态渲染，不碰后端逻辑。采集配置、数据库 schema、失败隔离与 API
+契约由 `tests/test_phase1.py` 覆盖（23 项，全部离线，不发真实网络请求）。
+
+```bash
+.venv/Scripts/python.exe -m unittest tests.test_phase1 -v
+```
+
+| 组 | 覆盖 |
+|---|---|
+| `ConfigTest` | 六款配置可读；引号/注释/行内列表解析；新增游戏只需改 yaml；appid/slug 重复、未知字段、全部禁用均被拒绝 |
+| `DatabaseTest` | schema 五张表；`init_db` 幂等；`sync_games` upsert 不碰历史；采集日志记录成功与失败 |
+| `MergeTest` | 一款失败不影响其余；失败保留旧点；停用游戏保留历史且不再打接口；窗口裁剪；同分钟覆盖 |
+| `ApiTest` | `meta` 契约、单款查询、`GAME_NOT_FOUND` / `INVALID_APPID`、库缺失时标 `unavailable` 而非伪造 0 |
+
+**为什么必须离线**：测试要验证的是「失败时系统怎么表现」，把网络拉进来只会让
+失败原因变成「Steam 今天不稳定」，而不是代码错在哪。采集函数在测试里被 monkeypatch 替换。
+
+新增后端逻辑时同步加测试；**不允许把未通过测试的功能标记为完成**（`AGENTS.md` §13）。

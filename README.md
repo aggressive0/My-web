@@ -156,33 +156,48 @@ node smoke.mjs              # 自动起服务，退出码 0 = 全绿
 
 ### 真实数据：Steam 同时在线与成就漏斗
 
-首页「玩家活跃趋势」与 KPI「活跃玩家」、流失分析页「成就完成漏斗」已接入 Steam 公开接口的真实数据，其余指标仍为演示数据。采集覆盖四款游戏：永劫无间（1203220）、PUBG（578080）、Warframe（230410）、Path of Exile（238960）。
+首页「玩家活跃趋势」与 KPI「活跃玩家」、流失分析页「成就完成漏斗」已接入 Steam 公开接口的真实数据，其余指标仍为演示数据。采集覆盖六款游戏，全部由 `backend/config/games.yaml` 定义：
+
+| # | 游戏 | appid | 定位 |
+|---|---|---|---|
+| 1 | 永劫无间 | 1203220 | 主选：成就中文可读，漏斗跨度 63.1pp |
+| 2 | PUBG | 578080 | 大体重对照（30–44 万在线） |
+| 3 | Warframe | 230410 | 成就最多（193 个），细粒度漏斗 |
+| 4 | Path of Exile | 238960 | 跨度最小（47.4pp），劝退较晚 |
+| 5 | Apex Legends | 1172470 | 服务型射击，跨度 31.7pp |
+| 6 | Cyberpunk 2077 | 1091500 | 单机对照，跨度最大（83.6pp） |
+
+**新增一款游戏只需在 yaml 里追加一项**，采集、CI 发布、API、前端切换器全部自动跟随，不改任何代码。
 
 | 环节 | 位置 |
 |---|---|
+| 游戏注册表 | `backend/config/games.yaml` + `backend/collectors/game_config.py`（零依赖解析，含字段校验） |
 | 本地采集 | `backend/collectors/steam_collector.py`（CCU 时序 + 成就快照 → `backend/data/steam.db`，5 分钟级） |
+| 表结构 | `backend/data/schema.sql`（games / ccu / achievements / collection_logs / collection_cursors） |
 | 本地快照 | `backend/collectors/export_snapshot.py`（生成站点内离线兜底 JSON，也用于本地验证） |
-| 线上采集 | `.github/workflows/collect-ccu.yml` 每小时运行 `backend/collectors/ci_publish.py`，写入 **`data` 分支** 两个文件 |
+| 线上采集 | `.github/workflows/collect-ccu.yml` 每小时运行 `backend/collectors/ci_publish.py`，写入 **`data` 分支** |
 | 消费 | `dashboard-data.js` 的 `loadRealCcu()` / `loadRealFunnels()`：远程 → 仓库内快照 → 演示序列 |
+| API | `backend/app.py`：`GET /api/games`、`GET /api/games/{appid}`（统一 `meta`，错误码可预期） |
 
-两个数据文件位于 `data` 分支根目录：
+`data` 分支根目录两个文件：
 
-- `steam-ccu.json`：各游戏同时在线时序（每小时一点，窗口 72h，含 `mean` 供归一化）
+- `steam-ccu.json`：各游戏同时在线时序（每小时一点，窗口 72h，含 `mean` 供归一化），并内嵌游戏注册表（名称/颜色/启用状态），前端据此生成切换器
 - `steam-funnels.json`：各游戏成就完成率（按完成率降序近似推进顺序）
 
 ```bash
-python backend/collectors/steam_collector.py --appids 1203220 --once   # 本地落库
-python backend/collectors/funnel.py --appid 1203220                   # 命令行看单个漏斗
-python backend/collectors/export_snapshot.py                          # 刷新离线快照
+python backend/collectors/game_config.py                             # 查看当前注册表
+python backend/collectors/steam_collector.py --once                  # 按配置采一轮（计划任务用）
+python backend/collectors/steam_collector.py --appids 1203220 --once # 临时只采某款
+python backend/collectors/funnel.py --appid 1203220                  # 命令行看单个漏斗
+python backend/collectors/export_snapshot.py                         # 刷新离线快照
 ```
 
-三个必须知道的限制：
+四个必须知道的限制：
 
 1. **口径**：CCU 是某一时刻的同时在线人数，不是 DAU；成就完成率是全量玩家累计值，用它反推「进度流失」是近似，**不等于留存率**。
 2. **多游戏不做加总**：首页「指数对比」是各游戏除以自身窗口均值后的指数（100 = 该游戏窗口均值），用于比较节奏而非体量。加总会被体量大的游戏吞掉细节。
 3. **离线退化**：断网或 raw 域名不可达时，页面退回仓库内的 JSON 快照（只在手动执行 `export_snapshot.py` 时更新）。
-
-上游接口有 `Cache-Control: max-age≈647`（约 11 分钟）的 CDN 缓存，采集器已加入缓存穿透参数与 `no-cache` 请求头——否则会采到一条水平直线。
+4. **横轴是时间轴**，不是等距类目轴：采样存在停机缺口（几十分钟到数小时），等距绘制会谎报事件间隔。曲线也不做平滑，避免在缺口处凭空画出趋势。
 
 ---
 

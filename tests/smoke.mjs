@@ -91,6 +91,7 @@ const PAGES = [
             ['#warnList .warn', 1],       // 曾因 stage 作用域 bug 恒为空
             ['#regionList > *', 1],
             ['#globeContainer', 1],
+            ['#gamePick', 1],             // 游戏切换器由 config/games.yaml 驱动
             ['#chain .chain-step, #chain > *', 1],
         ],
         // 文本非空的容器
@@ -221,6 +222,23 @@ async function checkPage(browser, cfg) {
         } else {
             record(cfg.label, 'L3', '时间范围分段控件存在', false, `找到 ${hasSeg} 个 .seg-btn`);
         }
+
+        /* 游戏切换器：选项来自 config/games.yaml（经 data 分支同步），不在页面里写死。
+           无真实数据时切换器是隐藏的，这是符合预期的一种状态，不算失败。 */
+        const pick = await page.evaluate(() => {
+            const s = document.getElementById('gamePick');
+            if (!s) return null;
+            return {
+                hidden: s.hidden,
+                n: s.options.length,
+                names: Array.from(s.options).map(o => o.textContent),
+            };
+        });
+        const pickOk = !!pick && (pick.hidden || (pick.n >= 5 && pick.names[0] === '指数对比'));
+        record(cfg.label, 'L3', '游戏切换器由配置生成', pickOk,
+            !pick ? '元素缺失'
+                : pick.hidden ? '无真实数据，切换器隐藏（预期之一）'
+                    : `${pick.n} 项：${pick.names.slice(1, 4).join(' / ')}`);
     }
 
     /* L3 交互 —— 策略页：缺密钥降级、方案联动、部署状态 */

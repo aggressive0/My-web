@@ -7,6 +7,9 @@ backend/data/cleaned/
 backend/data/*.json
 backend/data/*.db
 backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/data/backup/
 
 # 环境变量文件
 .env
@@ -43,6 +46,10 @@ Thumbs.db
 # Python 虚拟环境
 .venv/
 env/
+
+# Python 字节码
+__pycache__/
+*.pyc
 
 # 临时文件
 *.tmp
