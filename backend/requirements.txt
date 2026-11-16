@@ -3,3 +3,5 @@ Flask-CORS
 Flask-SQLAlchemy
 pymysql
 python-dotenv
+# 情感模块（backend/ml）与后端测试需要；不含 torch/ST，那两个只装在情感推理环境
+numpy
