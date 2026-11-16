@@ -367,6 +367,22 @@
 
     var api = {
         meta: META,
+
+        /* 真实 CCU 时序（Steam 同时在线）。
+           由 backend/collectors/export_ccu_json.py 生成，页面按需异步加载：
+           拿到数据就用真实曲线，拿不到就退回内置演示序列。
+           返回 null 表示不可用（文件缺失、点数太少、版本过旧）。 */
+        loadRealCcu: function (minPoints) {
+            var need = minPoints || 8;
+            return fetch('json/steam-ccu.json', { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (j) {
+                    if (!j || !j.points || j.points.length < need) return null;
+                    return j;
+                })
+                .catch(function () { return null; });
+        },
+
         regions: REGIONS,
         playerPoints: PLAYER_POINTS,
         hotspots: HOTSPOTS,
