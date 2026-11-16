@@ -1,0 +1,332 @@
+/* NEXUS · Spatial analytics skin
+   Scoped to churn analysis and retention tracking; data, chart logic and shared navigation stay untouched. */
+
+:root{
+  --space-0:#050914;
+  --space-1:#091426;
+  --space-2:#0d1c32;
+  --space-line:rgba(116,174,226,.18);
+  --space-cyan:#43e4f5;
+  --space-violet:#a78bfa;
+  --space-text:#edf6ff;
+  --space-muted:#91a7c1;
+}
+
+/* Shared spatial atmosphere */
+body:has(#trendChart),
+body:has(#retTrendChart){
+  position:relative;
+  isolation:isolate;
+  background:
+    radial-gradient(ellipse 68% 44% at 50% -12%,rgba(34,131,220,.20),transparent 72%),
+    radial-gradient(ellipse 42% 34% at 100% 28%,rgba(126,87,220,.12),transparent 74%),
+    radial-gradient(ellipse 35% 28% at 0% 72%,rgba(24,170,195,.07),transparent 76%),
+    linear-gradient(145deg,#050914 0%,#081222 48%,#050a15 100%);
+}
+body:has(#trendChart)::before,
+body:has(#retTrendChart)::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  opacity:.38;
+  background-image:
+    radial-gradient(1px 1px at 8% 16%,rgba(205,232,255,.8) 50%,transparent 100%),
+    radial-gradient(1px 1px at 22% 72%,rgba(109,214,255,.65) 50%,transparent 100%),
+    radial-gradient(1px 1px at 42% 24%,rgba(205,232,255,.65) 50%,transparent 100%),
+    radial-gradient(1px 1px at 68% 12%,rgba(205,232,255,.7) 50%,transparent 100%),
+    radial-gradient(1px 1px at 84% 66%,rgba(109,214,255,.6) 50%,transparent 100%),
+    radial-gradient(1px 1px at 94% 34%,rgba(205,232,255,.55) 50%,transparent 100%);
+  background-size:100% 100%;
+}
+body:has(#trendChart)::after,
+body:has(#retTrendChart)::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(105,157,211,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(105,157,211,.035) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:linear-gradient(180deg,black,transparent 88%);
+}
+body:has(#trendChart) .page,
+body:has(#retTrendChart) .page{
+  max-width:1500px;
+}
+
+/* Glass navigation and active location */
+body:has(#trendChart) .ops-nav,
+body:has(#retTrendChart) .ops-nav{
+  background:rgba(5,11,22,.76);
+  border-bottom:1px solid rgba(110,180,235,.16);
+  box-shadow:0 12px 36px rgba(0,0,0,.24),inset 0 -1px rgba(255,255,255,.025);
+  backdrop-filter:blur(18px) saturate(145%);
+  -webkit-backdrop-filter:blur(18px) saturate(145%);
+}
+body:has(#trendChart) .ops-tabs .nav-link.active,
+body:has(#retTrendChart) .ops-tabs .nav-link.active{
+  color:#e8fbff;
+  background:linear-gradient(135deg,rgba(50,210,235,.15),rgba(76,117,220,.09));
+  box-shadow:inset 0 0 0 1px rgba(76,220,245,.22),0 0 24px -14px rgba(53,217,242,.9);
+}
+
+/* ───────────────────────── CHURN ANALYSIS ───────────────────────── */
+body:has(#trendChart) .page{
+  padding-top:20px;
+  padding-bottom:24px;
+}
+body:has(#trendChart) .page-head{
+  position:relative;
+  align-items:center;
+  padding:4px 2px 20px;
+  margin-bottom:2px;
+}
+body:has(#trendChart) .page-title{
+  font-size:clamp(27px,2.35vw,35px);
+  letter-spacing:.015em;
+  text-shadow:0 8px 30px rgba(63,167,235,.16);
+}
+body:has(#trendChart) .page-title::before{
+  content:"RISK INTELLIGENCE  /  01";
+  display:block;
+  margin-bottom:9px;
+  color:#55d9ec;
+  font:600 9px/1.2 var(--mono);
+  letter-spacing:.24em;
+  -webkit-text-fill-color:#55d9ec;
+  text-shadow:0 0 18px rgba(67,228,245,.35);
+}
+body:has(#trendChart) .page-sub{
+  margin-top:9px;
+  color:#91a8c2;
+  font-size:13px;
+}
+body:has(#trendChart) .page-meta{
+  padding:10px 14px;
+  border:1px solid rgba(99,174,225,.2);
+  border-radius:10px;
+  background:linear-gradient(135deg,rgba(18,44,70,.58),rgba(12,20,38,.48));
+  box-shadow:inset 0 1px rgba(255,255,255,.06),0 12px 30px rgba(0,0,0,.18);
+}
+body:has(#trendChart) .page-meta span:first-child{color:#c3d7ec}
+body:has(#trendChart) .page-meta span:last-child{color:#4ed8e9}
+
+body:has(#trendChart) .kpi{
+  gap:14px;
+}
+body:has(#trendChart) .kpi-card{
+  min-height:122px;
+  padding:17px 20px 16px;
+  border-radius:15px;
+  border-color:rgba(103,164,218,.2);
+  background:
+    radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 58%),
+    linear-gradient(145deg,rgba(20,37,61,.94),rgba(7,15,29,.96));
+  box-shadow:0 22px 48px -30px rgba(0,0,0,.96),inset 0 1px rgba(255,255,255,.075),inset 0 -1px rgba(82,157,220,.07);
+  backdrop-filter:blur(14px);
+  transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;
+}
+body:has(#trendChart) .kpi-card::after{
+  content:"";
+  position:absolute;
+  width:130px;height:130px;
+  right:-55px;top:-74px;
+  border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);
+  border-radius:50%;
+  box-shadow:0 0 0 13px color-mix(in srgb,var(--accent) 4%,transparent),0 0 34px -12px var(--accent);
+  pointer-events:none;
+}
+body:has(#trendChart) .kpi-card:hover{
+  transform:translateY(-4px);
+  border-color:color-mix(in srgb,var(--accent) 46%,transparent);
+  box-shadow:0 28px 54px -30px rgba(0,0,0,.98),0 0 30px -18px var(--accent),inset 0 1px rgba(255,255,255,.09);
+}
+body:has(#trendChart) .kpi-label{font-size:10px;letter-spacing:.17em;color:#8fa8c2}
+body:has(#trendChart) .kpi-value{margin-top:11px;font-size:clamp(29px,2.6vw,37px);text-shadow:0 0 24px color-mix(in srgb,var(--accent) 22%,transparent)}
+body:has(#trendChart) .kpi-foot{margin-top:10px;font-size:11px;color:#8da2bb}
+body:has(#trendChart) .spark{width:100px;height:38px;right:15px;bottom:15px;opacity:.72}
+
+body:has(#trendChart) .mid{
+  gap:16px;
+  margin-top:17px;
+  grid-template-columns:minmax(0,1.9fr) minmax(300px,.92fr);
+}
+body:has(#trendChart) .bottom{
+  gap:16px;
+  margin-top:16px;
+}
+body:has(#trendChart) .panel{
+  border-radius:16px;
+  border:1px solid rgba(105,166,220,.2);
+  background:
+    linear-gradient(145deg,rgba(18,34,56,.82),rgba(7,14,27,.91));
+  box-shadow:0 28px 60px -38px rgba(0,0,0,.98),inset 0 1px rgba(255,255,255,.075),inset 0 -1px rgba(66,144,207,.08);
+  backdrop-filter:blur(16px) saturate(125%);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);
+  transition:border-color .22s ease,transform .22s ease,box-shadow .22s ease;
+}
+body:has(#trendChart) .panel:hover{
+  border-color:rgba(85,193,231,.32);
+  box-shadow:0 32px 66px -38px rgba(0,0,0,.98),0 0 34px -26px rgba(67,228,245,.3),inset 0 1px rgba(255,255,255,.09);
+}
+body:has(#trendChart) .panel.layer::after{
+  inset:8px -7px -8px 7px;
+  border-radius:16px;
+  border-color:rgba(90,156,213,.12);
+  background:linear-gradient(145deg,rgba(11,22,39,.62),rgba(5,11,22,.7));
+}
+body:has(#trendChart) .panel-head{padding:17px 20px 0}
+body:has(#trendChart) .panel-title{font-size:13px;letter-spacing:.055em}
+body:has(#trendChart) .panel-tag{color:#6f8ca9;font-size:9px;letter-spacing:.19em}
+body:has(#trendChart) .chart{height:270px}
+body:has(#trendChart) .reason-body{padding:8px 18px 18px}
+body:has(#trendChart) .reason-chart{height:190px}
+body:has(#trendChart) .reason-list{gap:10px;margin-top:8px}
+body:has(#trendChart) .reason-item{font-size:12px}
+body:has(#trendChart) .reason-item .val{color:#e5f3ff}
+body:has(#trendChart) .rows{padding:17px 20px 18px;gap:16px}
+body:has(#trendChart) .row{font-size:12px;gap:14px}
+body:has(#trendChart) .row-track{height:9px;background:rgba(94,147,198,.13);box-shadow:inset 0 1px 3px rgba(0,0,0,.45)}
+body:has(#trendChart) .row-fill{filter:saturate(1.12)}
+body:has(#trendChart) .row-num{color:#dcecff}
+body:has(#trendChart) .corr{gap:13px;font-size:12px}
+body:has(#trendChart) .legend-risk{padding:0 20px 17px;color:#8199b4}
+body:has(#trendChart) .note{margin-top:14px;color:#6e86a1;font-size:10px}
+
+/* ───────────────────────── RETENTION TRACKING ───────────────────────── */
+body:has(#retTrendChart) .page{
+  padding-top:18px;
+  padding-bottom:22px;
+  gap:15px;
+  grid-template-rows:auto minmax(330px,1fr) minmax(270px,.82fr) auto;
+}
+body:has(#retTrendChart) .kpi-row{gap:14px}
+body:has(#retTrendChart) .kpi{
+  min-height:112px;
+  padding:15px 16px;
+  border-radius:15px;
+  border-color:rgba(103,164,218,.2);
+  background:
+    radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--c) 13%,transparent),transparent 62%),
+    linear-gradient(145deg,rgba(19,37,62,.94),rgba(7,15,29,.96));
+  box-shadow:0 22px 48px -32px rgba(0,0,0,.96),inset 0 1px rgba(255,255,255,.075),inset 0 -1px rgba(82,157,220,.07);
+  transition:transform .24s ease,border-color .24s ease,box-shadow .24s ease;
+}
+body:has(#retTrendChart) .kpi:hover{
+  transform:translateY(-4px);
+  border-color:color-mix(in srgb,var(--c) 48%,transparent);
+  box-shadow:0 28px 56px -32px rgba(0,0,0,.98),0 0 30px -18px var(--glow),inset 0 1px rgba(255,255,255,.1);
+}
+body:has(#retTrendChart) .kpi-ico{
+  width:42px;height:42px;border-radius:12px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--c) 17%,#102039),rgba(8,18,33,.72));
+  box-shadow:0 0 26px -8px var(--glow),inset 0 1px rgba(255,255,255,.13);
+}
+body:has(#retTrendChart) .kpi-label{color:#91a9c4;font-size:10px;letter-spacing:.16em}
+body:has(#retTrendChart) .kpi-num{font-size:25px;text-shadow:0 0 22px rgba(67,228,245,.10)}
+body:has(#retTrendChart) .kpi-spark{width:78px;height:32px;opacity:.9}
+
+body:has(#retTrendChart) .panel{
+  border-radius:16px;
+  border:1px solid rgba(105,166,220,.2);
+  background:linear-gradient(145deg,rgba(18,34,56,.82),rgba(7,14,27,.92));
+  box-shadow:0 28px 60px -38px rgba(0,0,0,.98),inset 0 1px rgba(255,255,255,.075),inset 0 -1px rgba(66,144,207,.08);
+  backdrop-filter:blur(16px) saturate(125%);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);
+  transition:border-color .22s ease,box-shadow .22s ease;
+}
+body:has(#retTrendChart) .panel:hover{
+  border-color:rgba(85,193,231,.32);
+  box-shadow:0 32px 66px -38px rgba(0,0,0,.98),0 0 34px -26px rgba(67,228,245,.26),inset 0 1px rgba(255,255,255,.09);
+}
+body:has(#retTrendChart) .panel::before{
+  left:9%;right:9%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(67,228,245,.7),rgba(167,139,250,.48),transparent);
+  box-shadow:0 0 16px rgba(67,228,245,.22);
+}
+body:has(#retTrendChart) .p-head{padding:15px 18px 0}
+body:has(#retTrendChart) .p-title{font-size:13px;letter-spacing:.045em}
+body:has(#retTrendChart) .p-tag{color:#7794b1}
+body:has(#retTrendChart) .p-body{min-height:0}
+body:has(#retTrendChart) .seg{
+  padding:3px;
+  border-color:rgba(111,174,224,.18);
+  background:rgba(7,17,31,.72);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.38);
+}
+body:has(#retTrendChart) .seg button{padding:4px 11px;font-size:10px}
+body:has(#retTrendChart) .seg button.is-on{
+  color:#031923;
+  background:linear-gradient(180deg,#67f0fa,#27bddb);
+  box-shadow:0 0 20px -5px rgba(67,228,245,.8),inset 0 1px rgba(255,255,255,.45);
+}
+body:has(#retTrendChart) .cohort{padding:12px 16px 16px}
+body:has(#retTrendChart) .cohort-head{padding-bottom:9px}
+body:has(#retTrendChart) .cohort-head span{color:#87a2be;font-size:10px}
+body:has(#retTrendChart) .cohort-body{gap:7px;margin-top:10px}
+body:has(#retTrendChart) .cohort-cell{
+  min-height:29px;
+  border:1px solid rgba(120,190,240,.09);
+  box-shadow:inset 0 1px rgba(255,255,255,.06),0 5px 14px -10px rgba(60,170,240,.65);
+  color:#e7f5ff;
+  transition:filter .18s ease,transform .18s ease;
+}
+body:has(#retTrendChart) .cohort-cell:hover{filter:brightness(1.25);transform:translateY(-1px)}
+body:has(#retTrendChart) .cohort-period{color:#b5c9de}
+body:has(#retTrendChart) .seg-rows{padding:10px 18px 16px;gap:7px}
+body:has(#retTrendChart) .seg-row{gap:11px;font-size:11px}
+body:has(#retTrendChart) .seg-track{height:10px;background:rgba(95,151,203,.13);box-shadow:inset 0 1px 3px rgba(0,0,0,.42)}
+body:has(#retTrendChart) .seg-fill{filter:saturate(1.12)}
+body:has(#retTrendChart) .factor-wrap{padding:6px 15px 13px}
+body:has(#retTrendChart) .factor-list{gap:7px 12px}
+body:has(#retTrendChart) .factor-item{font-size:10px;color:#9eb3ca}
+body:has(#retTrendChart) .factor-item .v{color:#e5f3ff}
+body:has(#retTrendChart) .insight-wrap{padding:12px 16px 16px;gap:9px}
+body:has(#retTrendChart) .insight{
+  padding:10px 11px;
+  border-radius:11px;
+  background:linear-gradient(120deg,rgba(70,118,171,.10),rgba(14,27,47,.36));
+  border-color:rgba(107,167,219,.15);
+  box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+body:has(#retTrendChart) .insight b{font-size:11px}
+body:has(#retTrendChart) .insight span{font-size:10px;color:#91a7c0}
+body:has(#retTrendChart) .insight-cta{
+  height:34px;border-radius:9px;
+  border-color:rgba(67,228,245,.38);
+  background:linear-gradient(135deg,rgba(67,228,245,.19),rgba(93,110,222,.12));
+  box-shadow:inset 0 1px rgba(255,255,255,.1),0 8px 22px -16px rgba(67,228,245,.85);
+}
+body:has(#retTrendChart) .insight-cta:hover{box-shadow:0 0 24px -8px rgba(67,228,245,.75),inset 0 1px rgba(255,255,255,.16)}
+
+/* Responsive: keep depth without sacrificing legibility */
+@media (max-width:1180px){
+  body:has(#trendChart) .mid{grid-template-columns:minmax(0,1fr)}
+  body:has(#trendChart) .chart{height:290px}
+  body:has(#retTrendChart) .page{grid-template-rows:auto auto auto auto}
+  body:has(#retTrendChart) .mid{grid-template-columns:minmax(0,1fr)}
+  body:has(#retTrendChart) .bottom-row{grid-template-columns:minmax(0,1fr) !important}
+  body:has(#retTrendChart) .cohort{min-height:260px}
+}
+@media (max-width:760px){
+  body:has(#trendChart) .page{padding:14px 12px 20px}
+  body:has(#trendChart) .kpi-card{min-height:112px;padding:14px 16px}
+  body:has(#trendChart) .bottom{grid-template-columns:minmax(0,1fr)}
+  body:has(#trendChart) .page-meta{display:none}
+  body:has(#trendChart) .chart{height:250px}
+  body:has(#trendChart) .reason-chart{height:180px}
+  body:has(#retTrendChart) .page{padding:12px 10px 18px;gap:12px}
+  body:has(#retTrendChart) .kpi-row{grid-template-columns:minmax(0,1fr)}
+  body:has(#retTrendChart) .kpi{min-height:98px}
+  body:has(#retTrendChart) .cohort{overflow-x:auto}
+  body:has(#retTrendChart) .cohort-row{min-width:440px}
+  body:has(#retTrendChart) .factor-list{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  body:has(#trendChart) *,
+  body:has(#retTrendChart) *{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+}
