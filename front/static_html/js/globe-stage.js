@@ -6,7 +6,8 @@
 (function (global) {
     'use strict';
 
-    var RISK_COLOR = { high: '#FF6B75', medium: '#FFB45F', low: '#35D9F2' };
+    /* 玩家点位使用低饱和色阶，避免像素级光斑压过地球底图 */
+    var RISK_COLOR = { high: '#B9828C', medium: '#B5A184', low: '#739FB3' };
     var DEFAULT_VIEW = { lat: 26, lng: 18, altitude: 2.35 };
     var state = {
         globe: null,
@@ -20,7 +21,10 @@
         hotspots: [],
         riskPillars: [],
         handlers: {},
-        reduced: false
+        reduced: false,
+        cloudMesh: null,
+        cloudMaterial: null,
+        cloudTexture: null
     };
 
     function webglAvailable() {
@@ -96,11 +100,111 @@
         return hotspots.concat(pillars, buildFlowNodes(state.arcs || []));
     }
 
-    /* ---------- 工具：玩家点数 → 点半径（平方根压缩，避免超级点） ---------- */
+    /* ---------- 玩家分布点：半径单位为角度，压到亚度级，呈现贴地微光 ---------- */
     function pointRadius(p) {
-        /* globe.gl 的半径单位是「度」，需按像素观感放大：1° ≈ 1.1px（当前缩放） */
-        var r = Math.sqrt(p.players) / 90;
-        return Math.max(1.1, Math.min(2.4, r));
+        var r = Math.sqrt(Math.max(0, Number(p.players) || 0)) / 620;
+        return Math.max(0.12, Math.min(0.42, r));
+    }
+
+    /* ---------- 生成横向无缝的程序云图：不请求外部图片，不增加网络依赖 ---------- */
+    function cloudNoise(x, y, nx, ny, seed) {
+        x = ((x % nx) + nx) % nx;
+        y = ((y % ny) + ny) % ny;
+        var n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function cloudValueNoise(u, v, nx, ny, seed) {
+        var px = u * nx, py = v * ny;
+        var x0 = Math.floor(px), y0 = Math.floor(py);
+        var fx = px - x0, fy = py - y0;
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        var a = cloudNoise(x0, y0, nx, ny, seed);
+        var b = cloudNoise(x0 + 1, y0, nx, ny, seed);
+        var c = cloudNoise(x0, y0 + 1, nx, ny, seed);
+        var d = cloudNoise(x0 + 1, y0 + 1, nx, ny, seed);
+        var top = a + (b - a) * fx;
+        var bottom = c + (d - c) * fx;
+        return top + (bottom - top) * fy;
+    }
+
+    function createCloudCanvas() {
+        var width = 768, height = 384;
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var ctx = canvas.getContext('2d');
+        var image = ctx.createImageData(width, height);
+        var pixels = image.data;
+        var smooth = function (a, b, x) {
+            var t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+            return t * t * (3 - 2 * t);
+        };
+        for (var y = 0; y < height; y++) {
+            for (var x = 0; x < width; x++) {
+                var u = x / width, v = y / height;
+                var n = cloudValueNoise(u, v, 6, 3, 1) * 0.52 +
+                        cloudValueNoise(u, v, 12, 6, 2) * 0.27 +
+                        cloudValueNoise(u, v, 24, 12, 3) * 0.14 +
+                        cloudValueNoise(u, v, 48, 24, 4) * 0.07;
+                var alpha = Math.round(smooth(0.49, 0.68, n) * 190);
+                var k = (y * width + x) * 4;
+                pixels[k] = 220;
+                pixels[k + 1] = 232;
+                pixels[k + 2] = 240;
+                pixels[k + 3] = alpha;
+            }
+        }
+        ctx.putImageData(image, 0, 0);
+        return canvas;
+    }
+
+    /* 复用地球网格、材质与纹理的 Three.js 构造器，避免额外加载第二份 Three.js */
+    function attachCloudLayer(globe, earthMaterial) {
+        if (state.cloudMesh || !earthMaterial || !earthMaterial.map) return;
+        try {
+            var scene = globe.scene();
+            var earthMesh = null;
+            scene.traverse(function (obj) {
+                if (obj && obj.isMesh && obj.material === earthMaterial) earthMesh = obj;
+            });
+            if (!earthMesh || !earthMesh.geometry || !earthMesh.parent) return;
+
+            var canvas = createCloudCanvas();
+            var texture = new earthMaterial.map.constructor(canvas);
+            texture.needsUpdate = true;
+            texture.wrapS = earthMaterial.map.wrapS;
+            texture.wrapT = earthMaterial.map.wrapT;
+            if ('colorSpace' in texture) texture.colorSpace = earthMaterial.map.colorSpace;
+
+            var material = new earthMaterial.constructor({
+                map: texture,
+                color: '#91aebe',
+                transparent: true,
+                opacity: 0.22,
+                depthWrite: false,
+                shininess: 5
+            });
+            if (material.specular && material.specular.set) material.specular.set('#243d50');
+
+            var geometry = earthMesh.geometry.clone();
+            geometry.scale(1.005, 1.005, 1.005);
+            var clouds = new earthMesh.constructor(geometry, material);
+            clouds.position.copy(earthMesh.position);
+            clouds.quaternion.copy(earthMesh.quaternion);
+            clouds.scale.copy(earthMesh.scale);
+            clouds.renderOrder = (earthMesh.renderOrder || 0) + 1;
+            clouds.frustumCulled = false;
+            clouds.userData.globeCloudLayer = true;
+            earthMesh.parent.add(clouds);
+
+            state.cloudMesh = clouds;
+            state.cloudMaterial = material;
+            state.cloudTexture = texture;
+        } catch (e) {
+            /* 云层是增强层：创建失败不影响地球、点位和业务交互 */
+        }
     }
 
     function init(opts) {
@@ -148,6 +252,7 @@
             mat.emissiveMap = mat.map;
             mat.emissiveIntensity = 0.2;
             mat.needsUpdate = true;
+            attachCloudLayer(globe, mat);
             return true;
         }
         applyGlobeMaterial();
@@ -182,13 +287,14 @@
             .pointLng('lng')
             .pointColor(function (p) {
                 if (!state.selectedRegion) return riskColor(p.risk);
-                return p.regionId === state.selectedRegion ? riskColor(p.risk) : 'rgba(110,140,180,.20)';
+                return p.regionId === state.selectedRegion ? riskColor(p.risk) : '#344c60';
             })
             .pointRadius(function (p) {
                 var r = pointRadius(p);
-                return (state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.4 : r;
+                return (state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
             })
-            .pointAltitude(0.016)
+            .pointAltitude(0.004)
+            .pointResolution(6)
             .pointsMerge(false)
             .onPointClick(function (p) {
                 if (p && p.regionId && state.handlers.onSelectRegion) state.handlers.onSelectRegion(p.regionId, 'globe');
@@ -402,6 +508,15 @@
     function dispose() {
         if (!state.ready) return;
         try { state.ro && state.ro.disconnect(); } catch (e) {}
+        try {
+            if (state.cloudMesh && state.cloudMesh.parent) state.cloudMesh.parent.remove(state.cloudMesh);
+            if (state.cloudMesh && state.cloudMesh.geometry) state.cloudMesh.geometry.dispose();
+            if (state.cloudMaterial) state.cloudMaterial.dispose();
+            if (state.cloudTexture) state.cloudTexture.dispose();
+        } catch (e) {}
+        state.cloudMesh = null;
+        state.cloudMaterial = null;
+        state.cloudTexture = null;
         try { state.globe._destructor && state.globe._destructor(); } catch (e) {}
         try { state.globe.pauseAnimation(); } catch (e) {}
         state.globe = null;
