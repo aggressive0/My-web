@@ -220,6 +220,7 @@ def main():
         "skipped": dict(skipped),
         "model": {
             "embedding_model": metrics.get("embedding_model"),
+            "embedding_source": metrics.get("embedding_source"),
             "head_version": metrics.get("model_version"),
             "head_trained_at": metrics.get("trained_at"),
             "head_samples": metrics.get("n_samples"),

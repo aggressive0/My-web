@@ -137,7 +137,11 @@ def main():
     print("向量：%s" % (X.shape,))
 
     model, metrics = H.train(X, y, C=args.C)
-    metrics["embedding_model"] = getattr(encoder, "model_name", args.embedder)
+    metrics["embedding_model"] = getattr(encoder, "model_name", E.MODEL_NAME)
+    # 不把本机绝对路径写进指标：它会随 metrics.json 一起发布到 data 分支
+    src = str(getattr(encoder, "source", args.embedder))
+    is_path = (":" in src) or ("\\" in src) or src.startswith("/")
+    metrics["embedding_source"] = "local-cache" if is_path else src
     metrics["sources"] = {
         "games": sorted({r["appid"] for r in rows}),
         "languages": sorted({r["language"] for r in rows if r["language"]}),
