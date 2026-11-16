@@ -1,6 +1,6 @@
 {
   "model_version": "v1",
-  "trained_at": "2026-11-16T13:54:12Z",
+  "trained_at": "2026-11-16T14:11:59Z",
   "n_samples": 1232,
   "n_positive": 739,
   "n_negative": 493,
@@ -49,7 +49,8 @@
       }
     }
   },
-  "embedding_model": "C:/Users/Lin/.cache/huggingface/hub/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2/snapshots/e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "embedding_source": "local-cache",
   "sources": {
     "games": [
       230410,

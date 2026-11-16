@@ -40,7 +40,10 @@ class SentenceTransformerEmbedder:
                 "（原始错误：%s）" % e
             )
         # 国内网络建议设 HF_ENDPOINT=https://hf-mirror.com 再运行
-        self.model_name = model_name
+        # source 记录「实际用的是哪来的」（hub 名或本地目录），
+        # 而 model_name 永远给规范名 —— 否则发布出去会变成一串缓存哈希。
+        self.source = model_name
+        self.model_name = MODEL_NAME
         self.model = SentenceTransformer(model_name, device=device)
 
     def encode(self, texts, batch_size=32):
