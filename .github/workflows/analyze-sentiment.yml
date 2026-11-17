@@ -67,6 +67,13 @@ jobs:
           ST_EMBEDDER: ${{ inputs.embedder || 'st' }}
         run: python3 backend/collectors/sentiment_publish.py
 
+      # 风险指数消费情感与主题的产物，必须排在两者之后；
+      # 纯 JSON 计算，无新依赖
+      - name: Compute risk index
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 backend/collectors/risk_publish.py
+
       - name: Upload metrics on failure
         if: failure()
         uses: actions/upload-artifact@v7.0.2
