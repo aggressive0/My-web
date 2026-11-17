@@ -95,7 +95,7 @@ const PAGES = [
             ['#chain .chain-step, #chain > *', 1],
         ],
         // 文本非空的容器
-        nonEmpty: ['#kpiActive', '#kpiSent', '#warnList', '#regionList'],
+        nonEmpty: ['#kpiActive', '#kpiSent', '#warnList', '#regionList', '#kpiSrc'],
     },
     {
         file: 'analysis.html',
@@ -105,7 +105,7 @@ const PAGES = [
             ['#trendChart', 1], ['#funnelChart', 1], ['#rangeLabel', 1],
             ['#funnelList .reason-item', 1],
         ],
-        nonEmpty: ['#rangeLabel', '#funnelList'],
+        nonEmpty: ['#rangeLabel', '#funnelList', '#trendSrc', '#topicSrc'],
     },
     {
         file: 'solution.html',
@@ -239,6 +239,18 @@ async function checkPage(browser, cfg) {
             !pick ? '元素缺失'
                 : pick.hidden ? '无真实数据，切换器隐藏（预期之一）'
                     : `${pick.n} 项：${pick.names.slice(1, 4).join(' / ')}`);
+    }
+
+    /* L3 交互 —— 分析页：主题热度必须落到真实主题或显式空态（不能停在「加载中」） */
+    if (cfg.file === 'analysis.html') {
+        const topic = await page.evaluate(() => {
+            const rows = document.querySelectorAll('#topicRows .corr').length;
+            const st = document.querySelector('#topicRows .rd-state');
+            return { rows, state: st ? st.textContent.trim() : '' };
+        });
+        record(cfg.label, 'L3', '主题热度已落到真实数据或空态',
+            topic.rows > 0 || !!topic.state,
+            topic.rows > 0 ? topic.rows + ' 个主题' : ('空态：' + topic.state));
     }
 
     /* L3 交互 —— 策略页：缺密钥降级、方案联动、部署状态 */

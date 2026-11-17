@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="ops-nav.css">
     <link rel="stylesheet" href="live-ticker.css">
 <script src="libs/echarts.min.js"></script>
+    <link rel="stylesheet" href="css/realdata.css">
+    <script src="js/realdata.js"></script>
     <script src="js/dashboard-data.js"></script>
     <script src="js/live-ticker.js" defer></script>
     <script src="js/ops-nav.js" defer></script>
@@ -475,7 +477,7 @@ body::before{
     <!-- ================= 顶部：流失率 / 风险区域 / 热点强度 / 覆盖量 ================= -->
     <section class="kpi" aria-label="核心指标">
         <article class="kpi-card" style="--accent:#22D3EE">
-            <span class="kpi-label">整体流失率</span>
+            <span class="kpi-label">整体流失率<span class="mock-badge">演示</span></span>
             <div class="kpi-value">18.6<span class="unit">%</span></div>
             <div class="kpi-foot"><b>↓ 2.1%</b><span>较上周期</span><span class="chip chip--warn">高于阈值</span></div>
             <svg class="spark" viewBox="0 0 92 34" aria-hidden="true" focusable="false">
@@ -487,7 +489,7 @@ body::before{
         </article>
 
         <article class="kpi-card" style="--accent:#F5A524">
-            <span class="kpi-label">高风险区域</span>
+            <span class="kpi-label">高风险区域<span class="mock-badge">演示</span></span>
             <div class="kpi-value"><span class="cn">华东 / 华南</span></div>
             <div class="kpi-foot"><span class="chip">热点集中区域</span></div>
             <svg class="spark" viewBox="0 0 92 34" aria-hidden="true" focusable="false">
@@ -499,7 +501,7 @@ body::before{
         </article>
 
         <article class="kpi-card" style="--accent:#F0536B">
-            <span class="kpi-label">热点影响强度</span>
+            <span class="kpi-label">热点影响强度<span class="mock-badge">演示</span></span>
             <div class="kpi-value">0.87</div>
             <div class="kpi-foot"><span class="chip">高相关性</span><span>与流失强耦合</span></div>
             <svg class="spark" viewBox="0 0 92 34" aria-hidden="true" focusable="false">
@@ -511,7 +513,7 @@ body::before{
         </article>
 
         <article class="kpi-card" style="--accent:#A78BFA">
-            <span class="kpi-label">分析覆盖玩家</span>
+            <span class="kpi-label">分析覆盖玩家<span class="mock-badge">演示</span></span>
             <div class="kpi-value">1.26<span class="unit">M</span></div>
             <div class="kpi-foot"><span>样本持续更新</span></div>
             <svg class="spark" viewBox="0 0 92 34" aria-hidden="true" focusable="false">
@@ -527,11 +529,12 @@ body::before{
     <section class="mid" aria-label="流失趋势与原因结构">
         <article class="panel layer">
             <div class="panel-head">
-                <h2 class="panel-title">流失率变化趋势</h2>
-                <span class="panel-tag">Churn Trend · 30D</span>
+                <h2 class="panel-title">评论情感趋势（每日）</h2>
+                <span class="panel-tag">Sentiment · Daily</span>
             </div>
+            <div class="rd-bar" id="trendSrc"></div>
             <div id="trendChart" class="chart" role="img"
-                 aria-label="近 30 天流失率趋势：本期由 21.4% 波动下行至 18.6%，上期基线同期为 20.7%，15% 为风险阈值，末段 5 天为预测区间。"></div>
+                 aria-label="每日评论情感占比：正面/中性/负面，按评论数加权聚合"></div>
         </article>
 
         <article class="panel layer">
@@ -551,7 +554,7 @@ body::before{
     <section class="bottom" aria-label="玩家分群与热点关联">
         <article class="panel">
             <div class="panel-head">
-                <h2 class="panel-title">玩家分群画像</h2>
+                <h2 class="panel-title">玩家分群画像<span class="mock-badge">演示</span></h2>
                 <span class="panel-tag">Player Segments</span>
             </div>
             <div class="rows">
@@ -585,34 +588,12 @@ body::before{
 
         <article class="panel">
             <div class="panel-head">
-                <h2 class="panel-title">热点与流失关联</h2>
-                <span class="panel-tag">Hot Topic Correlation</span>
+                <h2 class="panel-title">主题热度（候选信号）</h2>
+                <span class="panel-tag">Topic Share</span>
             </div>
-            <div class="rows">
-                <div class="corr">
-                    <span class="row-name">版本平衡争议</span>
-                    <span class="row-track"><span class="row-fill" style="--c:#F0536B;width:91%"></span></span>
-                    <span class="row-num">0.91</span>
-                    <span class="level" style="--lv:#F0536B">高</span>
-                </div>
-                <div class="corr">
-                    <span class="row-name">活动奖励调整</span>
-                    <span class="row-track"><span class="row-fill" style="--c:#F5A524;width:78%"></span></span>
-                    <span class="row-num">0.78</span>
-                    <span class="level" style="--lv:#F5A524">中</span>
-                </div>
-                <div class="corr">
-                    <span class="row-name">匹配机制体验</span>
-                    <span class="row-track"><span class="row-fill" style="--c:#F5A524;width:72%"></span></span>
-                    <span class="row-num">0.72</span>
-                    <span class="level" style="--lv:#F5A524">中</span>
-                </div>
-                <div class="corr">
-                    <span class="row-name">社交关系链流失</span>
-                    <span class="row-track"><span class="row-fill" style="--c:#22D3EE;width:58%"></span></span>
-                    <span class="row-num">0.58</span>
-                    <span class="level" style="--lv:#22D3EE">低</span>
-                </div>
+            <div class="rd-bar" id="topicSrc"></div>
+            <div class="rows" id="topicRows">
+                <div class="rd-state">加载中…</div>
             </div>
             <div class="legend-risk">
                 <span><i style="--c:#F0536B"></i>高关联 ≥ 0.85</span>
@@ -661,85 +642,105 @@ body::before{
         extraCssText: 'border-radius:8px;box-shadow:0 18px 40px -20px rgba(0,0,0,.9);'
     };
 
-    /* ===== 流失率变化趋势 ===== */
+    /* ===== 评论情感趋势（真实数据）=====
+       数据来自 data 分支 sentiment-daily.json：MiniLM 句向量 + 逻辑回归。
+       口径：每日按评论数加权聚合；样本 <5 条的日期不画，避免单条评论撑起一个点；
+       模型输出是「推荐倾向」（弱标签），不是情绪极性。 */
     var trendEl = document.getElementById('trendChart');
     var trend = echarts.init(trendEl, null, { renderer: 'canvas' });
-    var days = [];
-    var endDate = new Date(2026, 10, 14);
-    for (var i = 29; i >= 0; i--) {
-        var d = new Date(endDate.getTime() - i * 86400000);
-        days.push((d.getMonth() + 1) + '-' + String(d.getDate()).padStart(2, '0'));
+    var trendSrc = document.getElementById('trendSrc');
+
+    function emptyOpt(title, sub) {
+        return {
+            title: { text: title, subtext: sub || '', left: 'center', top: 'middle',
+                     textStyle: { color: '#7B8AA0', fontSize: 12, fontWeight: 'normal' },
+                     subtextStyle: { color: '#5A6B80', fontSize: 10 } },
+            xAxis: { show: false }, yAxis: { show: false }, series: []
+        };
     }
 
-    var current = [21.4,21.8,21.1,20.6,21.0,20.4,20.9,20.2,19.8,20.3,19.6,19.9,19.2,19.5,18.9,19.3,18.6,19.0,18.4,18.8,18.1,18.5,17.9,18.3,17.8,18.1,17.6,18.0,17.4,17.8];
-    var previous = [19.9,20.2,20.5,20.1,20.4,20.8,20.3,20.6,20.9,20.5,20.8,21.1,20.7,21.0,21.3,20.9,21.2,21.4,21.0,21.3,20.8,21.1,20.6,20.9,20.4,20.7,20.2,20.5,20.0,20.3];
+    function dailyRows(doc) {
+        var byDate = {};
+        (doc.games || []).forEach(function (g) {
+            (g.days || []).forEach(function (d) {
+                var a = byDate[d.date] || (byDate[d.date] = { n: 0, pos: 0, neg: 0, neu: 0 });
+                a.n += d.n; a.pos += d.pos; a.neg += d.neg; a.neu += d.neu;
+            });
+        });
+        /* 只画最近 90 天：样本里混着 2017 年的老评论（filter=recent 的排序并不严格按时间），
+           全画出来会把九年的点压成一条毫无意义的横线 */
+        var cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+        return Object.keys(byDate).sort()
+            .filter(function (k) { return k >= cutoff && byDate[k].n >= 5; })
+            .map(function (k) {
+                var a = byDate[k];
+                return {
+                    date: k.slice(5),
+                    positive: +(a.pos / a.n * 100).toFixed(1),
+                    neutral: +(a.neu / a.n * 100).toFixed(1),
+                    negative: +(a.neg / a.n * 100).toFixed(1),
+                    n: a.n
+                };
+            });
+    }
 
-    trend.setOption({
-        grid: { left: 46, right: 22, top: 26, bottom: 32 },
-        tooltip: Object.assign({
-            trigger: 'axis',
-            axisPointer: { type: 'line', lineStyle: { color: 'rgba(34,211,238,.45)' } },
-            formatter: function (ps) {
-                var head = '<div style="font-family:' + MONO + ';font-size:10px;letter-spacing:.1em;color:#7B8AA0;margin-bottom:6px">' + ps[0].axisValue + '</div>';
-                return head + ps.map(function (p) {
-                    return '<div style="display:flex;gap:16px;justify-content:space-between"><span>' + p.marker + p.seriesName +
-                        '</span><b style="font-family:' + MONO + '">' + p.value + '%</b></div>';
-                }).join('');
-            }
-        }, tipBase),
-        xAxis: {
-            type: 'category',
-            boundaryGap: false,
-            data: days,
-            axisLine: { lineStyle: { color: 'rgba(122,166,255,.18)' } },
-            axisTick: { show: false },
-            axisLabel: { color: AXIS, fontSize: 10, fontFamily: MONO, interval: 4 }
-        },
-        yAxis: {
-            type: 'value',
-            min: 12,
-            max: 24,
-            splitNumber: 4,
-            axisLabel: { color: AXIS, fontSize: 10, fontFamily: MONO, formatter: '{value}%' },
-            splitLine: { lineStyle: { color: GRID_LINE, type: 'dashed' } }
-        },
-        series: [
-            {
-                name: '本期',
-                type: 'line',
-                smooth: 0.35,
-                symbol: 'none',
-                data: current,
-                lineStyle: { width: 2, color: '#22D3EE', shadowColor: 'rgba(34,211,238,.55)', shadowBlur: 14 },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(34,211,238,.30)' },
-                        { offset: 1, color: 'rgba(34,211,238,0)' }
-                    ])
-                },
-                markLine: {
-                    silent: true,
-                    symbol: 'none',
-                    label: { formatter: '风险阈值 15%', color: '#F5A524', fontSize: 10, fontFamily: MONO, position: 'insideEndTop' },
-                    lineStyle: { color: 'rgba(245,165,36,.55)', type: 'dashed', width: 1 },
-                    data: [{ yAxis: 15 }]
-                },
-                markArea: {
-                    silent: true,
-                    label: { show: true, position: 'insideTop', color: 'rgba(167,139,250,.9)', fontSize: 10, fontFamily: MONO, formatter: '预测区间' },
-                    itemStyle: { color: 'rgba(167,139,250,.07)' },
-                    data: [[{ xAxis: days[days.length - 5] }, { xAxis: days[days.length - 1] }]]
+    function trendOption(rows) {
+        return {
+            grid: { left: 46, right: 22, top: 26, bottom: 32 },
+            tooltip: Object.assign({
+                trigger: 'axis',
+                axisPointer: { type: 'line', lineStyle: { color: 'rgba(34,211,238,.45)' } },
+                formatter: function (ps) {
+                    var head = '<div style="font-family:' + MONO + ';font-size:10px;letter-spacing:.1em;color:#7B8AA0;margin-bottom:6px">' +
+                        ps[0].axisValue + '</div>';
+                    return head + ps.map(function (p) {
+                        return '<div style="display:flex;gap:16px;justify-content:space-between"><span>' + p.marker + p.seriesName +
+                            '</span><b style="font-family:' + MONO + '">' + p.value + '%</b></div>';
+                    }).join('') +
+                        '<div style="margin-top:4px;font-family:' + MONO + ';font-size:9px;color:#5A6B80">当日样本 n=' +
+                        (rows[ps[0].dataIndex] ? rows[ps[0].dataIndex].n : '—') + '</div>';
                 }
+            }, tipBase),
+            legend: {
+                right: 0, top: 0, itemWidth: 7, itemHeight: 7, itemGap: 10, icon: 'circle',
+                textStyle: { color: '#9EB1CA', fontSize: 9, fontFamily: MONO },
+                data: ['正面', '中性', '负面']
             },
-            {
-                name: '上期基线',
-                type: 'line',
-                smooth: 0.35,
-                symbol: 'none',
-                data: previous,
-                lineStyle: { width: 1.6, color: '#A78BFA', type: 'dashed', opacity: 0.85 }
-            }
-        ]
+            xAxis: {
+                type: 'category', boundaryGap: false, data: rows.map(function (r) { return r.date; }),
+                axisLine: { lineStyle: { color: 'rgba(122,166,255,.18)' } },
+                axisTick: { show: false },
+                axisLabel: { color: AXIS, fontSize: 10, fontFamily: MONO, hideOverlap: true }
+            },
+            yAxis: {
+                type: 'value', min: 0, max: 100, splitNumber: 4,
+                axisLabel: { color: AXIS, fontSize: 10, fontFamily: MONO, formatter: '{value}%' },
+                splitLine: { lineStyle: { color: GRID_LINE, type: 'dashed' } }
+            },
+            series: [
+                { name: '正面', type: 'line', symbol: 'none', data: rows.map(function (r) { return r.positive; }),
+                  lineStyle: { width: 2, color: '#34D399', shadowColor: 'rgba(52,211,153,.5)', shadowBlur: 10 },
+                  areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: 'rgba(52,211,153,.24)' }, { offset: 1, color: 'rgba(52,211,153,0)' }]) } },
+                { name: '中性', type: 'line', symbol: 'none', data: rows.map(function (r) { return r.neutral; }),
+                  lineStyle: { width: 1.4, color: '#8FA3BF', type: 'dashed' } },
+                { name: '负面', type: 'line', symbol: 'none', data: rows.map(function (r) { return r.negative; }),
+                  lineStyle: { width: 2, color: '#F0536B', shadowColor: 'rgba(240,83,107,.45)', shadowBlur: 8 } }
+            ]
+        };
+    }
+
+    RealData.load('sentiment-daily.json').then(function (r) {
+        if (r.state !== 'ready') {
+            trend.setOption(emptyOpt('暂无情感数据', '上游与本地快照均不可用'), true);
+            RealData.stamp(trendSrc, r);
+            return;
+        }
+        var rows = dailyRows(r.doc);
+        var totalN = (r.doc.games || []).reduce(function (s2, g) { return s2 + ((g.totals || {}).n || 0); }, 0);
+        RealData.stamp(trendSrc, r, { note: 'n=' + totalN + ' · 推荐倾向（弱标签）' });
+        trend.setOption(rows.length >= 2 ? trendOption(rows)
+            : emptyOpt('样本不足', '至少需要 2 天、每天 ≥5 条评论'), true);
     });
 
     /* ===== 成就完成漏斗（真实数据）=====
@@ -827,6 +828,57 @@ body::before{
     function resize() { trend.resize(); funnel.resize(); }
     window.addEventListener('resize', resize);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+})();
+</script>
+<!-- ==================== 主题热度（真实数据） ==================== -->
+<script>
+(function () {
+    var rowsEl = document.getElementById('topicRows');
+    var srcEl = document.getElementById('topicSrc');
+    if (!rowsEl || !window.RealData) return;
+
+    function levelOf(share) {
+        if (share >= 20) return { cls: '高', color: '#F0536B' };
+        if (share >= 10) return { cls: '中', color: '#F5A524' };
+        return { cls: '低', color: '#22D3EE' };
+    }
+
+    function row(t) {
+        var lv = levelOf(t.share);
+        var note = t.low_sample ? ' · 样本不足' : '';
+        return '<div class="corr">' +
+            '<span class="row-name">' + t.label + note + '</span>' +
+            '<span class="row-track"><span class="row-fill" style="--c:' + lv.color +
+            ';width:' + Math.min(100, t.share) + '%"></span></span>' +
+            '<span class="row-num">' + t.share + '%</span>' +
+            '<span class="level" style="--lv:' + lv.color + '">' + lv.cls + '</span>' +
+            '</div>';
+    }
+
+    RealData.load('topics-daily.json').then(function (r) {
+        if (r.state !== 'ready') {
+            rowsEl.innerHTML = '<div class="rd-state">暂无主题数据</div>';
+            RealData.stamp(srcEl, r);
+            return;
+        }
+        /* 选评论量最大的游戏做代表：样本量最大的那个，主题占比才最有意义 */
+        var games = (r.doc.games || []).filter(function (g) {
+            return g.topics && g.topics.length;
+        }).sort(function (a, b) { return (b.n_reviews || 0) - (a.n_reviews || 0); });
+
+        if (!games.length) {
+            rowsEl.innerHTML = '<div class="rd-state">样本中未命中任何主题</div>';
+            RealData.stamp(srcEl, r);
+            return;
+        }
+
+        var g = games[0];
+        RealData.stamp(srcEl, r, {
+            note: g.name + ' · n=' + g.n_reviews + ' · 覆盖率 ' + Math.round((g.coverage || 0) * 100) + '% · 关键词候选'
+        });
+        rowsEl.innerHTML = g.topics.slice(0, 4).map(row).join('') ||
+            '<div class="rd-state">该游戏未命中主题</div>';
+    });
 })();
 </script>
 </body>
