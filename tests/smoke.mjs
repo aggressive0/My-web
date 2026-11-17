@@ -241,6 +241,18 @@ async function checkPage(browser, cfg) {
                     : `${pick.n} 项：${pick.names.slice(1, 4).join(' / ')}`);
     }
 
+    /* L3 交互 —— 留存页：KPI 与时长分布必须来自真实评论聚合 */
+    if (cfg.file === 'validation.html') {
+        const v = await page.evaluate(() => ({
+            cards: document.querySelectorAll('#retKpi .kpi').length,
+            rows: document.querySelectorAll('#cohortBody .cohort-row').length,
+            first: ((document.querySelector('#cohortBody .cohort-row') || {}).innerText || '').replace(/\s+/g, ' ')
+        }));
+        record(cfg.label, 'L3', '留存页 KPI 为真实四卡', v.cards === 4, `${v.cards} 张`);
+        record(cfg.label, 'L3', '时长分布表已渲染且首行为游戏名',
+            v.rows >= 6 && /[A-Za-z\u4e00-\u9fa5]/.test(v.first), `${v.rows} 行：${v.first.slice(0, 30)}`);
+    }
+
     /* L3 交互 —— 分析页：主题热度必须落到真实主题或显式空态（不能停在「加载中」） */
     if (cfg.file === 'analysis.html') {
         const topic = await page.evaluate(() => {

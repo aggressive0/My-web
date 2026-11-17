@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="ops-nav.css">
 <link rel="stylesheet" href="live-ticker.css">
 <script src="libs/echarts.min.js"></script>
-<script src="js/dashboard-data.js"></script>
+<script src="js/realdata.js"></script>
+    <script src="js/dashboard-data.js"></script>
 <script src="js/live-ticker.js" defer></script>
 <script src="js/ops-nav.js" defer></script>
 <style>
@@ -356,14 +357,14 @@ body{
 <main class="page">
 
     <!-- 顶部：四个留存指标 -->
-    <div class="rd-bar" role="note" style="margin:10px 0 0"><span class="rd-chip is-warn">数据边界</span><span class="rd-note">留存指标（D1/D7/D30）需要登录与会话日志，本项目无此数据权限；本页 KPI 与曲线为演示值，公开可得的替代信号见「评论量 / 在线趋势 / 成就分布」。</span></div>
+    <div class="rd-bar" role="note" style="margin:10px 0 0"><span class="rd-chip is-warn">数据边界</span><span class="rd-note">D1/D7/D30 留存需要登录与会话日志，本项目无此权限。本页改用公开可得的三项替代信号：评论量、当日推荐率、评论者游戏时长分布（均来自 data 分支）；下方「分群留存 / 流失因素」仍为演示。</span></div>
     <section class="kpi-row" id="retKpi" aria-label="留存核心指标"></section>
 
     <!-- 中部：趋势 + cohort -->
     <section class="mid" aria-label="留存趋势与队列分析">
         <article class="panel">
             <div class="p-head">
-                <h2 class="p-title" style="--accent:#35D9F2">留存趋势分析</h2>
+                <h2 class="p-title" style="--accent:#35D9F2">评论量趋势（每日）</h2>
                 <div class="seg" id="trendSeg" role="group" aria-label="趋势时间范围">
                     <button type="button" data-range="7d" aria-pressed="false">7天</button>
                     <button type="button" data-range="30d" class="is-on" aria-pressed="true">30天</button>
@@ -378,13 +379,13 @@ body{
 
         <article class="panel">
             <div class="p-head">
-                <h2 class="p-title" style="--accent:#9275FF">用户留存 cohort 分析</h2>
-                <span class="p-tag">按注册周</span>
+                <h2 class="p-title" style="--accent:#9275FF">评论者游戏时长分布</h2>
+                <span class="p-tag">按游戏 · 公开字段</span>
             </div>
             <div class="p-body">
                 <div class="cohort">
                     <div class="cohort-head cohort-row">
-                        <span>注册时间</span><span>次日</span><span>3日</span><span>7日</span><span>14日</span><span>30日</span>
+                        <span>游戏 / 样本</span><span>&lt;1h</span><span>1–10h</span><span>10–50h</span><span>50h+</span>
                     </div>
                     <div class="cohort-body" id="cohortBody"></div>
                 </div>
@@ -396,7 +397,7 @@ body{
     <section class="bottom-row" style="display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.82fr) minmax(0,1fr);gap:12px;min-height:0">
         <article class="panel">
             <div class="p-head">
-                <h2 class="p-title" style="--accent:#35D399">分群留存表现</h2>
+                <h2 class="p-title" style="--accent:#35D399">分群留存表现<span class="mock-badge">演示</span></h2>
                 <div class="seg" id="segSeg" role="group" aria-label="留存口径">
                     <button type="button" data-seg="d1" class="is-on" aria-pressed="true">次日</button>
                     <button type="button" data-seg="d7" aria-pressed="false">7日</button>
@@ -716,6 +717,186 @@ body{
     renderTrend('30d');
     renderSegments('d1');
     window.addEventListener('resize', function () { trend.resize(); factor.resize(); });
+})();
+</script>
+<!-- ==================== 真实数据覆盖层（Phase 5 第二批）==================== -->
+<script>
+/* 这一层把「留存」三块（KPI / 趋势 / cohort）换成公开数据能支撑的指标：
+ *   KPI   → 评论总量、推荐率、覆盖天数、覆盖游戏
+ *   趋势  → 每日评论量 + 当日推荐率
+ *   cohort → 评论者游戏时长分布（playtime_at_review 分桶）
+ *
+ * 为什么不是「留存」：D1/D7/D30 需要登录与会话事件，本项目没有。
+ * 用评论者时长分布替代，是因为它能回答一个相近的问题——
+ * 「说话的人玩得久不久」——而且每个数字都能回到具体评论。
+ */
+(function () {
+    if (!window.RealData) return;
+
+    /* 原模块的分段控件对真实数据无意义（评论量有自己的时间窗），直接隐藏，
+       避免用户点一下就把真实内容换回演示值 */
+    ['trendSeg', 'segSeg'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    var C = [
+        { c: '#35D9F2', edge: 'rgba(53,217,242,.34)' },
+        { c: '#9275FF', edge: 'rgba(146,117,255,.34)' },
+        { c: '#FFB45F', edge: 'rgba(255,180,95,.34)' },
+        { c: '#35D399', edge: 'rgba(53,211,153,.32)' }
+    ];
+
+    function card(i, label, value, unit, note) {
+        var col = C[i % C.length];
+        return '<article class="kpi" style="--c:' + col.c + ';--edge:' + col.edge +
+            ';max-height:92px;align-self:start">' +
+            '<span class="kpi-ico" aria-hidden="true">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
+                '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3"/></svg>' +
+            '</span>' +
+            '<div class="kpi-main">' +
+              '<span class="kpi-label">' + label + '</span>' +
+              '<div class="kpi-num">' + value + '<span class="u">' + unit + '</span>' +
+                (note ? '<span class="kpi-delta" style="color:var(--ink-3)">' + note + '</span>' : '') +
+              '</div>' +
+            '</div></article>';
+    }
+
+    function bar(host, r, note) {
+        if (!host) return;
+        var d = document.createElement('div');
+        d.className = 'rd-bar';
+        host.parentNode.insertBefore(d, host);
+        RealData.stamp(d, r, { note: note });
+    }
+
+    RealData.load('reviews-daily.json').then(function (r) {
+        if (r.state !== 'ready') {
+            document.getElementById('retKpi').innerHTML =
+                '<div class="rd-state">评论数据不可用</div>';
+            document.getElementById('cohortBody').innerHTML =
+                '<div class="rd-state">评论数据不可用</div>';
+            return;
+        }
+
+        var games = (r.doc.games || []).filter(function (g) { return g.totals && g.totals.total; });
+        var totalN = games.reduce(function (a, g) { return a + g.totals.total; }, 0);
+        var posN = games.reduce(function (a, g) { return a + g.totals.positive; }, 0);
+        var dates = {};
+        games.forEach(function (g) {
+            (g.days || []).forEach(function (d) { if (d.total) dates[d.date] = 1; });
+        });
+
+        document.getElementById('retKpi').innerHTML = [
+            card(0, '评论总量', totalN.toLocaleString('en-US'), ' 条', ''),
+            card(1, '推荐率', (totalN ? (posN / totalN * 100).toFixed(1) : '—'), '%', 'voted_up'),
+            card(2, '覆盖天数', Object.keys(dates).length, ' 天', ''),
+            card(3, '覆盖游戏', games.length, ' 款', '')
+        ].join('');
+
+        /* ---------- 每日评论量 + 推荐率 ---------- */
+        var old = echarts.getInstanceByDom(document.getElementById('retTrendChart'));
+        if (old) old.dispose();
+
+        var byDate = {};
+        games.forEach(function (g) {
+            (g.days || []).forEach(function (d) {
+                var a = byDate[d.date] || (byDate[d.date] = { n: 0, pos: 0 });
+                a.n += d.total; a.pos += d.positive;
+            });
+        });
+        var cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+        var keys = Object.keys(byDate).filter(function (k) { return k >= cutoff; }).sort();
+
+        bar(document.getElementById('retTrendChart'), r,
+            '每日评论量 · n=' + totalN + ' · 近 90 天');
+
+        var chart = echarts.init(document.getElementById('retTrendChart'), null, { renderer: 'canvas' });
+        chart.setOption({
+            grid: { left: 44, right: 42, top: 30, bottom: 30 },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(9,14,24,.96)',
+                borderColor: 'rgba(122,166,255,.24)',
+                padding: [8, 11],
+                textStyle: { color: '#E9EFFA', fontSize: 11 }
+            },
+            legend: { right: 0, top: 0, itemWidth: 8, itemHeight: 8, icon: 'circle',
+                      textStyle: { color: '#9EB1CA', fontSize: 9 } },
+            xAxis: {
+                type: 'category', data: keys.map(function (k) { return k.slice(5); }),
+                axisLine: { lineStyle: { color: 'rgba(122,166,255,.18)' } },
+                axisTick: { show: false },
+                axisLabel: { color: '#7B8AA0', fontSize: 9, hideOverlap: true }
+            },
+            yAxis: [
+                { type: 'value', name: '条', nameTextStyle: { color: '#7B8AA0', fontSize: 9 },
+                  axisLabel: { color: '#7B8AA0', fontSize: 9 },
+                  splitLine: { lineStyle: { color: 'rgba(122,166,255,.10)', type: 'dashed' } } },
+                { type: 'value', name: '%', min: 0, max: 100,
+                  nameTextStyle: { color: '#7B8AA0', fontSize: 9 },
+                  axisLabel: { color: '#7B8AA0', fontSize: 9 },
+                  splitLine: { show: false } }
+            ],
+            series: [
+                { name: '评论量', type: 'bar', data: keys.map(function (k) { return byDate[k].n; }),
+                  itemStyle: { color: 'rgba(53,217,242,.55)', borderRadius: [2, 2, 0, 0] } },
+                { name: '推荐率', type: 'line', yAxisIndex: 1, symbol: 'none',
+                  data: keys.map(function (k) {
+                      var a = byDate[k];
+                      /* 当天样本 <5 条时推荐率没有意义（1 条好评 = 100%），留空断开 */
+                      return a.n >= 5 ? +(a.pos / a.n * 100).toFixed(1) : null;
+                  }),
+                  lineStyle: { width: 1.8, color: '#35D399' } }
+            ]
+        });
+
+        /* ---------- 时长分布 ---------- */
+        var BUCKETS = ['<1h', '1-10h', '10-50h', '50h+'];
+        var rows = games.slice().sort(function (a, b) { return b.totals.total - a.totals.total; });
+        var all = { n: 0, b: {} };
+        rows.forEach(function (g) {
+            (g.days || []).forEach(function (d) {
+                Object.keys(d.playtime || {}).forEach(function (k) {
+                    all.b[k] = (all.b[k] || 0) + d.playtime[k];
+                    all.n += d.playtime[k];
+                });
+            });
+        });
+
+        function pct(count, n) { return n ? (count / n * 100) : 0; }
+
+        document.getElementById('cohortBody').innerHTML = rows.map(function (g) {
+            var agg = { n: 0, b: {} };
+            (g.days || []).forEach(function (d) {
+                Object.keys(d.playtime || {}).forEach(function (k) {
+                    agg.b[k] = (agg.b[k] || 0) + d.playtime[k];
+                    agg.n += d.playtime[k];
+                });
+            });
+            var cells = BUCKETS.map(function (b) {
+                var v = pct(agg.b[b] || 0, agg.n);
+                var a = 0.08 + v / 100 * 0.62;
+                return '<span class="cohort-cell" style="background:rgba(146,117,255,' + a.toFixed(3) +
+                    ')" title="' + (agg.b[b] || 0) + ' 条">' + v.toFixed(0) + '%</span>';
+            }).join('');
+            return '<div class="cohort-row">' +
+                '<span class="cohort-period">' + g.name + '<em style="opacity:.55;font-style:normal"> n=' +
+                agg.n + '</em></span>' + cells + '</div>';
+        }).join('') +
+        '<div class="cohort-row" style="border-top:1px solid rgba(90,140,200,.16);margin-top:4px;padding-top:4px">' +
+            '<span class="cohort-period">全部</span>' +
+            BUCKETS.map(function (b) {
+                return '<span class="cohort-cell" style="background:rgba(53,217,242,.16)">' +
+                    pct(all.b[b] || 0, all.n).toFixed(0) + '%</span>';
+            }).join('') +
+        '</div>';
+
+        bar(document.getElementById('cohortBody'), r, '按 playtime_at_review 分桶 · 全部评论 n=' + all.n);
+
+        window.addEventListener('resize', function () { chart.resize(); });
+    });
 })();
 </script>
 </body>
