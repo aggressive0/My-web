@@ -249,6 +249,13 @@ async function checkPage(browser, cfg) {
             first: ((document.querySelector('#cohortBody .cohort-row') || {}).innerText || '').replace(/\s+/g, ' ')
         }));
         record(cfg.label, 'L3', '留存页 KPI 为真实四卡', v.cards === 4, `${v.cards} 张`);
+
+        /* 只数卡片不够：上一轮脚本语法错误时，页面回落成演示值，卡片照样是 4 张。
+           所以必须校验首卡文案来自真实聚合，或明确报不可用。 */
+        const firstLabel = await page.evaluate(() =>
+            ((document.querySelector('#retKpi .kpi-label') || {}).innerText || '').trim());
+        record(cfg.label, 'L3', '留存页首卡文案来自真实聚合',
+            /评论总量|评论数据不可用/.test(firstLabel), firstLabel || '(空)');
         record(cfg.label, 'L3', '时长分布表已渲染且首行为游戏名',
             v.rows >= 6 && /[A-Za-z\u4e00-\u9fa5]/.test(v.first), `${v.rows} 行：${v.first.slice(0, 30)}`);
     }

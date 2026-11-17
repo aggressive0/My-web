@@ -56,8 +56,14 @@ body{
     margin:0 auto;
     padding:14px clamp(12px,1.8vw,24px) 10px;
     display:grid;
-    grid-template-rows:auto minmax(0,1fr) minmax(0,.86fr) auto;
+    /* 5 行对应 5 个子元素：边界提示 / KPI / 中区 / 底部三栏 / 状态条。
+       早先只有 4 行定义，插入提示条后 KPI 行被挤进 1fr 行并拉伸到 380px，
+       卡片下方于是空出一大片——行数与子元素数必须一一对应。 */
+    grid-template-rows:auto max-content minmax(0,1fr) minmax(0,.86fr) auto;
     gap:12px;
+    /* auto 行默认会被 align-content:stretch 拉高，KPI 卡因此被撑到数百像素。
+       固定为 start 后，auto 行严格按内容高度，剩余空间全归 1fr 行。 */
+    align-content:start;
 }
 
 /* ---------- 通用面板 ---------- */
@@ -119,6 +125,9 @@ body{
 .kpi-row{
     display:grid;
     grid-template-columns:repeat(4,minmax(0,1fr));
+    /* 行高按内容，不被父级剩余空间拉伸；否则卡片会被撑成数百像素高 */
+    grid-auto-rows:max-content;
+    align-content:start;
     gap:12px;
 }
 .kpi{
@@ -281,7 +290,7 @@ body{
 
 /* ---------- 响应式 ---------- */
 @media (max-width:1180px){
-    .page{grid-template-rows:auto auto auto auto}
+    .page{grid-template-rows:auto auto auto auto auto}
     .mid{grid-template-columns:minmax(0,1fr)}
     .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}
     .bottom-row{grid-template-columns:minmax(0,1fr) !important}
@@ -749,8 +758,7 @@ body{
 
     function card(i, label, value, unit, note) {
         var col = C[i % C.length];
-        return '<article class="kpi" style="--c:' + col.c + ';--edge:' + col.edge +
-            ';max-height:92px;align-self:start">' +
+        return '<article class="kpi" style="--c:' + col.c + ';--edge:' + col.edge + '">' +
             '<span class="kpi-ico" aria-hidden="true">' +
               '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
                 '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3"/></svg>' +

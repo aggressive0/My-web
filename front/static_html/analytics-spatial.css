@@ -168,7 +168,10 @@ body:has(#retTrendChart) .page{
   padding-top:18px;
   padding-bottom:22px;
   gap:15px;
-  grid-template-rows:auto minmax(330px,1fr) minmax(270px,.82fr) auto;
+  /* 5 行对应 5 个子元素：边界提示 / KPI / 中区 / 底部三栏 / 状态条。
+     原先只有 4 行，Phase 5 插入提示条后 KPI 落进 minmax(330px,1fr) 那一行，
+     被强制拉到 330px 以上，卡片下方空出一大片。 */
+  grid-template-rows:auto auto minmax(330px,1fr) minmax(270px,.82fr) auto;
 }
 body:has(#retTrendChart) .kpi-row{gap:14px}
 body:has(#retTrendChart) .kpi{
@@ -273,7 +276,7 @@ body:has(#retTrendChart) .insight-cta:hover{box-shadow:0 0 24px -8px rgba(67,228
 @media (max-width:1180px){
   body:has(#trendChart) .mid{grid-template-columns:minmax(0,1fr)}
   body:has(#trendChart) .chart{height:290px}
-  body:has(#retTrendChart) .page{grid-template-rows:auto auto auto auto}
+  body:has(#retTrendChart) .page{grid-template-rows:auto auto auto auto auto}
   body:has(#retTrendChart) .mid{grid-template-columns:minmax(0,1fr)}
   body:has(#retTrendChart) .bottom-row{grid-template-columns:minmax(0,1fr) !important}
   body:has(#retTrendChart) .cohort{min-height:260px}
