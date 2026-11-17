@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 
 BACKEND = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 sys.path.insert(0, BACKEND)
@@ -262,3 +263,116 @@ class WorkflowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ============================================================================
+# 主题与热点（Phase 3 剩余部分）
+# ============================================================================
+
+sys.path.insert(0, os.path.join(BACKEND, "analysis"))
+import topics as T  # noqa: E402
+
+
+class MatchTopicTest(unittest.TestCase):
+    def test_english_word_boundary(self):
+        # 'lag' 不应命中 'flag' / 'lagging' 之外的无词边界场景
+        self.assertEqual([s for s, _ in T.match_topics("this is laggy")], ["performance"])
+        self.assertEqual(T.match_topics("flag on the wall"), [])
+
+    def test_case_insensitive_and_plural(self):
+        self.assertIn("performance", [s for s, _ in T.match_topics("Many BUGS and crashes")])
+
+    def test_chinese_substring(self):
+        self.assertEqual([s for s, _ in T.match_topics("优化太差了")], ["performance"])
+        self.assertEqual([s for s, _ in T.match_topics("外挂太多了")], ["cheating"])
+
+    def test_multiple_topics_in_one_review(self):
+        slugs = [s for s, _ in T.match_topics("匹配很慢，而且外挂很多，服务器也卡")]
+        self.assertIn("server", slugs)
+        self.assertIn("cheating", slugs)
+
+    def test_empty_text(self):
+        self.assertEqual(T.match_topics(""), [])
+        self.assertEqual(T.match_topics(None), [])
+
+    def test_same_topic_counted_once(self):
+        hits = T.match_topics("bug bug crash glitch")
+        self.assertEqual(len([s for s, _ in hits if s == "performance"]), 1)
+
+
+class TopicAggregateTest(unittest.TestCase):
+    def _rows(self):
+        today = datetime.now(timezone.utc).date()
+        d = lambda n: (today - timedelta(days=n)).isoformat()
+        return [
+            {"appid": 1, "id": "a", "date": d(1), "text": "外挂太多了", "voted_up": False},
+            {"appid": 1, "id": "b", "date": d(1), "text": "服务器卡", "voted_up": False},
+            {"appid": 1, "id": "c", "date": d(10), "text": "剧情不错", "voted_up": True},
+            {"appid": 1, "id": "d", "date": d(2), "text": "nothing to report", "voted_up": True},
+        ]
+
+    def test_aggregate_requires_tagged_rows(self):
+        with self.assertRaises(ValueError):
+            T.aggregate(self._rows())
+
+    def test_coverage_and_share_use_text_reviews_as_denominator(self):
+        games = T.analyze(self._rows())
+        g = games[0]
+        self.assertEqual(g["n_reviews"], 4)
+        self.assertEqual(g["n_matched"], 3)
+        self.assertAlmostEqual(g["coverage"], 0.75)
+        cheating = [t for t in g["topics"] if t["slug"] == "cheating"][0]
+        self.assertEqual(cheating["count"], 1)
+        self.assertEqual(cheating["share"], 25.0)     # 1/4，不是 1/3
+
+    def test_sample_ids_are_traceable_and_capped(self):
+        rows = [{"appid": 1, "id": "x%d" % i, "date": datetime.now(timezone.utc).date().isoformat(),
+                 "text": "外挂", "voted_up": False} for i in range(6)]
+        g = T.analyze(rows, examples_per_topic=2)[0]
+        self.assertEqual(g["topics"][0]["sample_ids"], ["x0", "x1"])
+
+    def test_low_sample_flag(self):
+        games = T.analyze(self._rows(), min_sample=30)
+        self.assertTrue(all(t["low_sample"] for t in games[0]["topics"]))
+
+    def test_days_only_include_dates_with_data(self):
+        g = T.analyze(self._rows())[0]
+        self.assertEqual(len(g["days"]), 3)          # d(1), d(10), d(2)
+
+
+class TrendTest(unittest.TestCase):
+    def _days(self, counts_by_offset, window=7):
+        today = datetime.now(timezone.utc).date()
+        days = {}
+        for offset, (cnt, n) in counts_by_offset.items():
+            date = (today - timedelta(days=offset)).isoformat()
+            days[date] = {"n": n, "matched": cnt, "counts": {"performance": cnt}}
+        return days, today
+
+    def test_ok_growth_uses_fixed_denominator(self):
+        # 当前窗口 7 天共 14 次（日均 2），上一个窗口共 7 次（日均 1）→ +100%
+        days, today = self._days({1: (7, 10), 2: (7, 10), 9: (4, 10), 10: (3, 10)})
+        tr = T._trend(days, "performance", 7, today)
+        self.assertEqual(tr["status"], "ok")
+        self.assertAlmostEqual(tr["current_daily_avg"], 2.0)
+        self.assertAlmostEqual(tr["previous_daily_avg"], 1.0)
+        self.assertEqual(tr["growth_pct"], 100.0)
+
+    def test_base_zero_is_not_infinity(self):
+        days, today = self._days({1: (0, 5), 2: (0, 5)})
+        tr = T._trend(days, "performance", 7, today)
+        self.assertEqual(tr["status"], "base_zero")
+        self.assertIsNone(tr["growth_pct"])
+
+    def test_insufficient_when_no_reviews_in_either_window(self):
+        days, today = self._days({30: (5, 10)})
+        tr = T._trend(days, "performance", 7, today)
+        self.assertEqual(tr["status"], "insufficient")
+        self.assertIsNone(tr["growth_pct"])
+
+    def test_old_data_does_not_leak_into_recent_window(self):
+        # 只有两个月前的数据 → 两个窗口都是 0，不得因为「有数据」就算趋势
+        days, today = self._days({60: (100, 100)})
+        tr = T._trend(days, "performance", 7, today)
+        self.assertEqual(tr["status"], "insufficient")
+        self.assertEqual(tr["current_count"], 0)

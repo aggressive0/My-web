@@ -96,7 +96,7 @@ HTML —— 静态节点永远存在，断言它等于什么都没测。
 | `MergeTest` | 一款失败不影响其余；失败保留旧点；停用游戏保留历史且不再打接口；窗口裁剪；同分钟覆盖 |
 | `ApiTest` | `meta` 契约、单款查询、`GAME_NOT_FOUND` / `INVALID_APPID`、库缺失时标 `unavailable` 而非伪造 0 |
 | `test_phase2.py` | 评论解析容错（缺字段/超长文本/差评）、游标不前进即停、页内去重、旧接口降级、时长分档、按日聚合与窗口裁剪、去重集合 FIFO、发布链路四文件端到端 |
-| `test_phase3.py` | 中性带边界、置信度、样本解析跳过计数、聚合含 `n`/`voted_up_rate`/可追溯 id、HashEmbedder 归一化、分类头训练与单类拒绝（需 sklearn）、发布链路含模型元数据 |
+| `test_phase3.py` | 情感：中性带边界、置信度、聚合含 `n`/`voted_up_rate`/可追溯 id、HashEmbedder 归一化、训练与单类拒绝、发布链路；主题：英文词边界、中文子串、多主题命中、覆盖率与占比分母、`low_sample`、趋势三种状态（ok/base_zero/insufficient） |
 
 **为什么必须离线**：测试要验证的是「失败时系统怎么表现」，把网络拉进来只会让
 失败原因变成「Steam 今天不稳定」，而不是代码错在哪。采集函数在测试里被 monkeypatch 替换。
