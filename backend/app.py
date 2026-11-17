@@ -27,6 +27,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # 初始化数据库
 db = SQLAlchemy(app)
 
+# AI 路由（Phase 6.1）。用 try 包住：AI 模块坏掉不能拖垮整站，
+# 但也不能静默——注册失败会在启动日志里留下明确原因。
+try:
+    from routes.ai_routes import bp as ai_bp
+    app.register_blueprint(ai_bp)
+except Exception as _ai_err:                     # pragma: no cover
+    print("[ai] 路由注册失败：%s" % _ai_err)
+
 # 定义数据模型
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
