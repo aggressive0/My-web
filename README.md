@@ -306,6 +306,23 @@ risk = 0.35·N + 0.30·G + 0.20·C + 0.15·A   （缺失分量按剩余权重重
 
 ---
 
+### AI 模型接入（Phase 6.1）
+
+```bash
+curl -s http://127.0.0.1:5000/api/ai/health
+curl -s -X POST http://127.0.0.1:5000/api/ai/llm/ping -H 'Content-Type: application/json' -d '{}'
+```
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| 配置 | `backend/ai/config.py` | 环境变量 + 校验；密钥只在后端 |
+| Provider | `backend/ai/llm/` | `ollama` / `siliconflow` / `mock`，统一接口 |
+| 路由 | `backend/routes/ai_routes.py` | 健康检查（逐组件如实上报）+ 最小生成测试 |
+
+**当前状态**：本机未安装 Ollama，`/api/ai/health` 会返回 `llm.available=false` 与明确原因——
+这是设计意图，不是故障。装好 `qwen3:4b` 后设 `AI_ENABLED=true` 即可，无需改代码。
+`embedding` / `vector_db` 在 Phase 6.2 之前一律报 `available=false`，不写占位成功。
+
 ## 后端接口
 
 | 接口 | 方法 | 状态 |

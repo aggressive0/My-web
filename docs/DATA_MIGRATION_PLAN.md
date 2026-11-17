@@ -335,6 +335,44 @@ LLM 的输入将直接引用这些字段（结构化证据），而不是让它�
 
 ---
 
+### Phase 6.1：AI 模型接入 ◐ 代码完成（2026-11-17），真实模型待安装
+
+| 交付 | 文件 | 状态 |
+|---|---|---|
+| 配置 | `backend/ai/config.py` | ✅ 环境变量 + 校验，密钥零落库 |
+| Provider 抽象 | `backend/ai/llm/base.py` | ✅ 错误码与方案 §11.7 对齐 |
+| Ollama | `backend/ai/llm/ollama_provider.py` | ✅ `/api/chat`、`format=json`、超时/404/空文本分流 |
+| SiliconFlow | `backend/ai/llm/siliconflow_provider.py` | ✅ OpenAI 兼容，密钥仅环境变量 |
+| Mock | `backend/ai/llm/mock_provider.py` | ✅ 仅测试用，附完整策略 JSON |
+| 工厂 | `backend/ai/llm/provider_factory.py` | ✅ 未知 provider 直接报错 |
+| 路由 | `backend/routes/ai_routes.py` | ✅ `/api/ai/health`、`/api/ai/llm/ping` |
+| 测试 | `tests/test_phase6.py` | ✅ 21 项，**用本地桩 HTTP 服务**验证失败路径 |
+
+#### 一个刻意的设计：Provider 不校验 JSON
+
+`generate()` 只返回文本，剥掉 json 代码围栏就结束；schema 校验留给策略校验器。
+否则「模型返回了非 JSON」会被误报成「模型不可用」，两类错误混在一起就没法定位。
+`/api/ai/llm/ping` 会返回 `json_valid` 字段，把这件事显式暴露出来。
+
+#### 未完成的验收项（如实记录）
+
+方案 §17 的验收要求「能通过 Flask 调用本地 Qwen3」。当前机器**未安装 Ollama**，
+`127.0.0.1:11434` 不可达，因此这一条**未验证**。已完成的是：
+
+- Flask → Provider → HTTP 链路：用本地桩服务跑通（含正常、404、500、超时、空文本、围栏 JSON）
+- 健康检查在 `AI_ENABLED=false` 与「服务不可达」两种情况下都如实报告
+- 一旦 `ollama pull qwen3:4b` 完成，只需设 `AI_ENABLED=true`，无需改代码
+
+#### 安装步骤（待执行）
+
+```text
+winget install Ollama.Ollama      # 或官网安装包
+ollama pull qwen3:4b              # 约 2.5GB
+ollama pull bge-m3                # Phase 6.2 需要
+```
+
+装完后在 `.env` 设 `AI_ENABLED=true`，`POST /api/ai/llm/ping` 应返回 `json_valid: true`。
+
 ## 4. 风险与回滚
 
 | 风险 | 概率 | 影响 | 应对 |
