@@ -242,6 +242,27 @@ class PublishFlowTest(unittest.TestCase):
         self.assertIn("n", doc["games"][0]["totals"])
 
 
+class DependencyIsolationTest(unittest.TestCase):
+    def test_topics_publish_does_not_pull_numpy(self):
+        """主题步骤跑在装 ML 依赖之前 —— 它一旦间接 import numpy 就会在 CI 崩。
+
+        这条不是理论风险：首次上线时 topics_publish 复用了 sentiment_publish，
+        而后者顶部 import numpy，于是「纯规则的 20 行解析」被 2GB 依赖绑架。
+        """
+        import subprocess
+        code = (
+            "import sys;"
+            "sys.path[:0]=['backend/collectors','backend/analysis','backend/ml'];"
+            "import topics_publish;"
+            "print('numpy' in sys.modules)"
+        )
+        out = subprocess.run([sys.executable, "-c", code], cwd=os.path.dirname(BACKEND),
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr[-400:])
+        self.assertEqual(out.stdout.strip(), "False",
+                         "topics_publish 不应加载 numpy（它会跑在装依赖之前）")
+
+
 class WorkflowTest(unittest.TestCase):
     def test_workflow_uses_cpu_torch_and_existing_script(self):
         root = os.path.dirname(BACKEND)

@@ -38,60 +38,10 @@ sys.path.insert(0, os.path.join(BACKEND, "ml"))
 import ci_publish as P      # noqa: E402  GitHub Contents API
 import embedder as E        # noqa: E402
 import head as H            # noqa: E402
+from samples_io import SAMPLES, parse_samples, read_text   # noqa: E402,F401
 
-SAMPLES = "reviews-samples.jsonl"
 OUT = "sentiment-daily.json"
 EXAMPLES_PER_CLASS = 2
-
-
-def read_text(path, repo, token):
-    """读 data 分支上的文本文件（jsonl）。不存在返回 (None, None)。"""
-    for _ in range(3):
-        try:
-            res = P.gh("GET", "/repos/%s/contents/%s?ref=%s" % (repo, path, P.BRANCH), token=token)
-            return base64.b64decode(res["content"]).decode("utf-8", "replace"), res.get("sha")
-        except RuntimeError as e:
-            if " 404 " in str(e):
-                return None, None
-            time.sleep(2)
-    return None, None
-
-
-def parse_samples(text):
-    """返回 (rows, skipped)。坏行记数而不是静默丢弃。"""
-    rows, skipped = [], Counter()
-    for line in (text or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            d = json.loads(line)
-        except ValueError:
-            skipped["bad_json"] += 1
-            continue
-
-        text_body = (d.get("text") or "").strip()
-        if not text_body:
-            skipped["no_text"] += 1
-            continue
-        if not d.get("created"):
-            skipped["no_date"] += 1
-            continue
-
-        rows.append({
-            "appid": d.get("appid"),
-            "id": d.get("id"),
-            "date": d["created"][:10],
-            "text": text_body,
-            "voted_up": bool(d.get("voted_up")),
-            "lang": d.get("lang") or "unknown",
-        })
-
-    # 同一 id 只保留最后一次（样本文件可能因重建而包含旧副本）
-    dedup = {}
-    for r in rows:
-        dedup[(r["appid"], r["id"])] = r
-    return list(dedup.values()), skipped
 
 
 def aggregate(rows, probs):
