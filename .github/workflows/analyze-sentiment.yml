@@ -43,6 +43,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/ml/requirements.txt
 
+      # 主题是纯规则，不依赖 torch；放在情感之前，模型出问题也不会连累它
+      - name: Publish topic candidates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 backend/collectors/topics_publish.py
+
       - name: Cache embedding model
         uses: actions/cache@v6.1.0
         with:

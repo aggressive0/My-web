@@ -251,6 +251,26 @@ python backend/collectors/sentiment_publish.py --dry-run --samples-file <samples
 4. 每个比例都带 `n` 与 `low_conf_share`。
 5. 当前样本**全部是英文**（接口忽略 `language=`），多语言能力尚未验证。
 
+### 真实数据：主题候选信号（Phase 3）
+
+```bash
+python backend/collectors/topics_publish.py --dry-run --samples-file <samples.jsonl>
+```
+
+| 环节 | 位置 |
+|---|---|
+| 词典与匹配 | `backend/analysis/topics.py`（10 个主题，中英双语，`LEXICON_VERSION` 可追踪） |
+| 聚合发布 | `backend/collectors/topics_publish.py` → data 分支 `topics-daily.json` |
+| 调度 | 与情感同一个工作流；主题步骤排在模型安装之前（纯规则，不依赖 torch） |
+
+四条必须保留的标注：
+
+1. **是「候选信号」不是「语义结论」**——关键词命中，不做否定消解、不处理反讽。
+2. **覆盖率随结果一起发布**（`coverage`）。PUBG 26% vs Cyberpunk 65%，
+   不标覆盖率的「某主题占 13.8%」会被读成「13.8% 的玩家在骂外挂」。
+3. **一条评论可命中多个主题**，各主题占比之和会超过 100%。
+4. **趋势用自然日窗口**（近 7 天 vs 前 7 天，分母固定为 7）；基期为 0 返回 `base_zero`，不返回 inf。
+
 ---
 
 ## 后端接口
