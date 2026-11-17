@@ -436,8 +436,12 @@
 
             return grabJson(DATA_BASE + 'steam-ccu.json', 4000).then(function (j) {
                 var r = usable(j);
-                if (r) return r;
-                return grabJson('json/steam-ccu.json', 4000).then(usable);
+                if (r) { r.source = 'remote'; return r; }
+                return grabJson('json/steam-ccu.json', 4000).then(function (k) {
+                    var s = usable(k);
+                    if (s) s.source = 'snapshot';
+                    return s;      // null = 两级都不可用，由页面显式显示空态
+                });
             });
         },
 

@@ -1,0 +1,92 @@
+/* ============================================================================
+ * 真实数据状态组件（四页共用）
+ *   .rd-chip   来源/状态徽标
+ *   .rd-time   更新时间
+ *   .rd-note   补充说明（样本量、覆盖率等）
+ *   .rd-state  四态占位（loading / empty / error）
+ *   .mock-badge 明确标注「演示数据」——不允许静默使用
+ * ========================================================================== */
+
+.rd-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-family: var(--mono, ui-monospace, Menlo, Consolas, monospace);
+    font-size: 9.5px;
+    letter-spacing: .08em;
+    color: var(--ink-3, #6b7f99);
+    margin: 0 0 8px;
+}
+
+.rd-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border: 1px solid rgba(53, 217, 242, .35);
+    border-radius: 3px;
+    color: #35D9F2;
+    background: rgba(53, 217, 242, .07);
+    white-space: nowrap;
+}
+
+.rd-chip::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.rd-chip.is-warn {
+    color: #FFB45F;
+    border-color: rgba(255, 180, 95, .4);
+    background: rgba(255, 180, 95, .08);
+}
+
+.rd-chip.is-bad {
+    color: #F0536B;
+    border-color: rgba(240, 83, 107, .4);
+    background: rgba(240, 83, 107, .08);
+}
+
+.rd-time { color: var(--ink-3, #6b7f99); }
+.rd-note { color: var(--ink-3, #6b7f99); opacity: .85; }
+
+.rd-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 96px;
+    padding: 14px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--ink-3, #6b7f99);
+    border: 1px dashed rgba(68, 155, 209, .25);
+    border-radius: 6px;
+}
+
+.rd-state.rd-error { color: #F0536B; border-color: rgba(240, 83, 107, .3); }
+
+/* 明确标注演示数据：右上角小标签，避免「看起来像真的」 */
+.mock-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 5px;
+    margin-left: 6px;
+    font-family: var(--mono, ui-monospace, Menlo, Consolas, monospace);
+    font-size: 8.5px;
+    letter-spacing: .12em;
+    color: #FFB45F;
+    border: 1px solid rgba(255, 180, 95, .45);
+    border-radius: 3px;
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+
+/* 小屏时状态条换行不挤压标题 */
+@media (max-width: 720px) {
+    .rd-bar { font-size: 9px; }
+}

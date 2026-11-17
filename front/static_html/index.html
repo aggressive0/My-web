@@ -8,8 +8,10 @@
 <!-- 数据说明：本页数值为设计用示例数据，后端 /api/churn-* 尚未提供数据文件 -->
 <link rel="stylesheet" href="ops-nav.css">
     <link rel="stylesheet" href="live-ticker.css">
+    <link rel="stylesheet" href="css/realdata.css">
 <script src="libs/echarts.min.js"></script>
 <script src="libs/globe.gl.min.js"></script>
+<script src="js/realdata.js"></script>
 <script src="js/dashboard-data.js"></script>
 <script src="js/globe-stage.js"></script>
 <script src="js/ops-nav.js" defer></script>
@@ -1235,7 +1237,7 @@ body::after{
                 <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.2c.6-3.1 3.1-5 6.2-5s5.6 1.9 6.2 5"/><circle cx="17" cy="7" r="2.4"/><path d="M16.4 12.6c2.6.3 4.3 2 4.8 4.6"/></svg>
             </span>
             <div class="kpi-main">
-                <span class="kpi-label">活跃玩家</span>
+                <span class="kpi-label">合计同时在线</span>
                 <div class="kpi-num" id="kpiActive">128.6<span class="u">K</span><span class="kpi-delta">▲ 6.2%</span></div>
             </div>
             <svg class="kpi-spark" viewBox="0 0 84 30" aria-hidden="true" focusable="false" data-spark="ksActive">
@@ -1249,8 +1251,8 @@ body::after{
                 <svg viewBox="0 0 24 24"><path d="M12 3.6l8.4 15.2H3.6L12 3.6z"/><path d="M12 9.6v4.2M12 16.6v.6"/></svg>
             </span>
             <div class="kpi-main">
-                <span class="kpi-label">高危玩家</span>
-                <div class="kpi-num" id="kpiAtRisk">8,420<span class="kpi-delta">▼ 12.5%</span></div>
+                <span class="kpi-label">负面评论占比</span>
+                <div class="kpi-num" id="kpiAtRisk">—</div>
             </div>
             <svg class="kpi-spark" viewBox="0 0 84 30" aria-hidden="true" focusable="false" data-spark="ksAtRisk">
                 <defs><linearGradient id="ks2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F0536B" stop-opacity=".15"/><stop offset="1" stop-color="#F0536B"/></linearGradient></defs>
@@ -1263,8 +1265,8 @@ body::after{
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M8.6 14.2c.9 1.5 2.1 2.2 3.4 2.2s2.5-.7 3.4-2.2"/><path d="M9 9.6h.01M15 9.6h.01"/></svg>
             </span>
             <div class="kpi-main">
-                <span class="kpi-label">情感指数</span>
-                <div class="kpi-num" id="kpiSent">+0.68<span class="kpi-delta">▲ 0.07</span></div>
+                <span class="kpi-label">正面倾向占比</span>
+                <div class="kpi-num" id="kpiSent">—</div>
             </div>
             <svg class="kpi-spark" viewBox="0 0 84 30" aria-hidden="true" focusable="false" data-spark="ksSent">
                 <defs><linearGradient id="ks3" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#34D399" stop-opacity=".15"/><stop offset="1" stop-color="#34D399"/></linearGradient></defs>
@@ -1277,8 +1279,8 @@ body::after{
                 <svg viewBox="0 0 24 24"><path d="M20.2 12a8.2 8.2 0 1 1-2.6-6"/><path d="M20.6 4.2v4.6h-4.6"/></svg>
             </span>
             <div class="kpi-main">
-                <span class="kpi-label">召回率</span>
-                <div class="kpi-num" id="kpiRec">23.4<span class="u">%</span><span class="kpi-delta">▲ 2.1%</span></div>
+                <span class="kpi-label">风险指数（最高）</span>
+                <div class="kpi-num" id="kpiRec">—</div>
             </div>
             <svg class="kpi-ring" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
                 <circle class="track" cx="23" cy="23" r="16" fill="none" stroke-width="3.5"/>
@@ -1287,6 +1289,8 @@ body::after{
             </svg>
         </article>
     </section>
+
+    <div class="rd-bar" id="kpiSrc" aria-live="polite"></div>
 
     <!-- ==================== 中央地球 + 两翼 ==================== -->
     <section class="stage" aria-label="全球玩家分布与运营态势">
@@ -1853,6 +1857,8 @@ body::after{
         if (seg) seg.style.display = 'none';
     }
 
+    window.__updateKpi = null;
+
     function updateKpi() {
         if (!realCcu) return;
         var games = drawableGames(realCcu);
@@ -1908,25 +1914,71 @@ body::after{
     }
 
 
+    window.__updateKpi = updateKpi;
+
+    /* ECharts 空态：统一在画布中央给一句话，不用 HTML 覆盖（会破坏实例） */
+    function emptyOption(title, sub) {
+        return {
+            title: {
+                text: title, subtext: sub || '',
+                left: 'center', top: 'middle',
+                textStyle: { color: '#6B7F99', fontSize: 11, fontWeight: 'normal' },
+                subtextStyle: { color: '#4C5E75', fontSize: 9 }
+            },
+            xAxis: { show: false }, yAxis: { show: false }, series: []
+        };
+    }
+
+    /* 把各游戏的每日情感聚合成全局每日占比（Σ分子/Σ分母，不是平均各游戏） */
+    function realSentimentRows() {
+        var games = (((window.__realState || {}).sent || {}).doc || {}).games || [];
+        var byDate = {};
+        games.forEach(function (g) {
+            (g.days || []).forEach(function (d) {
+                var a = byDate[d.date] || (byDate[d.date] = { n: 0, pos: 0, neg: 0, neu: 0 });
+                a.n += d.n; a.pos += d.pos; a.neg += d.neg; a.neu += d.neu;
+            });
+        });
+        return Object.keys(byDate).sort()
+            .filter(function (k) { return byDate[k].n >= 5; })   // 样本过少的日期不画，避免单条评论撑起一个点
+            .map(function (k) {
+                var a = byDate[k];
+                return {
+                    timestamp: k.slice(5).replace('-', '/'),
+                    positive: +(a.pos / a.n * 100).toFixed(1),
+                    neutral: +(a.neu / a.n * 100).toFixed(1),
+                    negative: +(a.neg / a.n * 100).toFixed(1)
+                };
+            });
+    }
+
     function safeRender() {
         /* 各模块独立容错：单个图表失败不拖垮整页 */
         try {
             if (realCcu) {
                 act.setOption(ccuOption(realCcu, realMode), true);
             } else {
-                var d = DashboardData.series(current.range, current.region || null);
-                act.setOption(activityOption(d.activity), true);
+                /* 不再回落演示序列（审计 P1）：取不到就明确说取不到 */
+                act.clear();
+                act.setOption(emptyOption('未取到真实在线数据',
+                    'Steam 接口与仓库内离线快照均不可用'), true);
             }
         } catch (e) {
-            console.warn('活跃趋势渲染失败，已降级为占位状态', e);
-            actEl.innerHTML = '<div class="chart-empty">活跃趋势数据暂不可用</div>';
+            console.warn('活跃趋势渲染失败', e);
+            act.clear();
+            act.setOption(emptyOption('活跃趋势渲染失败', String(e).slice(0, 60)), true);
         }
         try {
-            var d2 = DashboardData.series(current.range, current.region || null);
-            lastSenti = d2.sentiment;              // 先更新引用，图例再取
-            senti.setOption(sentimentOption(d2.sentiment), true);
+            var rows = realSentimentRows();
+            if (rows.length >= 2) {
+                lastSenti = rows;                  // 先更新引用，图例再取
+                senti.setOption(sentimentOption(rows), true);
+            } else {
+                senti.clear();
+                senti.setOption(emptyOption('暂无情感数据', '每日情感聚合尚未产出'), true);
+            }
         } catch (e) {
-            console.warn('情感趋势渲染失败，已降级为占位状态', e);
+            console.warn('情感趋势渲染失败', e);
             sentiEl.innerHTML = '<div class="chart-empty">情感趋势数据暂不可用</div>';
         }
     }
@@ -1940,17 +1992,33 @@ body::after{
 
     safeRender();
 
-    /* 异步加载真实 CCU：有数据就接管，没有就保持演示序列，不阻塞首屏 */
+    /* 异步加载真实 CCU / 情感 / 风险：任一到达就重绘，取不到则显式空态 */
     if (DashboardData.loadRealCcu) {
         DashboardData.loadRealCcu(8).then(function (real) {
-            if (!real) return;
-            realCcu = real;
-            applyRealCcu(real);
-            updateKpi();
+            if (real) {
+                realCcu = real;
+                window.__ccuStamp = { state: 'ready', source: real.source, doc: { updated_at: real.updated_at } };
+                applyRealCcu(real);
+            }
+            if (window.__updateKpi) window.__updateKpi();
+            if (window.__renderRealKpis) window.__renderRealKpis();
             safeRender();
             act.resize();
         });
     }
+
+    window.__realState = window.__realState || { sent: null, risk: null };
+
+    RealData.load('sentiment-daily.json').then(function (r) {
+        window.__realState.sent = r.state === 'ready' ? r : null;
+        if (window.__renderRealKpis) window.__renderRealKpis();
+        safeRender();
+    });
+
+    RealData.load('risk-daily.json').then(function (r) {
+        window.__realState.risk = r.state === 'ready' ? r : null;
+        if (window.__renderRealKpis) window.__renderRealKpis();
+    });
 
     window.addEventListener('resize', function () { act.resize(); senti.resize(); });
 })();
@@ -2257,34 +2325,104 @@ body::after{
         }).join(' ');
     }
 
-    function refreshKpis(range) {
-        var k = D.kpis(range);
+    /* ---------- KPI：全部来自真实数据 ----------
+       Phase 5 之前这里用 D.kpis(range) 的演示值填充（审计 P1）。
+       现在只渲染真实值，取不到就显示「—」并标数据不可用，绝不用模拟数补。 */
+    window.__realState = window.__realState || { sent: null, risk: null };
 
-        var e1 = document.getElementById('kpiActive');
-        if (e1) e1.innerHTML = k.activePlayers.value.toFixed(1) + '<span class="u">K</span>' +
-            deltaHtml('activePlayers', k.activePlayers.change, '%');
+    /* 占比的正确合并方式：按评论数加权（Σ分子/Σ分母），不是各游戏占比求平均 */
+    function pooledShare(key) {
+        var games = ((window.__realState.sent || {}).doc || {}).games || [];
+        var num = 0, den = 0;
+        games.forEach(function (g) {
+            var t = g.totals || {};
+            if (t.n) { num += (t[key] || 0); den += t.n; }
+        });
+        return den ? { value: num / den * 100, n: den } : null;
+    }
+
+    function topRiskGame() {
+        var games = ((window.__realState.risk || {}).doc || {}).games || [];
+        var ok = games.filter(function (g) { return g.status === 'ok' && g.risk_index !== null; });
+        if (!ok.length) return null;
+        return ok[0];   // risk_publish 已按「充分性优先、风险值降序」排好
+    }
+
+    function renderRealKpis() {
+        var neg = pooledShare('neg');
+        var pos = pooledShare('pos');
 
         var e2 = document.getElementById('kpiAtRisk');
-        if (e2) e2.innerHTML = k.atRiskPlayers.value.toLocaleString() +
-            deltaHtml('atRiskPlayers', k.atRiskPlayers.change, '%');
+        if (e2) {
+            e2.innerHTML = neg
+                ? neg.value.toFixed(1) + '<span class="u">%</span>' +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">n=' + neg.n + '</span>'
+                : '—';
+        }
 
         var e3 = document.getElementById('kpiSent');
-        if (e3) e3.innerHTML = (k.averageSentiment.value >= 0 ? '+' : '') + k.averageSentiment.value.toFixed(2) +
-            deltaHtml('averageSentiment', k.averageSentiment.change, '');
+        if (e3) {
+            e3.innerHTML = pos
+                ? pos.value.toFixed(1) + '<span class="u">%</span>' +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">n=' + pos.n + '</span>'
+                : '—';
+        }
 
         var e4 = document.getElementById('kpiRec');
-        if (e4) e4.innerHTML = k.recoveryRate.value.toFixed(1) + '<span class="u">%</span>' +
-            deltaHtml('recoveryRate', k.recoveryRate.change, '%');
+        var top = topRiskGame();
+        if (e4) {
+            e4.innerHTML = top
+                ? top.risk_index.toFixed(1) +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">' + top.name + '</span>'
+                : '—';
+        }
 
-        /* 火花线同步，避免数字与趋势图形不一致 */
-        [['activePlayers', 'activePlayers'], ['atRiskPlayers', 'atRiskPlayers'], ['averageSentiment', 'averageSentiment']]
-            .forEach(function (pair) {
-                var svg = document.querySelector('[data-spark="' + pair[0] + '"]');
-                if (!svg) return;
-                var path = svg.querySelector('path');
-                if (path) path.setAttribute('d', sparkPath(k[pair[1]].spark));
-            });
+        /* 这三张卡的迷你图原本是演示形状，接入真实值后一律隐藏，
+           避免「数字是真的、旁边曲线是编的」这种更糟的半真状态 */
+        Array.prototype.forEach.call(
+            document.querySelectorAll('[data-spark="ksAtRisk"],[data-spark="ksSent"],.kpi-ring'),
+            function (el) { el.style.display = 'none'; });
+
+        /* 来源条：取各数据源里最新的更新时间 */
+        var st = window.__realState;
+        var stamps = [realCcuStamp(), st.sent, st.risk].filter(Boolean);
+        var bar = document.getElementById('kpiSrc');
+        if (bar) {
+            if (!stamps.length) {
+                bar.innerHTML = '<span class="rd-chip is-bad">数据不可用</span>' +
+                    '<span class="rd-note">上游与本地快照均未取到数据，未使用模拟值填充</span>';
+            } else {
+                var latest = stamps.map(function (x) {
+                    return (x.doc && x.doc.updated_at) || '';
+                }).sort().pop();
+                var remote = stamps.some(function (x) { return x.source === 'remote'; });
+                bar.innerHTML =
+                    '<span class="rd-chip' + (remote ? '' : ' is-warn') + '">' +
+                    (remote ? 'LIVE' : 'SNAPSHOT') + '</span>' +
+                    '<span class="rd-time">更新于 ' + hhmmOf(latest) + '</span>' +
+                    '<span class="rd-note">在线 ← Steam CCU ｜ 占比 ← 评论情感模型 ｜ 风险 ← 公开信号合成</span>';
+            }
+        }
     }
+
+    function realCcuStamp() {
+        return window.__ccuStamp || null;
+    }
+
+    function hhmmOf(iso) {
+        if (!iso) return '时间未知';
+        var d = new Date(iso);
+        if (isNaN(d)) return '时间未知';
+        function p(n) { return n < 10 ? '0' + n : '' + n; }
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function refreshKpis(range) {
+        if (window.__updateKpi) window.__updateKpi();   // 定义在第一块
+        renderRealKpis();
+    }
+
+    window.__renderRealKpis = renderRealKpis;   // 第一块的数据回调要跨作用域调用
 
     /* ---------- 时间范围 ---------- */
     var segBtns = Array.prototype.slice.call(document.querySelectorAll('.seg-btn'));

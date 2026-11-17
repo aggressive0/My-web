@@ -297,6 +297,7 @@ body{
 :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
 </style>
 <link rel="stylesheet" href="analytics-spatial.css">
+    <link rel="stylesheet" href="css/realdata.css">
 </head>
 <body>
 
@@ -355,6 +356,7 @@ body{
 <main class="page">
 
     <!-- 顶部：四个留存指标 -->
+    <div class="rd-bar" role="note" style="margin:10px 0 0"><span class="rd-chip is-warn">数据边界</span><span class="rd-note">留存指标（D1/D7/D30）需要登录与会话日志，本项目无此数据权限；本页 KPI 与曲线为演示值，公开可得的替代信号见「评论量 / 在线趋势 / 成就分布」。</span></div>
     <section class="kpi-row" id="retKpi" aria-label="留存核心指标"></section>
 
     <!-- 中部：趋势 + cohort -->
