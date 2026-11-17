@@ -27,7 +27,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(BACKEND, "analysis"))
 
 import ci_publish as P           # noqa: E402
-import sentiment_publish as SP   # noqa: E402  复用样本解析
+import samples_io as SIO         # noqa: E402  复用样本解析（无 numpy 依赖）
 import topics as T               # noqa: E402
 
 OUT = "topics-daily.json"
@@ -58,7 +58,7 @@ def build_doc(rows, cfg_games=None):
 
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "source": SP.SAMPLES,
+        "source": SIO.SAMPLES,
         "sample_size": len(rows),
         "method": {
             "type": "rule_keyword_candidate",
@@ -96,9 +96,9 @@ def main():
             text = f.read()
         print("样本来源：本地文件 %s" % local)
     else:
-        text, _ = SP.read_text(SP.SAMPLES, repo, token)
+        text, _ = SIO.read_text(SIO.SAMPLES, repo, token)
 
-    rows, skipped = SP.parse_samples(text)
+    rows, skipped = SIO.parse_samples(text)
     print("样本：%d 条可用；跳过 %s" % (len(rows), dict(skipped) or "无"))
     if not rows:
         raise SystemExit("没有可用样本，退出（不写空结果覆盖线上数据）")
