@@ -75,7 +75,7 @@ signal, risk score and top topic.
 
 ```bash
 python backend/collectors/globe_publish.py --dry-run --samples-file path/to/reviews-samples.jsonl
-python -m unittest tests.test_globe_publish -v
+python -m unittest discover -s tests -p 'test_globe_publish.py' -v
 ```
 
 No synthetic market data is written when the sample file is missing or empty.
