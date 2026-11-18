@@ -2087,7 +2087,7 @@ body::after{
             if (stamp) {
                 stamp.textContent = markets.length
                     ? (result.source === 'remote' ? 'LIVE' : 'SNAPSHOT') + ' · ' + markets.length + ' 个语言市场'
-                    : '暂无足够的真实评论样本';
+                    : (result && result.state === 'ready' ? '暂无足够的真实评论样本' : '真实地球数据暂不可用');
             }
         }).catch(function () {
             var stamp = document.getElementById('globeDataStatus');
