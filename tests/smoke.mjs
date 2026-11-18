@@ -157,6 +157,17 @@ async function checkPage(browser, cfg) {
     // 给 WebGL / ECharts / 首次渲染留时间
     await page.waitForTimeout(4500);
 
+    /* 数据到达是异步的：远程 raw.githubusercontent 失败后会退到仓库内快照，
+       全程可能要 5-6s。固定睡 4.5s 在网络抖动时会误报，改为等真实信号：
+       - 任何来源条被填充（LIVE / SNAPSHOT / 数据不可用 均算）；
+       - 图表 canvas 数达到该页预期（仅当尚未达标时等待）。
+       超时不吞掉失败——后面的断言会如实记录。 */
+    await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('.rd-bar')).some(b => (b.innerText || '').trim().length > 0),
+        { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(min => document.querySelectorAll('canvas').length >= min,
+        cfg.canvases[0], { timeout: 15000 }).catch(() => {});
+
     record(cfg.label, 'L1', '无未捕获异常', errors.length === 0, errors.join(' | '));
     record(cfg.label, 'L1', '无 console.error', consoleErrs.length === 0, consoleErrs.join(' | '));
     record(cfg.label, 'L1', '无失败请求', failedReq.length === 0, failedReq.join(' | '));
@@ -243,6 +254,14 @@ async function checkPage(browser, cfg) {
 
     /* L3 交互 —— 留存页：KPI 与时长分布必须来自真实评论聚合 */
     if (cfg.file === 'validation.html') {
+        /* 通用来源条等待对这页不够：静态「数据边界」提示条一打开就有内容，
+           而 overlay 要等 reviews-daily 远程失败→快照回退（约 5-6s）才渲染。
+           等真正的落点：KPI 标签变成真实聚合文案，或时长表出现 ≥6 行。 */
+        await page.waitForFunction(() => {
+            const label = ((document.querySelector('#retKpi .kpi-label') || {}).innerText || '');
+            const rows = document.querySelectorAll('#cohortBody .cohort-row').length;
+            return /评论总量|评论数据不可用/.test(label) || rows >= 6;
+        }, { timeout: 15000 }).catch(() => {});
         const v = await page.evaluate(() => ({
             cards: document.querySelectorAll('#retKpi .kpi').length,
             rows: document.querySelectorAll('#cohortBody .cohort-row').length,
