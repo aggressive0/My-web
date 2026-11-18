@@ -1315,9 +1315,10 @@ body::after{
 
             <article class="panel" style="--hair:rgba(240,83,107,.45)">
                 <div class="p-head">
-                    <h2 class="p-title" style="--accent:#F0536B">区域流失排行<span class="mock-badge">演示</span></h2>
-                    <span class="p-meta">流失率</span>
+                    <h2 class="p-title" style="--accent:#F0536B">游戏舆情排行</h2>
+                    <span class="p-meta">负面占比 / 风险指数</span>
                 </div>
+                <div class="rd-bar" id="rankSrc"></div>
                 <div class="p-body">
                     <div class="region-list" id="regionList"></div>
                 </div>
@@ -2175,6 +2176,11 @@ body::after{
         set('chainRecovery', '预期 +' + h.response.expectedRecoveryRate + '%');
     }
 
+    /* 第 3 块的初始化要调用它们，但两者不在同一个 IIFE 里，必须显式挂 window */
+    window.renderDefaultInfo = renderDefaultInfo;
+    window.renderChain = renderChain;
+    window.toast = toast;
+
     /* ---------- 选中态 ---------- */
     function highlightRegion(id) {
         document.querySelectorAll('.region').forEach(function (r) {
@@ -2309,11 +2315,11 @@ body::after{
     });
 
     /* ---------- 初始化 ---------- */
-    renderDefaultInfo();
-    renderChain(D.hotspots[0]);
-    if (!stage) {
-        /* 地球不可用时，列表仍可驱动信息卡 */
-        toast('3D 地球不可用，已降级为数据模式');
+    if (window.renderDefaultInfo) window.renderDefaultInfo();
+    if (window.renderChain && D.hotspots && D.hotspots[0]) window.renderChain(D.hotspots[0]);
+    /* stage 定义在第 2 块，第 3 块读不到；用 GlobeStage 自身状态判断更可靠 */
+    if (!window.GlobeStage && window.toast) {
+        window.toast('3D 地球不可用，已降级为数据模式');
     }
 })();
 </script>
@@ -2470,7 +2476,344 @@ body::after{
         refreshKpis(range);
         renderRegions(range);       /* §5：范围变化 → 排行同步 */
         /* 本块与地球初始化块是两个 IIFE，stage 不在作用域内，统一走公开 API */
-        if (window.GlobeStage) window.GlobeStage.setRiskPillars(D.regionsFor(range));
+        /* 原区域风险柱来自构造数据；地球已改为语言市场语义，这里清空 */
+        if (window.GlobeStage) window.GlobeStage.setRiskPillars([]);
+        /* 反向同步：告诉导航下拉当前档位，避免"文案 90 天、选中态 30 天" */
+        window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: range } }));
+    }
+
+    segBtns.forEach(function (b) {
+        b.addEventListener('click', function () { applyRange(b.dataset.range); });
+    });
+
+    /* ---------- 区域筛选 ---------- */
+    if (sentiRegion) {
+        sentiRegion.innerHTML = '<option value="">全部区域</option>' +
+            D.regions.map(function (r) {
+                return '<option value="' + r.id + '">' + r.name + '</option>';
+            }).join('');
+        sentiRegion.addEventListener('change', function () {
+            state.region = sentiRegion.value;
+            if (window.DashboardCharts) window.DashboardCharts.setRegion(state.region);
+        });
+    }
+
+    /* ---------- 预警列表 ---------- */
+    function renderAlerts() {
+        if (!warnList) return;
+        var active = D.alerts.filter(function (a) { return a.status === 'active'; });
+        if (!active.length) {
+            warnList.innerHTML = '<div class="empty-state">当前没有活动预警</div>';
+            return;
+        }
+        warnList.innerHTML = active.map(function (a) {
+            var sev = SEVERITY[a.severity] || SEVERITY.low;
+            return '<div class="warn" role="button" tabindex="0" data-alert-id="' + a.id + '" aria-label="' + a.title + '，' + sev.t + '风险">' +
+                '<span class="warn-ico" style="--c:' + sev.c + '" aria-hidden="true">!</span>' +
+                '<div class="warn-txt"><b>' + a.title + '</b><span>' + a.description + '</span></div>' +
+                '<span class="badge" style="--c:' + sev.c + '">' + sev.t + '</span>' +
+                '<div class="warn-detail">' +
+                    '<span><i>触发规则</i>' + a.rule + '</span>' +
+                    '<span><i>当前指标</i>' + a.metric.name + ' ' + a.metric.currentValue + a.metric.unit +
+                        '（前值 ' + a.metric.previousValue + a.metric.unit + '）</span>' +
+                    '<span><i>处置建议</i>' + a.suggestion + '</span>' +
+                    '<span><i>触发时间</i>' + a.createdAt.replace('T', ' ').slice(0, 16) + '</span>' +
+                    '<button class="warn-ack" type="button" data-ack="' + a.id + '">标记已确认</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest && ev.target.closest('[data-ack]');
+        if (!btn) return;
+        ev.stopPropagation();
+        var alert = D.alertById(btn.dataset.ack);
+        if (!alert) return;
+        alert.status = 'acknowledged';
+        renderAlerts();
+    });
+
+    /* ---------- 动作详情 ---------- */
+    var actionBtn = document.querySelector('[data-action-id]');
+    var actionDetail = document.getElementById('actionDetail');
+    if (actionBtn && actionDetail) {
+        var action = D.actions[0];
+        var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+        set('adAudience', action.audience);
+        set('adChannel', action.channel);
+        set('adReason', action.reason);
+        actionBtn.addEventListener('click', function () {
+            actionDetail.hidden = !actionDetail.hidden;
+            actionBtn.setAttribute('aria-expanded', actionDetail.hidden ? 'false' : 'true');
+        });
+    }
+
+    /* 区域行 hover 提示（原生 title，零成本且可访问） */
+    document.querySelectorAll('.region').forEach(function (row) {
+        var r = D.regionById(row.dataset.regionId);
+        if (!r) return;
+        row.title = r.name + '：流失率 ' + r.churnRate + '%（环比 ' +
+            (r.change > 0 ? '+' : '') + r.change + 'pp）· 高危玩家 ' + r.atRisk.toLocaleString() + ' 人';
+    });
+
+    /* ---------- 导航时间范围下拉联动 ---------- */
+    window.addEventListener('rangechange', function (ev) {
+        /* 同值短路：applyRange 自身也会派发该事件，否则会来回递归 */
+        if (ev.detail && ev.detail.range && ev.detail.range !== state.range) applyRange(ev.detail.range);
+    });
+
+    /* ---------- 游戏舆情排行（真实数据）----------
+       取代原先的「区域流失排行」：地区维度本项目没有数据（Steam 评论不带地理字段），
+       而每个游戏都有真实的评论样本、负面占比与风险指数，且都能回指到具体评论。
+       容器 id 仍叫 regionList，是为了不牵动其它引用。 */
+    var rankSrcEl = document.getElementById('rankSrc');
+    var rankSent = null, rankRisk = null;
+
+    function riskBand(score) {
+        if (score === null || score === undefined) return { c: '#6B7F99', t: '—' };
+        if (score >= 60) return { c: '#FF6B75', t: '高' };
+        if (score >= 30) return { c: '#FFB45F', t: '中' };
+        return { c: '#35D9F2', t: '低' };
+    }
+
+    function renderGameRanks() {
+        var list = document.getElementById('regionList');
+        if (!list) return;
+
+        var sent = (rankSent && rankSent.doc) || null;
+        var risk = (rankRisk && rankRisk.doc) || null;
+
+        if (!sent) {
+            list.innerHTML = '<div class="rd-state">评论聚合数据不可用</div>';
+            if (window.RealData && rankSrcEl) RealData.stamp(rankSrcEl, rankSent || { state: 'unavailable' });
+            return;
+        }
+
+        var riskBy = {};
+        ((risk && risk.games) || []).forEach(function (g) { riskBy[g.appid] = g; });
+
+        var rows = (sent.games || []).map(function (g) {
+            var t = g.totals || {};
+            var r = riskBy[g.appid] || {};
+            return {
+                appid: g.appid,
+                name: g.name || String(g.appid),
+                n: t.n || 0,
+                neg: t.neg || 0,
+                negRate: t.n ? (t.neg / t.n * 100) : null,
+                risk: (r.risk_index === undefined ? null : r.risk_index),
+                status: r.status || 'unknown'
+            };
+        }).filter(function (r) { return r.n > 0; })
+          .sort(function (a, b) { return (b.negRate || 0) - (a.negRate || 0); });
+
+        if (!rows.length) {
+            list.innerHTML = '<div class="rd-state">暂无评论样本</div>';
+            return;
+        }
+
+        var maxRate = rows.reduce(function (m, r) { return Math.max(m, r.negRate || 0); }, 1) || 1;
+
+        list.innerHTML = rows.map(function (r, idx) {
+            var band = riskBand(r.risk);
+            var w = Math.max(8, Math.round((r.negRate || 0) / maxRate * 82));
+            var lowSample = r.n < 30;
+            var title = r.name + '：负面占比 ' + (r.negRate === null ? '—' : r.negRate.toFixed(1) + '%') +
+                '（' + r.neg + '/' + r.n + ' 条）· 风险指数 ' +
+                (r.risk === null ? '—' : r.risk) + (r.status === 'low_sample' || lowSample ? ' · 样本不足' : '');
+            return '<div class="region" role="button" tabindex="0" data-appid="' + r.appid + '" title="' + title + '">' +
+                '<span class="rank">' + String(idx + 1).padStart(2, '0') + '</span>' +
+                '<span class="name">' + r.name + (lowSample ? '*' : '') + '</span>' +
+                '<span class="track"><span class="fill" style="--c:' + band.c + ';width:' + w + '%"></span></span>' +
+                '<span class="val">' + (r.negRate === null ? '—' : r.negRate.toFixed(1) + '%') + '</span>' +
+                '<span class="delta" style="color:' + band.c + '">' +
+                (r.risk === null ? '—' : r.risk.toFixed(1)) + '</span>' +
+            '</div>';
+        }).join('');
+
+        if (window.RealData && rankSrcEl) {
+            var total = rows.reduce(function (a, r) { return a + r.n; }, 0);
+            RealData.stamp(rankSrcEl, rankSent, { note: 'n=' + total + ' · * 表示样本 <30' });
+        }
+    }
+
+    /* 保留原函数名：applyRange 仍在调用它，改成只读真实数据，不再看时间范围 */
+    function renderRegions(range) { renderGameRanks(); }
+
+    RealData.load('sentiment-daily.json').then(function (r) {
+        rankSent = r;
+        renderGameRanks();
+    });
+    RealData.load('risk-daily.json').then(function (r) {
+        rankRisk = r;
+        renderGameRanks();
+    });
+
+    /* ---------- 初始化 ---------- */
+    if (window.renderDefaultInfo) window.renderDefaultInfo();
+    if (window.renderChain && D.hotspots && D.hotspots[0]) window.renderChain(D.hotspots[0]);
+    /* stage 定义在第 2 块，第 3 块读不到；用 GlobeStage 自身状态判断更可靠 */
+    if (!window.GlobeStage && window.toast) {
+        window.toast('3D 地球不可用，已降级为数据模式');
+    }
+})();
+</script>
+
+<script>
+/* ==================== P2 控件层：筛选、KPI 刷新、预警与动作 ==================== */
+(function () {
+    'use strict';
+    var D = window.DashboardData;
+    if (!D) return;
+
+    var state = { range: '30d', region: '' };
+    var rangeLabel = document.getElementById('rangeLabel');
+    var warnList = document.getElementById('warnList');
+    var sentiRegion = document.getElementById('sentiRegion');
+
+    /* ---------- KPI ---------- */
+    var SEVERITY = {
+        high:   { c: '#FF6B75', t: '高' },
+        medium: { c: '#FFB45F', t: '中' },
+        low:    { c: '#35D9F2', t: '低' },
+        critical: { c: '#FF4D6D', t: '严重' }
+    };
+
+    function deltaHtml(key, change, unit) {
+        var adverse = key === 'atRiskPlayers' ? change > 0 : change < 0;
+        var arrow = change >= 0 ? '▲' : '▼';
+        return '<span class="kpi-delta' + (adverse ? ' is-bad' : '') + '">' +
+            arrow + ' ' + Math.abs(change) + unit + '</span>';
+    }
+
+    function sparkPath(arr) {
+        var w = 83, h = 22, pad = 4;
+        var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
+        var span = (max - min) || 1;
+        return arr.map(function (v, i) {
+            var x = (i / Math.max(arr.length - 1, 1)) * w;
+            var y = pad + (h - ((v - min) / span) * h);
+            return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+        }).join(' ');
+    }
+
+    /* ---------- KPI：全部来自真实数据 ----------
+       Phase 5 之前这里用 D.kpis(range) 的演示值填充（审计 P1）。
+       现在只渲染真实值，取不到就显示「—」并标数据不可用，绝不用模拟数补。 */
+    window.__realState = window.__realState || { sent: null, risk: null };
+
+    /* 占比的正确合并方式：按评论数加权（Σ分子/Σ分母），不是各游戏占比求平均 */
+    function pooledShare(key) {
+        var games = ((window.__realState.sent || {}).doc || {}).games || [];
+        var num = 0, den = 0;
+        games.forEach(function (g) {
+            var t = g.totals || {};
+            if (t.n) { num += (t[key] || 0); den += t.n; }
+        });
+        return den ? { value: num / den * 100, n: den } : null;
+    }
+
+    function topRiskGame() {
+        var games = ((window.__realState.risk || {}).doc || {}).games || [];
+        var ok = games.filter(function (g) { return g.status === 'ok' && g.risk_index !== null; });
+        if (!ok.length) return null;
+        return ok[0];   // risk_publish 已按「充分性优先、风险值降序」排好
+    }
+
+    function renderRealKpis() {
+        var neg = pooledShare('neg');
+        var pos = pooledShare('pos');
+
+        var e2 = document.getElementById('kpiAtRisk');
+        if (e2) {
+            e2.innerHTML = neg
+                ? neg.value.toFixed(1) + '<span class="u">%</span>' +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">n=' + neg.n + '</span>'
+                : '—';
+        }
+
+        var e3 = document.getElementById('kpiSent');
+        if (e3) {
+            e3.innerHTML = pos
+                ? pos.value.toFixed(1) + '<span class="u">%</span>' +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">n=' + pos.n + '</span>'
+                : '—';
+        }
+
+        var e4 = document.getElementById('kpiRec');
+        var top = topRiskGame();
+        if (e4) {
+            e4.innerHTML = top
+                ? top.risk_index.toFixed(1) +
+                  '<span class="kpi-delta" style="color:var(--ink-3)">' + top.name + '</span>'
+                : '—';
+        }
+
+        /* 这三张卡的迷你图原本是演示形状，接入真实值后一律隐藏，
+           避免「数字是真的、旁边曲线是编的」这种更糟的半真状态 */
+        Array.prototype.forEach.call(
+            document.querySelectorAll('[data-spark="ksAtRisk"],[data-spark="ksSent"],.kpi-ring'),
+            function (el) { el.style.display = 'none'; });
+
+        /* 来源条：取各数据源里最新的更新时间 */
+        var st = window.__realState;
+        var stamps = [realCcuStamp(), st.sent, st.risk].filter(Boolean);
+        var bar = document.getElementById('kpiSrc');
+        if (bar) {
+            if (!stamps.length) {
+                bar.innerHTML = '<span class="rd-chip is-bad">数据不可用</span>' +
+                    '<span class="rd-note">上游与本地快照均未取到数据，未使用模拟值填充</span>';
+            } else {
+                var latest = stamps.map(function (x) {
+                    return (x.doc && x.doc.updated_at) || '';
+                }).sort().pop();
+                var remote = stamps.some(function (x) { return x.source === 'remote'; });
+                bar.innerHTML =
+                    '<span class="rd-chip' + (remote ? '' : ' is-warn') + '">' +
+                    (remote ? 'LIVE' : 'SNAPSHOT') + '</span>' +
+                    '<span class="rd-time">更新于 ' + hhmmOf(latest) + '</span>' +
+                    '<span class="rd-note">在线 ← Steam CCU ｜ 占比 ← 评论情感模型 ｜ 风险 ← 公开信号合成</span>';
+            }
+        }
+    }
+
+    function realCcuStamp() {
+        return window.__ccuStamp || null;
+    }
+
+    function hhmmOf(iso) {
+        if (!iso) return '时间未知';
+        var d = new Date(iso);
+        if (isNaN(d)) return '时间未知';
+        function p(n) { return n < 10 ? '0' + n : '' + n; }
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function refreshKpis(range) {
+        if (window.__updateKpi) window.__updateKpi();   // 定义在第一块
+        renderRealKpis();
+    }
+
+    window.__renderRealKpis = renderRealKpis;   // 第一块的数据回调要跨作用域调用
+
+    /* ---------- 时间范围 ---------- */
+    var segBtns = Array.prototype.slice.call(document.querySelectorAll('.seg-btn'));
+
+    function applyRange(range) {
+        state.range = range;
+        segBtns.forEach(function (b) {
+            var on = b.dataset.range === range;
+            b.classList.toggle('is-on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (rangeLabel) rangeLabel.textContent = D.windowOf(range).label;
+        if (window.DashboardCharts) window.DashboardCharts.setRange(range);
+        refreshKpis(range);
+        renderRegions(range);       /* §5：范围变化 → 排行同步 */
+        /* 本块与地球初始化块是两个 IIFE，stage 不在作用域内，统一走公开 API */
+        /* 原区域风险柱来自构造数据；地球已改为语言市场语义，这里清空 */
+        if (window.GlobeStage) window.GlobeStage.setRiskPillars([]);
         /* 反向同步：告诉导航下拉当前档位，避免"文案 90 天、选中态 30 天" */
         window.dispatchEvent(new CustomEvent('rangechange', { detail: { range: range } }));
     }
