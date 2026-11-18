@@ -1,0 +1,23 @@
+name: Probe Review Language Support
+
+# 一次性诊断：判定 Steam 评论接口是否遵守 language 参数。
+# 只读，不写任何数据文件。跑完可以删掉本工作流。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Setup Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Probe language matrix
+        run: python3 backend/scripts/probe_review_language.py --apps 730,1091500
