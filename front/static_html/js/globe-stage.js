@@ -103,7 +103,7 @@
     /* ---------- 玩家分布点：半径单位为角度，压到亚度级，呈现贴地微光 ---------- */
     function pointRadius(p) {
         var count = Number(p.review_count != null ? p.review_count : p.players) || 0;
-        var r = Math.sqrt(Math.max(0, count)) / 18;
+        var r = Math.sqrt(Math.max(0, count)) / 180;
         return Math.max(0.12, Math.min(0.42, r));
     }
 
