@@ -6,35 +6,32 @@
     但 1013 条样本 100% 是 english —— PUBG(289) / Cyberpunk(409) 这种
     中文俄文评论量巨大的游戏一条外语都没有，统计上不可能。
 
-由此产生一个更具体的假设：
-    `filter=recent` 不仅忽略 `num_per_page`（已在采集器里记录），
-    可能**同样忽略 `language`**；只有 `filter=all` 才让这两个参数生效。
+第一版探针的错误（已修）：
+    手写 store.steampowered.com/appreviews 的 URL，结果 10 次全部返回 HTML ——
+    Steam 反爬把请求跳回首页。而生产用的是 api.steampowered.com 的
+    IUserReviewsService，走的是完全不同的通道。
+    **测不到生产路径的探针，结论没有意义。**
 
-本脚本就是来判这个假设，不做任何写入：
-    对每个 (appid, filter, language) 组合发一次请求，
-    统计返回评论的语言分布，打印成表。
+本版直接调用采集器的 fetch_page()：与生产同一条通道、同一套重试与降级逻辑，
+只变 language 一个变量。
 
-用法（本地被 Steam 反爬拦时，请在 CI 里跑）：
+用法（本地被反爬拦时请在 CI 里跑）：
     python backend/scripts/probe_review_language.py
-    python backend/scripts/probe_review_language.py --apps 730,1091500 --pages 1
+    python backend/scripts/probe_review_language.py --apps 730,1091500 --json
 """
 
 import argparse
 import json
+import os
 import sys
-import urllib.error
-import urllib.request
 from collections import Counter
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(BACKEND, "collectors"))
 
-# 尽量绕开本地代理：CI 没有代理，本地有代理反而更稳
-OPENER = urllib.request.build_opener()
+import steam_reviews_collector as R  # noqa: E402
 
-BASE = "https://store.steampowered.com/appreviews/%d"
-
-# (filter, language) 组合：覆盖两个 filter × 三种 language
+# (filter, language)：两个 filter × 三种 language
 MATRIX = [
     ("recent", "all"),
     ("recent", "schinese"),
@@ -44,42 +41,27 @@ MATRIX = [
 ]
 
 
-def fetch(appid, filter_, language, num=100, timeout=25):
-    url = "%s?json=1&filter=%s&language=%s&num_per_page=%d&purchase_type=all" % (
-        BASE % appid, filter_, language, num)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": UA,
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cookie": "Steam_Language=english; birthtime=628473601",
-    })
+def probe(appid, filter_, language):
     try:
-        with OPENER.open(req, timeout=timeout) as r:
-            raw = r.read()
-            ctype = r.headers.get("Content-Type", "")
-    except urllib.error.HTTPError as e:
-        return {"ok": False, "status": e.code, "error": "HTTP %s" % e.code}
-    except Exception as e:                       # 超时、连接失败
-        return {"ok": False, "status": None, "error": type(e).__name__}
+        resp = R.fetch_page(appid, cursor="*", filter_=filter_, num=100,
+                            language=language, purchase_type="all")
+    except Exception as e:
+        return {"ok": False, "error": "%s: %s" % (type(e).__name__, str(e)[:80])}
 
-    if "json" not in ctype.lower():
-        # Steam 反爬时会把请求 302 到首页，返回的是 HTML
-        return {"ok": False, "status": 200, "error": "非 JSON（%s）" % ctype.split(";")[0]}
-    try:
-        doc = json.loads(raw.decode("utf-8", "replace"))
-    except ValueError:
-        return {"ok": False, "status": 200, "error": "JSON 解析失败"}
+    if not isinstance(resp, dict):
+        return {"ok": False, "error": "返回非字典：%s" % type(resp).__name__}
+    if resp.get("success") not in (1, True, None):
+        return {"ok": False, "error": "success=%s" % resp.get("success"), "raw_keys": list(resp)[:6]}
 
-    reviews = doc.get("reviews") or []
-    langs = Counter(r.get("language") for r in reviews)
-    return {"ok": True, "count": len(reviews), "langs": dict(langs.most_common(6)),
-            "success_flag": doc.get("success")}
+    reviews = resp.get("reviews") or []
+    langs = Counter((r.get("language") or "unknown") for r in reviews)
+    return {"ok": True, "count": len(reviews), "langs": dict(langs.most_common(8))}
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apps", default="730,1091500", help="逗号分隔的 appid")
-    ap.add_argument("--json", action="store_true", help="只输出 JSON，便于 CI 日志解析")
+    ap.add_argument("--json", action="store_true", help="只输出 JSON")
     args = ap.parse_args()
 
     apps = [int(x) for x in args.apps.split(",") if x.strip()]
@@ -87,12 +69,12 @@ def main():
 
     for appid in apps:
         for filter_, lang in MATRIX:
-            r = fetch(appid, filter_, lang)
+            r = probe(appid, filter_, lang)
             r.update({"appid": appid, "filter": filter_, "language": lang})
             results.append(r)
             if not args.json:
                 if r["ok"]:
-                    print("app=%-8d filter=%-6s language=%-8s → n=%-3d 语言分布 %s"
+                    print("app=%-8d filter=%-6s language=%-8s → n=%-3d 语言 %s"
                           % (appid, filter_, lang, r["count"], r["langs"]))
                 else:
                     print("app=%-8d filter=%-6s language=%-8s → 失败：%s"
@@ -100,16 +82,18 @@ def main():
 
     if args.json:
         print(json.dumps(results, ensure_ascii=False, indent=1))
+        return 0
 
-    # 自动结论：只要出现非 english 的语言，就说明 language 参数在某个组合下是生效的
-    foreign = [r for r in results if r["ok"] and any(k and k != "english" for k in r["langs"])]
-    if not args.json:
-        print()
-        if foreign:
-            combos = sorted({(r["filter"], r["language"]) for r in foreign})
-            print("结论：language 参数在以下组合生效 → %s" % combos)
-        else:
-            print("结论：所有组合都只返回 english，language 参数在当前通道完全无效")
+    foreign = [r for r in results if r["ok"] and any(k != "english" for k in r["langs"])]
+    print()
+    if foreign:
+        combos = sorted({(r["filter"], r["language"]) for r in foreign})
+        print("结论：language 在以下组合生效 → %s" % combos)
+        print("       → 把采集器切到该组合即可获得多语言样本")
+    else:
+        print("结论：所有组合都只返回 english —— 该通道不支持语言过滤")
+        print("       → 需要换通道（官方 WebAPI key / 本地化 storefront / 地区代理）")
+    return 0
 
 
 if __name__ == "__main__":
