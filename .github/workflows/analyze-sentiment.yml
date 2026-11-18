@@ -75,7 +75,7 @@ jobs:
         run: python3 backend/collectors/risk_publish.py
 
       - name: Test globe aggregation
-        run: python3 -m unittest tests.test_globe_publish -v
+        run: python3 -m unittest discover -s tests -p 'test_globe_publish.py' -v
 
       # Language-market globe is derived from the same real Steam review sample.
       # It deliberately does not infer the reviewer's physical location.
