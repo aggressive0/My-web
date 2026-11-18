@@ -39,13 +39,11 @@ MARKETS = {
     "french": ("法语市场", "French", 2.2137, 46.2276, "europe"),
     "spanish": ("西语市场", "Spanish", -3.7038, 40.4637, "global"),
     "brazilian": ("巴西葡语市场", "Brazilian Portuguese", -51.9253, -14.2350, "south_america"),
-    "portuguese": ("葡语市场", "Portuguese", -51.9253, -14.2350, "global"),
-    "english": ("英语评论市场", "English", -100.0, 40.0, "global"),
+    "english": ("英语评论市场", "English", -20.0, 20.0, "global"),
     "polish": ("波兰语市场", "Polish", 19.1451, 51.9194, "europe"),
     "turkish": ("土耳其语市场", "Turkish", 35.2433, 38.9637, "eurasia"),
     "thai": ("泰语市场", "Thai", 100.9925, 15.87, "southeast_asia"),
     "ukrainian": ("乌克兰语市场", "Ukrainian", 31.1656, 48.3794, "europe"),
-    "unknown": ("未知语言", "Unknown", 0.0, 0.0, "unknown"),
 }
 
 
