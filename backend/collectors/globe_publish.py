@@ -154,6 +154,8 @@ def main():
     doc = build_doc(rows, games)
     doc["sample_size"] = len(rows)
     doc["skipped"] = dict(skipped)
+    if not doc["markets"]:
+        raise SystemExit("当前窗口没有达到最小样本量的语言市场；不写空结果覆盖已有数据")
     if dry_run:
         print("[dry-run] markets=%d sample_size=%d" % (len(doc["markets"]), len(rows)))
         print(json.dumps(doc, ensure_ascii=False, indent=2)[:6000])
