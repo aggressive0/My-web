@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070B16'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%2335D9F2'/%3E%3Crect x='12' y='12' width='8' height='8' rx='2' fill='%23070B16'/%3E%3C/svg%3E">
 <title>留存追踪 · NEXUS 玩家留存中枢</title>
-<!-- 数据说明：本页数值来自 js/dashboard-data.js 的演示数据集，未接入后端接口 -->
+<!-- 数据说明：KPI、评论量趋势、时长分布来自 data 分支真实聚合；分群/因素/AI 三块为演示并已标 badge -->
 <link rel="stylesheet" href="ops-nav.css">
 <link rel="stylesheet" href="live-ticker.css">
 <script src="libs/echarts.min.js"></script>
@@ -307,9 +307,242 @@ body{
 :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
 </style>
 <link rel="stylesheet" href="analytics-spatial.css">
+<style id="holo-theme">
+/* ============================================================================
+ * 全息玻璃主题（仅本页）
+ *
+ * 只复刻概念图「屏幕内」的视觉语言：深空背景 + 数字网格 + 粒子流、
+ * 多层玻璃面板、激光折线、发光模块。
+ * 刻意不做两件事：
+ *   1. 不加概念图里的物理显示器边框/桌面——那是渲染道具，放进网页就成了假截图；
+ *   2. 不做大角度整体倾斜——那会让 12px 字变糊、点选错位。
+ *      只给整个内容区 0.6° 的极轻透视，保留「浮起来」的纵深，不牺牲可读性。
+ * ========================================================================== */
+
+:root{
+    --holo-cyan:#35D9F2;
+    --holo-glow:rgba(53,217,242,.42);
+    --glass-top:rgba(20,38,64,.74);
+    --glass-bottom:rgba(5,10,18,.88);
+}
+
+/* ---------- 深空背景：网格 + 光晕 + 暗角 ---------- */
+body{
+    background:
+        radial-gradient(1200px 620px at 18% -10%, rgba(49,139,255,.18), transparent 62%),
+        radial-gradient(900px 520px at 88% 4%, rgba(146,117,255,.12), transparent 66%),
+        radial-gradient(700px 420px at 50% 108%, rgba(53,217,242,.08), transparent 70%),
+        #04070D !important;
+}
+body::before{
+    content:"";position:fixed;inset:-10% -10% -10% -10%;pointer-events:none;z-index:0;
+    background-image:
+        linear-gradient(rgba(120,190,255,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120,190,255,.045) 1px, transparent 1px);
+    background-size:64px 64px, 64px 64px;
+    transform:perspective(900px) rotateX(46deg) translateY(14%) scale(1.9);
+    transform-origin:50% 100%;
+    mask-image:linear-gradient(180deg, transparent 4%, rgba(0,0,0,.85) 46%, transparent 88%);
+    opacity:.5;
+}
+body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(78% 62% at 50% 38%, transparent 46%, rgba(2,4,8,.72) 100%);
+}
+
+/* ---------- 粒子流（情感分析粒子，纯 CSS，18 个）---------- */
+.holo-dust{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.holo-dust i{
+    position:absolute;bottom:-6vh;width:2px;height:2px;border-radius:50%;
+    background:var(--holo-cyan);
+    box-shadow:0 0 8px var(--holo-glow), 0 0 18px rgba(53,217,242,.25);
+    animation:holo-rise linear infinite;
+    opacity:0;
+}
+.holo-dust i:nth-child(3n){background:#7FB2FF;box-shadow:0 0 8px rgba(127,178,255,.5)}
+.holo-dust i:nth-child(4n){width:1px;height:1px;background:#B79BFF;box-shadow:0 0 6px rgba(183,155,255,.5)}
+@keyframes holo-rise{
+    0%{transform:translate3d(0,0,0) scale(.6);opacity:0}
+    12%{opacity:.55}
+    70%{opacity:.35}
+    100%{transform:translate3d(18px,-112vh,0) scale(1);opacity:0}
+}
+
+/* ---------- 内容层：极轻透视，产生纵深但不糊字 ---------- */
+main.page{position:relative;z-index:1}
+/* 纵深不用 transform 做：0.6° 的透视会让 12px 中文整片发虚。
+   改由阴影分层 + 顶部折射高光制造「浮起」，可读性优先。 */
+
+/* ---------- 玻璃面板 ---------- */
+.panel{
+    position:relative;
+    background:linear-gradient(158deg, var(--glass-top), var(--glass-bottom)) !important;
+    border:1px solid rgba(120,190,255,.16) !important;
+    border-radius:16px !important;
+    box-shadow:
+        0 42px 80px -46px rgba(0,0,0,.95),
+        0 12px 32px -22px rgba(0,0,0,.9),
+        inset 0 1px 0 rgba(255,255,255,.07),
+        inset 0 -60px 70px -70px rgba(53,217,242,.45) !important;
+    backdrop-filter:blur(16px) saturate(128%);
+    -webkit-backdrop-filter:blur(16px) saturate(128%);
+    overflow:hidden;
+}
+/* 顶部一条折射高光 + 边缘光 */
+.panel::before{
+    content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.10), transparent 16%),
+        radial-gradient(120% 60% at 50% -20%, rgba(53,217,242,.16), transparent 62%);
+    mix-blend-mode:screen;opacity:.42;
+}
+.panel > *{position:relative;z-index:1}
+.panel::after{
+    content:"";position:absolute;left:14%;right:14%;top:0;height:1px;pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(120,220,255,.85), transparent);
+    filter:blur(.3px);
+}
+
+/* ---------- KPI 卡：波纹 + 发光边 ---------- */
+.kpi-row .kpi{
+    position:relative;overflow:hidden;isolation:isolate;
+    background:linear-gradient(160deg, rgba(22,44,72,.78), rgba(6,12,22,.9)) !important;
+    border:1px solid rgba(120,190,255,.2) !important;
+    border-radius:15px !important;
+    box-shadow:
+        0 30px 56px -38px rgba(0,0,0,.95),
+        inset 0 1px 0 rgba(255,255,255,.08),
+        inset 0 0 40px -18px rgba(53,217,242,.55) !important;
+    transition:transform .25s ease, box-shadow .25s ease;
+}
+.kpi-row .kpi:hover{
+    transform:translateY(-2px);
+    box-shadow:
+        0 36px 64px -34px rgba(0,0,0,.95),
+        inset 0 1px 0 rgba(255,255,255,.1),
+        inset 0 0 52px -14px rgba(53,217,242,.7) !important;
+}
+/* 3D 波纹：两组同心圆，极低对比，只做「科技底纹」 */
+.kpi-row .kpi::before{
+    content:"";position:absolute;right:-46px;top:-52px;width:190px;height:190px;pointer-events:none;z-index:0;
+    background:
+        repeating-radial-gradient(circle at 50% 50%, rgba(53,217,242,.22) 0 1px, transparent 1px 11px);
+    mask-image:radial-gradient(circle at 50% 50%, #000 12%, transparent 72%);
+    opacity:.38;
+    animation:holo-drift 14s ease-in-out infinite alternate;
+}
+.kpi-row .kpi::after{
+    content:"";position:absolute;left:16px;right:16px;bottom:0;height:1px;pointer-events:none;z-index:0;
+    background:linear-gradient(90deg, transparent, var(--holo-cyan), transparent);
+    opacity:.5;
+}
+@keyframes holo-drift{
+    from{transform:translate3d(0,0,0) scale(1)}
+    to{transform:translate3d(-10px,8px,0) scale(1.08)}
+}
+.kpi-row .kpi > *{position:relative;z-index:1}
+/* 真实卡片没有迷你曲线，原先为它预留的 70px 右内边距会把「条 / voted_up」挤出裁切 */
+.kpi-row .kpi-main{padding-right:10px !important;min-width:0}
+.kpi-row .kpi-num{flex-wrap:wrap;row-gap:1px;overflow:visible}
+.kpi-row .kpi-num .u{flex:none}
+.kpi-row .kpi-delta{font-size:9px;opacity:.8}
+.kpi-row .kpi-num{
+    text-shadow:0 0 18px rgba(53,217,242,.45), 0 0 2px rgba(255,255,255,.35);
+    letter-spacing:.02em;
+}
+.kpi-row .kpi-label{color:#A9C0DA}
+
+/* ---------- 图表容器：内凹玻璃槽 ---------- */
+.chart,
+#retTrendChart,
+#factorChart{
+    border-radius:12px;
+}
+.panel .p-body{position:relative}
+.panel .p-body::after{
+    content:"";position:absolute;inset:0;pointer-events:none;border-radius:12px;
+    box-shadow:inset 0 0 60px -30px rgba(53,217,242,.35);
+}
+
+/* ---------- 分群进度条：流光 ---------- */
+.seg-track{position:relative;overflow:hidden;border-radius:999px;background:rgba(90,140,200,.12) !important}
+.seg-fill{
+    background-image:linear-gradient(90deg, rgba(255,255,255,.32), transparent 62%) !important;
+    background-color:var(--c) !important;
+    box-shadow:0 0 16px -2px var(--c), 0 0 3px var(--c) !important;
+}
+.seg-fill::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(100deg, transparent 20%, rgba(255,255,255,.55) 48%, transparent 70%);
+    background-size:220% 100%;
+    animation:holo-sweep 2.6s linear infinite;
+    mix-blend-mode:screen;opacity:.45;
+}
+@keyframes holo-sweep{
+    from{background-position:160% 0}
+    to{background-position:-60% 0}
+}
+
+/* ---------- 时长分布表：栅格 + 悬停辉光 ---------- */
+.cohort-cell{
+    position:relative;
+    border:1px solid rgba(120,190,255,.14);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 16px -10px rgba(146,117,255,.9);
+    transition:box-shadow .2s ease, transform .2s ease;
+}
+.cohort-cell:hover{transform:translateY(-1px);box-shadow:0 0 0 1px rgba(53,217,242,.5), 0 0 22px -6px rgba(53,217,242,.8)}
+.cohort-head{border-bottom-color:rgba(120,190,255,.22) !important}
+.cohort-row{position:relative}
+.cohort-row + .cohort-row::before{
+    content:"";position:absolute;left:0;right:0;top:-3px;height:1px;
+    background:linear-gradient(90deg, transparent, rgba(120,190,255,.12) 20%, rgba(120,190,255,.12) 80%, transparent);
+}
+
+/* ---------- AI 面板：红/青呼吸灯 ---------- */
+.insight{
+    position:relative;
+    border:1px solid rgba(240,83,107,.28) !important;
+    box-shadow:inset 0 0 30px -18px rgba(240,83,107,.9) !important;
+    animation:holo-breathe 4.2s ease-in-out infinite;
+}
+.insight + .insight{border-color:rgba(53,217,242,.26) !important;animation-delay:1.4s}
+@keyframes holo-breathe{
+    0%,100%{box-shadow:inset 0 0 30px -20px rgba(240,83,107,.55)}
+    50%{box-shadow:inset 0 0 46px -12px rgba(240,83,107,.9)}
+}
+.insight-cta{box-shadow:0 0 26px -12px rgba(53,217,242,.9), inset 0 1px 0 rgba(255,255,255,.14)}
+
+/* ---------- 状态条/来源徽标在深底上提一点对比 ---------- */
+.rd-bar{position:relative;z-index:1}
+.rd-chip{backdrop-filter:blur(6px)}
+
+/* ---------- 环形图扫描光效 ---------- */
+#factorChart{position:relative}
+#factorChart::after{
+    content:"";position:absolute;left:50%;top:52%;width:78%;aspect-ratio:1/1;
+    transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
+    background:conic-gradient(from 0deg, transparent 0 78%, rgba(53,217,242,.55) 88%, transparent 96%);
+    mask:radial-gradient(circle, transparent 61%, #000 64%, #000 86%, transparent 89%);
+    -webkit-mask:radial-gradient(circle, transparent 61%, #000 64%, #000 86%, transparent 89%);
+    animation:holo-scan 5.5s linear infinite;
+    opacity:.75;
+}
+@keyframes holo-scan{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* ---------- 尊重「减少动效」 ---------- */
+@media (prefers-reduced-motion: reduce){
+    .holo-dust{display:none}
+    .kpi-row .kpi::before,
+    .seg-fill::after,
+    .insight{animation:none !important}
+    main.page{transform:none}
+    #factorChart::after{display:none}
+}
+</style>
     <link rel="stylesheet" href="css/realdata.css">
 </head>
 <body>
+<div class="holo-dust" aria-hidden="true"><i style="left:4%;animation-duration:16s;animation-delay:-0s"></i><i style="left:9%;animation-duration:20s;animation-delay:-2s"></i><i style="left:14%;animation-duration:24s;animation-delay:-4s"></i><i style="left:19%;animation-duration:28s;animation-delay:-6s"></i><i style="left:24%;animation-duration:32s;animation-delay:-8s"></i><i style="left:29%;animation-duration:16s;animation-delay:-10s"></i><i style="left:34%;animation-duration:20s;animation-delay:-12s"></i><i style="left:39%;animation-duration:24s;animation-delay:-14s"></i><i style="left:44%;animation-duration:28s;animation-delay:-16s"></i><i style="left:49%;animation-duration:32s;animation-delay:-18s"></i><i style="left:54%;animation-duration:16s;animation-delay:-20s"></i><i style="left:59%;animation-duration:20s;animation-delay:-22s"></i><i style="left:64%;animation-duration:24s;animation-delay:-24s"></i><i style="left:69%;animation-duration:28s;animation-delay:-26s"></i><i style="left:74%;animation-duration:32s;animation-delay:-28s"></i><i style="left:79%;animation-duration:16s;animation-delay:-30s"></i><i style="left:84%;animation-duration:20s;animation-delay:-32s"></i><i style="left:89%;animation-duration:24s;animation-delay:-34s"></i></div>
 
 <!-- 顶部导航（对齐 NEXUS 概念图） -->
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top ops-nav" aria-label="主导航">
@@ -675,7 +908,10 @@ body{
             type: 'pie',
             radius: ['62%', '84%'],
             center: ['50%', '52%'],
-            itemStyle: { borderRadius: 4, borderColor: '#070D18', borderWidth: 2 },
+            itemStyle: {
+                borderRadius: 5, borderColor: '#060B14', borderWidth: 2,
+                shadowBlur: 22, shadowColor: 'rgba(146,117,255,.45)'
+            },
             label: {
                 show: true,
                 position: 'center',
@@ -797,8 +1033,10 @@ body{
         });
 
         document.getElementById('retKpi').innerHTML = [
+            /* 样本量不放在卡片里：它会挤压数字并导致右边缘裁切，
+               而页面顶部来源条已经写了 n=…，重复且更占地方 */
             card(0, '评论总量', totalN.toLocaleString('en-US'), ' 条', ''),
-            card(1, '推荐率', (totalN ? (posN / totalN * 100).toFixed(1) : '—'), '%', 'voted_up'),
+            card(1, '推荐率', (totalN ? (posN / totalN * 100).toFixed(1) : '—'), '%', ''),
             card(2, '覆盖天数', Object.keys(dates).length, ' 天', ''),
             card(3, '覆盖游戏', games.length, ' 款', '')
         ].join('');
@@ -825,10 +1063,14 @@ body{
             grid: { left: 44, right: 42, top: 30, bottom: 30 },
             tooltip: {
                 trigger: 'axis',
-                backgroundColor: 'rgba(9,14,24,.96)',
-                borderColor: 'rgba(122,166,255,.24)',
-                padding: [8, 11],
-                textStyle: { color: '#E9EFFA', fontSize: 11 }
+                backgroundColor: 'rgba(8,16,28,.86)',
+                borderColor: 'rgba(53,217,242,.42)',
+                borderWidth: 1,
+                padding: [9, 12],
+                textStyle: { color: '#E9EFFA', fontSize: 11 },
+                extraCssText: 'border-radius:10px;backdrop-filter:blur(12px);' +
+                    'box-shadow:0 24px 48px -24px rgba(0,0,0,.95), 0 0 26px -10px rgba(53,217,242,.55);' +
+                    'transform:translateY(-6px);'
             },
             legend: { right: 0, top: 0, itemWidth: 8, itemHeight: 8, icon: 'circle',
                       textStyle: { color: '#9EB1CA', fontSize: 9 } },
@@ -849,14 +1091,31 @@ body{
             ],
             series: [
                 { name: '评论量', type: 'bar', data: keys.map(function (k) { return byDate[k].n; }),
-                  itemStyle: { color: 'rgba(53,217,242,.55)', borderRadius: [2, 2, 0, 0] } },
+                  itemStyle: {
+                      color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                          { offset: 0, color: 'rgba(49,139,255,.62)' },
+                          { offset: 1, color: 'rgba(24,62,120,.16)' }]),
+                      borderColor: 'rgba(53,217,242,.38)', borderWidth: 1,
+                      borderRadius: [3, 3, 0, 0],
+                      shadowBlur: 14, shadowColor: 'rgba(49,139,255,.55)'
+                  } },
                 { name: '推荐率', type: 'line', yAxisIndex: 1, symbol: 'none',
                   data: keys.map(function (k) {
                       var a = byDate[k];
                       /* 当天样本 <5 条时推荐率没有意义（1 条好评 = 100%），留空断开 */
                       return a.n >= 5 ? +(a.pos / a.n * 100).toFixed(1) : null;
                   }),
-                  lineStyle: { width: 1.8, color: '#35D399' } }
+                  lineStyle: {
+                      width: 2.2, color: '#4BF0C0',
+                      shadowBlur: 22, shadowColor: 'rgba(75,240,192,.85)',
+                      shadowOffsetY: 0
+                  },
+                  areaStyle: {
+                      color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                          { offset: 0, color: 'rgba(75,240,192,.22)' },
+                          { offset: 1, color: 'rgba(75,240,192,0)' }])
+                  },
+                  endLabel: { show: false } }
             ]
         });
 
