@@ -1329,7 +1329,7 @@ body::after{
             <div class="core-head">
                 <span class="chev" aria-hidden="true">«</span>
                 <span class="dot" aria-hidden="true"></span>
-                全球玩家脉搏 · 演示
+                全球评论语言市场 · REAL DATA
                 <span class="chev" aria-hidden="true">»</span>
             </div>
 
@@ -1340,15 +1340,16 @@ body::after{
                 <div class="orbit orbit--c" aria-hidden="true"></div>
                 <div class="orbit orbit--d" aria-hidden="true"></div>
                 <div id="globeContainer" role="img"
-                     aria-label="可交互三维地球：青色/橙色/红色点位为玩家分布与风险等级，脉冲环为热点区域，弧线为区域间迁移路径。支持拖动旋转、滚轮缩放、双击复位。"></div>
+                     aria-label="可交互三维地球：点位代表 Steam 评论语言市场，颜色代表评论风险信号，不代表玩家真实所在地。支持拖动旋转、滚轮缩放、双击复位。"></div>
                 <div class="globe-scan" aria-hidden="true"></div>
+                <div id="globeDataStatus" class="p-meta" aria-live="polite">正在加载真实评论市场数据…</div>
                 <div class="globe-info" id="globeInfo" aria-live="polite">
                     <span class="gi-k">全局态势</span>
-                    <b class="gi-title">全球玩家分布</b>
+                    <b class="gi-title">全球评论语言市场</b>
                     <div class="gi-rows">
-                        <span><i>活跃玩家</i><em>128.6K</em></span>
-                        <span><i>高危玩家</i><em>8,420</em></span>
-                        <span><i>高流失区域</i><em>北美 7.8%</em></span>
+                        <span><i>地图维度</i><em>评论语言</em></span>
+                        <span><i>风险信号</i><em>推荐倾向</em></span>
+                        <span><i>玩家所在地</i><em>不可推断</em></span>
                     </div>
                     <p class="gi-hint">拖动旋转 · 滚轮缩放 · 双击复位 · 点击点位或热点标签查看区域详情</p>
                 </div>
@@ -1356,7 +1357,7 @@ body::after{
                 
             </div>
 
-            <p class="core-hint">拖动旋转 · 滚轮缩放 · 发光点为高流失区域</p>
+            <p class="core-hint">拖动旋转 · 滚轮缩放 · 点位为评论语言市场，颜色表示公开评论风险信号</p>
 
             <!-- 决策链：热点事件 → 玩家情绪 → 流失风险 → 召回策略（文档 §F1） -->
             <div class="chain" id="chain" aria-label="热点响应链路">
