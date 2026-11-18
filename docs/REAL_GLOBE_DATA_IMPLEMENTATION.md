@@ -35,6 +35,17 @@ A market is emitted only when it has at least `GLOBE_MIN_REVIEWS` samples in the
 configured period (default 20). Unknown/unmapped languages are omitted rather than
 guessed. The output remains game-scoped.
 
+## Initial source coverage audit (2026-11-18)
+
+The current `data` branch sample file was inspected before implementation:
+
+- 994 review sample rows in total.
+- All 994 rows currently carry `lang=english`.
+- 166 rows fall in the seven-day window ending 2026-11-18, for AppID 1091500.
+- Therefore the first real globe build is expected to show one English-language market marker, not a populated country-by-country world map.
+
+This is an honest reflection of current source coverage. Additional language markers will appear only after the collector produces enough real samples in those language codes. Do not create synthetic markers to make the globe look fuller.
+
 ## Metric semantics
 
 - `positive_rate` / `negative_rate`: Steam `voted_up` recommendation signal.
