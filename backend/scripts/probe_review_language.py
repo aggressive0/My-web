@@ -1,29 +1,40 @@
 """
-判定 Steam 评论接口到底认不认 language 参数（一次性诊断脚本）。
+判定 Steam 评论新接口的正确请求协议，以及 languages 是否真正生效。
 
-背景：
-    CI 一直用 `language=all` 拉评论（采集器 DEFAULT_LANGUAGE="all"），
-    但 1013 条样本 100% 是 english —— PUBG(289) / Cyberpunk(409) 这种
-    中文俄文评论量巨大的游戏一条外语都没有，统计上不可能。
+结论修正史（这个脚本本身被推翻了两次，所以要写清楚）：
+  第一版：手写 store.steampowered.com/appreviews 的旧 URL → 被反爬跳回首页，
+          10 次全返回 HTML。测的不是生产路径，结论无效。
+  第二版：改调采集器的 fetch_page()（生产同通道），10/10 组合全 english，
+          得出「该通道不支持语言过滤」。
+  第三版（本脚本）：怀疑真正的根因是**参数格式**——
+          采集器请求新接口 IUserReviewsService/GetAppReviews/v1/，
+          但参数仍按旧接口的扁平 query 传（appid/filter/language/num_per_page），
+          新接口要求 `input_json`，字段是 `languages`（数组）与整数枚举。
 
-第一版探针的错误（已修）：
-    手写 store.steampowered.com/appreviews 的 URL，结果 10 次全部返回 HTML ——
-    Steam 反爬把请求跳回首页。而生产用的是 api.steampowered.com 的
-    IUserReviewsService，走的是完全不同的通道。
-    **测不到生产路径的探针，结论没有意义。**
+本脚本对同一款游戏发四种请求，比较语言分布：
+  A legacy            —— 现在的写法（扁平 query）
+  B input_json(all)   —— languages=["all"] + filter=1(Recent)
+  C input_json(schinese)
+  D input_json(all, filter=0) —— 排除 filter 枚举取值错误的干扰
 
-本版直接调用采集器的 fetch_page()：与生产同一条通道、同一套重试与降级逻辑，
-只变 language 一个变量。
+判据：
+  A 全 english 而 B 出现多语言 → 参数格式就是根因，修采集器即可
+  B/C/D 仍全 english          → 端点确不提供多语言，需换通道（key/代理）
+  全部请求失败                → 网络或鉴权问题，不能据此下任何结论
 
-用法（本地被反爬拦时请在 CI 里跑）：
+用法：
     python backend/scripts/probe_review_language.py
-    python backend/scripts/probe_review_language.py --apps 730,1091500 --json
+    python backend/scripts/probe_review_language.py --apps 730 --json
 """
 
 import argparse
 import json
 import os
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import Counter
 
 BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,68 +42,112 @@ sys.path.insert(0, os.path.join(BACKEND, "collectors"))
 
 import steam_reviews_collector as R  # noqa: E402
 
-# (filter, language)：两个 filter × 三种 language
-MATRIX = [
-    ("recent", "all"),
-    ("recent", "schinese"),
-    ("all", "all"),
-    ("all", "schinese"),
-    ("all", "russian"),
-]
+UA = "NEXUS-reviews/1.0 (student research)"
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+# 新接口枚举（IUserReviewsService）
+FILTER_RECENT = 1
+FILTER_ALL = 0
+REVIEW_TYPE_ALL = 0
+PURCHASE_ALL = 1
 
 
-def probe(appid, filter_, language):
-    try:
-        resp = R.fetch_page(appid, cursor="*", filter_=filter_, num=100,
-                            language=language, purchase_type="all")
-    except Exception as e:
-        return {"ok": False, "error": "%s: %s" % (type(e).__name__, str(e)[:80])}
+def _request(url, timeout=25, retries=2):
+    last = None
+    for i in range(retries + 1):
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        try:
+            with OPENER.open(req, timeout=timeout) as r:
+                raw = r.read().decode("utf-8", "replace")
+            return json.loads(raw), None
+        except urllib.error.HTTPError as e:
+            return None, "HTTP %s" % e.code
+        except Exception as e:
+            last = "%s: %s" % (type(e).__name__, str(e)[:60])
+            time.sleep(1.2 * (2 ** i))
+    return None, last
 
-    if not isinstance(resp, dict):
-        return {"ok": False, "error": "返回非字典：%s" % type(resp).__name__}
-    if resp.get("success") not in (1, True, None):
-        return {"ok": False, "error": "success=%s" % resp.get("success"), "raw_keys": list(resp)[:6]}
 
+def summarize(body):
+    """新接口把结果放在 response 里，旧接口在顶层；两种都兼容。"""
+    resp = body.get("response", body) if isinstance(body, dict) else {}
     reviews = resp.get("reviews") or []
     langs = Counter((r.get("language") or "unknown") for r in reviews)
-    return {"ok": True, "count": len(reviews), "langs": dict(langs.most_common(8))}
+    return {
+        "n": len(reviews),
+        "langs": dict(langs.most_common(8)),
+        "has_cursor": bool(resp.get("cursor")),
+    }
+
+
+def call_legacy(appid, language="all"):
+    """现在的写法：扁平 query（疑似参数格式错误）。"""
+    params = {
+        "appid": appid, "filter": "recent", "num_per_page": 100,
+        "language": language, "purchase_type": "all", "cursor": "*",
+    }
+    url = R.ENDPOINT_NEW + "?" + urllib.parse.urlencode(params)
+    body, err = _request(url)
+    return {"error": err} if err else summarize(body)
+
+
+def call_input_json(appid, languages, filter_=FILTER_RECENT, num=100):
+    """官方格式：input_json + languages 数组 + 整数枚举。"""
+    payload = {
+        "appid": appid,
+        "filter": filter_,
+        "languages": languages,
+        "review_type": REVIEW_TYPE_ALL,
+        "purchase_type": PURCHASE_ALL,
+        "num_per_page": num,
+        "cursor": "*",
+    }
+    url = R.ENDPOINT_NEW + "?" + urllib.parse.urlencode({"input_json": json.dumps(payload)})
+    body, err = _request(url)
+    return {"error": err} if err else summarize(body)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--apps", default="730,1091500", help="逗号分隔的 appid")
-    ap.add_argument("--json", action="store_true", help="只输出 JSON")
+    ap.add_argument("--apps", default="730,1091500")
+    ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
     apps = [int(x) for x in args.apps.split(",") if x.strip()]
-    results = []
+    rows = []
 
     for appid in apps:
-        for filter_, lang in MATRIX:
-            r = probe(appid, filter_, lang)
-            r.update({"appid": appid, "filter": filter_, "language": lang})
-            results.append(r)
+        variants = [
+            ("A_legacy", lambda a=appid: call_legacy(a)),
+            ("B_input_json_all", lambda a=appid: call_input_json(a, ["all"])),
+            ("C_input_json_schinese", lambda a=appid: call_input_json(a, ["schinese"])),
+            ("D_input_json_all_f0", lambda a=appid: call_input_json(a, ["all"], filter_=FILTER_ALL)),
+        ]
+        for name, fn in variants:
+            r = fn()
+            r.update({"appid": appid, "variant": name})
+            rows.append(r)
             if not args.json:
-                if r["ok"]:
-                    print("app=%-8d filter=%-6s language=%-8s → n=%-3d 语言 %s"
-                          % (appid, filter_, lang, r["count"], r["langs"]))
+                if "error" in r:
+                    print("app=%-8d %-22s → 失败：%s" % (appid, name, r["error"]))
                 else:
-                    print("app=%-8d filter=%-6s language=%-8s → 失败：%s"
-                          % (appid, filter_, lang, r["error"]))
+                    print("app=%-8d %-22s → n=%-3d 语言 %s"
+                          % (appid, name, r["n"], r["langs"]))
 
     if args.json:
-        print(json.dumps(results, ensure_ascii=False, indent=1))
+        print(json.dumps(rows, ensure_ascii=False, indent=1))
         return 0
 
-    foreign = [r for r in results if r["ok"] and any(k != "english" for k in r["langs"])]
+    ok = [r for r in rows if "error" not in r]
+    multi = [r for r in ok if any(k != "english" for k in r["langs"])]
     print()
-    if foreign:
-        combos = sorted({(r["filter"], r["language"]) for r in foreign})
-        print("结论：language 在以下组合生效 → %s" % combos)
-        print("       → 把采集器切到该组合即可获得多语言样本")
+    if multi:
+        print("结论：出现非英语样本的变形 → %s" % sorted({r["variant"] for r in multi}))
+        print("      → 参数格式就是根因，按该格式修采集器")
+    elif ok:
+        print("结论：所有变形仍只返回 english → 该端点不提供多语言，需要换通道")
     else:
-        print("结论：所有组合都只返回 english —— 该通道不支持语言过滤")
-        print("       → 需要换通道（官方 WebAPI key / 本地化 storefront / 地区代理）")
+        print("结论：所有请求失败，先查网络/鉴权，不能据此下任何结论")
     return 0
 
 
