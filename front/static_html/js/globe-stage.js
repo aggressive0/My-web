@@ -7,13 +7,18 @@
     'use strict';
 
     /* 玩家点位使用低饱和色阶，避免像素级光斑压过地球底图 */
-    var RISK_COLOR = { high: '#B9828C', medium: '#B5A184', low: '#739FB3' };
+    /* 风险配色按 docs/REAL_GLOBE_DATA_IMPLEMENTATION.md §25：
+   low #36E0A0 / medium #FFD166 / high #FF4D6D。
+   旧值是一组去饱和的灰紫（#B9828C/#B5A184/#739FB3），在深色球面上
+   几乎看不出风险差异——颜色是这张图唯一的信息编码，不能这么弱。 */
+    var RISK_COLOR = { high: '#FF4D6D', medium: '#FFD166', low: '#36E0A0' };
     var DEFAULT_VIEW = { lat: 26, lng: 18, altitude: 2.35 };
     var state = {
         globe: null,
         el: null,
         ro: null,
         ready: false,
+        pendingMarkets: [],
         selectedRegion: null,
         points: null,
         arcs: null,
@@ -100,11 +105,14 @@
         return hotspots.concat(pillars, buildFlowNodes(state.arcs || []));
     }
 
-    /* ---------- 玩家分布点：半径单位为角度，压到亚度级，呈现贴地微光 ---------- */
+    /* ---------- 玩家分布点：半径单位为角度 ----------
+       旧值 Math.sqrt(count)/180 → 300 条样本只有 0.096°，上限 0.42，
+       实际渲染出来不足 1 像素，球面上等于看不见（这是「12 个市场但一个点都没有」的直接原因）。
+       改为 sqrt/45 并把下限定在 0.35°，保证最小市场也清晰可见。 */
     function pointRadius(p) {
         var count = Number(p.review_count != null ? p.review_count : p.players) || 0;
-        var r = Math.sqrt(Math.max(0, count)) / 180;
-        return Math.max(0.12, Math.min(0.42, r));
+        var r = Math.sqrt(Math.max(0, count)) / 25;
+        return Math.max(0.9, Math.min(2.2, r));
     }
 
     /* ---------- 生成横向无缝的程序云图：不请求外部图片，不增加网络依赖 ---------- */
@@ -294,7 +302,7 @@
                 var r = pointRadius(p);
                 return (!p.marketId && state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
             })
-            .pointAltitude(0.004)
+            .pointAltitude(0.02)
             .pointResolution(6)
             .pointsMerge(false)
             .onPointClick(function (p) {
@@ -425,6 +433,9 @@
         }, 80);
         state.globe = globe;
         state.ready = true;
+        if (state.pendingMarkets && state.pendingMarkets.length) {
+            applyMarkets(state.pendingMarkets);
+        }
 
         /* 尺寸跟随容器 */
         if (global.ResizeObserver) {
@@ -483,7 +494,15 @@
     }
 
     function setMarketData(markets) {
+        /* 数据回调常常早于地球初始化完成（three/globe 异步 ready）。
+           旧实现在这里直接 return，数据就永久丢了——页面头部显示「12 个市场」
+           但球面一个点都没有，正是这个原因。改为先缓存，就绪后补渲染。 */
+        state.pendingMarkets = markets || [];
         if (!state.ready) return;
+        applyMarkets(state.pendingMarkets);
+    }
+
+    function applyMarkets(markets) {
         var rows = (markets || []).map(function (m) {
             return Object.assign({}, m, {
                 marketId: m.id,
