@@ -287,12 +287,12 @@
             .pointLat('lat')
             .pointLng('lng')
             .pointColor(function (p) {
-                if (!state.selectedRegion) return riskColor(p.risk);
+                if (p.marketId || !state.selectedRegion) return riskColor(p.risk);
                 return p.regionId === state.selectedRegion ? riskColor(p.risk) : '#344c60';
             })
             .pointRadius(function (p) {
                 var r = pointRadius(p);
-                return (state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
+                return (!p.marketId && state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
             })
             .pointAltitude(0.004)
             .pointResolution(6)
