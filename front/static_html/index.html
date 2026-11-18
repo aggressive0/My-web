@@ -2085,8 +2085,12 @@ body::after{
             if (stage && markets.length) stage.setMarketData(markets);
             var stamp = document.getElementById('globeDataStatus');
             if (stamp) {
+                var reviewTotal = markets.reduce(function (sum, market) {
+                    return sum + (Number(market.review_count) || 0);
+                }, 0);
                 stamp.textContent = markets.length
-                    ? (result.source === 'remote' ? 'LIVE' : 'SNAPSHOT') + ' · ' + markets.length + ' 个语言市场'
+                    ? (result.source === 'remote' ? 'LIVE' : 'SNAPSHOT') + ' · ' +
+                      markets.length + ' 个语言市场 / ' + reviewTotal.toLocaleString() + ' 条评论样本'
                     : (result && result.state === 'ready' ? '暂无足够的真实评论样本' : '真实地球数据暂不可用');
             }
         }).catch(function () {
