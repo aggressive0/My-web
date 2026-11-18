@@ -30,7 +30,8 @@ window.RealData = (function () {
         'sentiment-daily.json': { label: '评论情感', src: 'MiniLM + 逻辑回归' },
         'topics-daily.json': { label: '主题候选', src: '规则词典 v1' },
         'risk-daily.json': { label: '风险指数', src: '公开信号合成' },
-        'collection-status.json': { label: '采集状态', src: '采集日志' }
+        'collection-status.json': { label: '采集状态', src: '采集日志' },
+        'globe-daily.json': { label: '语言市场舆情热点', src: 'Steam 评论样本聚合' }
     };
 
     var cache = {};
