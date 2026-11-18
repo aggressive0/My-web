@@ -5,13 +5,21 @@ Steam 评论采集（Phase 2）：原始评论 → 本地 SQLite。
     新：https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/
     旧：https://store.steampowered.com/appreviews/<appid>?json=1   （降级用）
 
-实测出来的三条「文档没写」的行为，直接决定实现方式：
-  1. `num_per_page` 只在 `filter=all` 时生效（100 条/页）；
-     `filter=recent` 固定返回 5 条，无论传多少。
-  2. `filter=recent` 翻页时，若没有更多数据，服务端会**返回同一个 cursor**
-     且 reviews 为空 —— 必须显式判定「游标没前进就停」，否则死循环。
-  3. `language=` 参数被忽略（传 schinese 仍返回 english 评论）。
-     因此语言不做服务端过滤，改为落库后按 review.language 聚合。
+请求协议（2026-11-18 修正，有实验记录在 docs/REAL_GLOBE_DATA_IMPLEMENTATION.md）：
+  新接口必须用 `input_json` 传参，字段为 `languages`（数组）与整数枚举：
+    filter: recent=1 / updated=2 / all=0
+    review_type: all=0 ｜ purchase_type: all=1
+  历史上这里按旧接口的扁平 query 传（appid/filter/language/num_per_page），
+  服务端**静默忽略全部参数**并回落默认值，于是产生了两个错误结论：
+    - 「recent 每页固定 5 条」——其实是 num_per_page 被忽略；
+    - 「language 参数被忽略」——其实是字段名应为 languages 且在 input_json 里。
+  对照实验：同一款游戏，扁平 query 返回 english 100/100；
+  input_json + languages=["all"] 返回 russian 45 / english 18 / schinese 15 …
+  改成 input_json 后，每页 100 条与语言过滤都正常。
+
+仍然成立的一条（与协议无关）：
+  `filter=recent` 翻页到末尾时，服务端会返回**同一个 cursor** 且 reviews 为空，
+  必须显式判定「游标没前进就停」，否则死循环。
 
 设计取舍：
   - 原始评论只进本地库，不进 Git（见 docs/DATA_MIGRATION_PLAN.md §2.2）。
@@ -41,6 +49,11 @@ import game_config
 
 ENDPOINT_NEW = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/"
 ENDPOINT_LEGACY = "https://store.steampowered.com/appreviews/%d"
+
+# IUserReviewsService 的枚举（官方文档）：字符串 filter 必须转成整数
+FILTER_ENUM = {"recent": 1, "updated": 2, "all": 0}
+REVIEW_TYPE_ALL = 0
+PURCHASE_ALL = 1
 
 DB = os.environ.get("STEAM_DB", store.DEFAULT_DB)
 
@@ -82,18 +95,22 @@ def parse_review(r):
 def fetch_page(appid, cursor="*", filter_="recent", num=100, language=DEFAULT_LANGUAGE,
                purchase_type="all", day_range=None, timeout=25, retries=3):
     """取一页评论，返回 response 字典（含 reviews / cursor / query_summary）。"""
-    params = {
+    # 新接口要 input_json；languages 是数组，空数组等于只给英语
+    languages = ["all"] if language in (None, "", "all") else [language]
+    input_json = {
         "appid": appid,
-        "filter": filter_,
+        "filter": FILTER_ENUM.get(str(filter_).lower(), FILTER_ENUM["recent"]),
+        "languages": languages,
+        "review_type": REVIEW_TYPE_ALL,
+        "purchase_type": PURCHASE_ALL,
         "num_per_page": num,
-        "language": language,
-        "purchase_type": purchase_type,
         "cursor": cursor or "*",
     }
     if day_range:
-        params["day_range"] = day_range
+        input_json["day_range"] = day_range
 
-    url = ENDPOINT_NEW + "?" + urllib.parse.urlencode(params)
+    url = ENDPOINT_NEW + "?" + urllib.parse.urlencode(
+        {"input_json": json.dumps(input_json, separators=(",", ":"))})
     last = None
     for i in range(retries + 1):
         req = urllib.request.Request(url, headers={
@@ -102,7 +119,9 @@ def fetch_page(appid, cursor="*", filter_="recent", num=100, language=DEFAULT_LA
         })
         try:
             with OPENER.open(req, timeout=timeout) as r:
-                return json.loads(r.read().decode("utf-8")).get("response", {})
+                doc = json.loads(r.read().decode("utf-8")).get("response", {})
+                doc["_endpoint"] = "input_json"
+                return doc
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as e:
             last = e
             # 实测同一时刻 CCU 端点超时、评论端点却 200 —— 抖动是逐连接的，
@@ -118,6 +137,7 @@ def fetch_page(appid, cursor="*", filter_="recent", num=100, language=DEFAULT_LA
         with OPENER.open(req, timeout=timeout) as r:
             body = json.loads(r.read().decode("utf-8"))
         if body.get("success") == 1 or "reviews" in body:
+            body["_endpoint"] = "legacy"       # 降级来源要能被下游识别
             return body
         raise ReviewFetchError("旧端点返回 success=%s" % body.get("success"))
     except Exception as e:
