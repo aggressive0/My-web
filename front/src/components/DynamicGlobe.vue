@@ -1,50 +1,61 @@
 <template>
   <div class="globe-wrapper">
     <div ref="globeContainer" class="globe-container"></div>
+    <div v-if="status !== 'ready'" class="globe-status" role="status">{{ statusText }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import * as echarts from 'echarts'
 import 'echarts-gl'
 
 const globeContainer = ref(null)
 const chartInstance = ref(null)
 const isRotating = ref(true)
+const status = ref('loading')
+const statusText = computed(() => ({
+  loading: '正在加载真实 Steam 评论市场数据…',
+  empty: '暂无达到最小样本量的评论语言市场',
+  error: '真实地球数据暂不可用'
+}[status.value] || ''))
 
-// 地区数据
-const regionData = [
-  { name: '美国（United States of America）', value: [ -95.7129, 37.0902, 50 ], percentage: '22.79%' },
-  { name: '加拿大（Canada）', value: [ -106.3468, 56.1304, 40 ], percentage: '3.06%' },
-  { name: '巴西（Brazil）', value: [ -51.9253, -14.2350, 35 ], percentage: '2.28%' },
-  { name: '阿根廷（Argentina）', value: [ -63.6167, -38.4161, 35 ], percentage: '3.08%' },
-  { name: '英国（United Kingdom）', value: [ -3.4359, 55.3781, 40 ], percentage: '9.02%' },
-  { name: '法国（France）', value: [ 2.2137, 46.2276, 35 ], percentage: '7.29%' },
-  { name: '西班牙（Spain）', value: [ -3.7038, 40.4637, 40 ], percentage: '9.74%' },
-  { name: '意大利（Italy）', value: [ 12.5674, 41.8719, 30 ], percentage: '2.25%' },
-  { name: '德国（Germany）', value: [ 10.4515, 51.1657, 35 ], percentage: '5.05%' },
-  { name: '俄罗斯（Russia）', value: [ 37.6173, 55.7558, 40 ], percentage: '5.05%' },
-  { name: '中国', value: [ 104.1954, 35.8617, 30 ], percentage: '0.03%' },
-  { name: '日本', value: [ 138.2529, 36.2048, 35 ], percentage: '3.20%' },
-  { name: '台湾（Taiwan，中国省级行政区）', value: [ 121.5200, 25.0330, 25 ], percentage: '0.30%' },
-  { name: '香港（Hong Kong，中国省级行政区）', value: [ 114.1694, 22.3193, 25 ], percentage: '1.57%' },
-  { name: '沙特阿拉伯（Saudi Arabia）', value: [ 45.0792, 23.8859, 30 ], percentage: '2.51%' },
-  { name: '澳大利亚（Australia）', value: [ 133.7751, -25.2744, 35 ], percentage: '1.47%' }
-]
+const DATA_URL = 'https://raw.githubusercontent.com/aggressive0/My-web/data/globe-daily.json'
+const riskColor = (level) => ({
+  high: '#FF6B75',
+  medium: '#FFB45F',
+  low: '#35D399'
+}[level] || '#35D9F2')
 
-// 初始化图表
-const initChart = () => {
+function initChart(markets) {
   if (!globeContainer.value) return
-  
   chartInstance.value = echarts.init(globeContainer.value)
-  
-  const option = {
+  const points = markets.map((market) => ({
+    name: market.name,
+    value: [market.longitude, market.latitude, market.review_count],
+    reviewCount: market.review_count,
+    negativeRate: market.negative_rate,
+    riskScore: market.risk_score,
+    riskLevel: market.risk_level,
+    topTopic: market.top_topic,
+    language: market.language,
+    game: market.game
+  }))
+  chartInstance.value.setOption({
     backgroundColor: '#0a0a1a',
     tooltip: {
       trigger: 'item',
-      formatter: function(params) {
-        return params.name + '<br/>占比: ' + params.data.percentage;
+      formatter: (params) => {
+        const p = params.data
+        return [
+          p.name + ' · ' + p.game,
+          '评论样本：' + Number(p.reviewCount).toLocaleString(),
+          '不推荐比例：' + (p.negativeRate * 100).toFixed(1) + '%',
+          '风险信号：' + p.riskScore + ' / ' + p.riskLevel,
+          '热点主题：' + (p.topTopic || '暂无'),
+          '语言：' + p.language,
+          '<small>评论语言市场，不代表玩家真实所在地</small>'
+        ].join('<br/>')
       }
     },
     globe: {
@@ -61,86 +72,92 @@ const initChart = () => {
         zoomSensitivity: 0.5
       },
       light: {
-        main: {
-          intensity: 1.2,
-          shadow: true
-        },
-        ambient: {
-          intensity: 0.3
-        }
+        main: { intensity: 1.2, shadow: true },
+        ambient: { intensity: 0.3 }
       }
     },
-    series: [
-      {
-        type: 'scatter3D',
-        coordinateSystem: 'globe',
-        data: regionData,
-        symbolSize: function(val) {
-          return val[2] * 0.6; // 缩小光点大小
-        },
-        itemStyle: {
-          color: 'rgba(255, 255, 255, 0.7)',
-          opacity: 0.8
-        },
-        emphasis: {
-          itemStyle: {
-            color: 'rgba(255, 255, 255, 1)',
-            opacity: 1,
-            shadowBlur: 40,
-            shadowColor: 'rgba(255, 255, 255, 1)'
-          }
-        },
-        blendMode: 'lighter'
-      }
-    ]
-  }
-  
-  chartInstance.value.setOption(option)
-  
-  // 响应式调整
-  window.addEventListener('resize', () => {
-    chartInstance.value?.resize()
+    series: [{
+      type: 'scatter3D',
+      coordinateSystem: 'globe',
+      data: points,
+      symbolSize: (value) => Math.max(5, Math.min(28, Math.log10(Number(value[2]) + 1) * 10)),
+      itemStyle: {
+        color: (params) => riskColor(params.data.riskLevel),
+        opacity: 0.88
+      },
+      emphasis: {
+        itemStyle: { opacity: 1, shadowBlur: 32, shadowColor: '#ffffff' }
+      },
+      blendMode: 'lighter'
+    }]
   })
 }
 
-// 切换旋转状态
-const toggleRotation = (status) => {
-  isRotating.value = status
-  chartInstance.value?.setOption({
-    globe: {
-      viewControl: {
-        autoRotate: status
-      }
+async function loadGlobeData() {
+  status.value = 'loading'
+  try {
+    const response = await fetch(DATA_URL, { cache: 'no-store' })
+    if (!response.ok) throw new Error('HTTP ' + response.status)
+    const doc = await response.json()
+    if (!Array.isArray(doc.markets) || doc.markets.length === 0) {
+      status.value = 'empty'
+      return
     }
-  })
+    initChart(doc.markets)
+    status.value = 'ready'
+  } catch (error) {
+    console.error('[DynamicGlobe] failed to load real globe data:', error)
+    status.value = 'error'
+  }
+}
+
+function handleResize() {
+  chartInstance.value?.resize()
+}
+
+const toggleRotation = (statusValue) => {
+  isRotating.value = statusValue
+  chartInstance.value?.setOption({ globe: { viewControl: { autoRotate: statusValue } } })
 }
 
 onMounted(() => {
-  initChart()
+  window.addEventListener('resize', handleResize)
+  loadGlobeData()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   chartInstance.value?.dispose()
-  window.removeEventListener('resize', () => {})
+  chartInstance.value = null
 })
 
-defineExpose({
-  toggleRotation
-})
+defineExpose({ toggleRotation })
 </script>
 
 <style scoped>
 .globe-wrapper {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
+  min-height: 420px;
+  background: #0a0a1a;
 }
-
 .globe-container {
-  width: 1000px;
-  height: 700px;
+  width: 100%;
+  min-height: 420px;
+  height: 70vh;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+}
+.globe-status {
+  position: absolute;
+  inset: auto 16px 16px;
+  color: #9eb1ca;
+  text-align: center;
+  font-size: 13px;
+  pointer-events: none;
 }
 </style>

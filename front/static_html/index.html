@@ -1293,7 +1293,7 @@ body::after{
     <div class="rd-bar" id="kpiSrc" aria-live="polite"></div>
 
     <!-- ==================== 中央地球 + 两翼 ==================== -->
-    <section class="stage" aria-label="全球玩家分布与运营态势">
+    <section class="stage" aria-label="全球 Steam 评论语言市场与公开风险信号">
 
         <!-- 左翼 -->
         <div class="wing wing--left">
@@ -1329,7 +1329,7 @@ body::after{
             <div class="core-head">
                 <span class="chev" aria-hidden="true">«</span>
                 <span class="dot" aria-hidden="true"></span>
-                全球玩家脉搏 · 演示
+                全球评论语言市场 · REAL DATA
                 <span class="chev" aria-hidden="true">»</span>
             </div>
 
@@ -1340,15 +1340,16 @@ body::after{
                 <div class="orbit orbit--c" aria-hidden="true"></div>
                 <div class="orbit orbit--d" aria-hidden="true"></div>
                 <div id="globeContainer" role="img"
-                     aria-label="可交互三维地球：青色/橙色/红色点位为玩家分布与风险等级，脉冲环为热点区域，弧线为区域间迁移路径。支持拖动旋转、滚轮缩放、双击复位。"></div>
+                     aria-label="可交互三维地球：点位代表 Steam 评论语言市场，颜色代表评论风险信号，不代表玩家真实所在地。支持拖动旋转、滚轮缩放、双击复位。"></div>
                 <div class="globe-scan" aria-hidden="true"></div>
+                <div id="globeDataStatus" class="p-meta" aria-live="polite">正在加载真实评论市场数据…</div>
                 <div class="globe-info" id="globeInfo" aria-live="polite">
                     <span class="gi-k">全局态势</span>
-                    <b class="gi-title">全球玩家分布</b>
+                    <b class="gi-title">全球评论语言市场</b>
                     <div class="gi-rows">
-                        <span><i>活跃玩家</i><em>128.6K</em></span>
-                        <span><i>高危玩家</i><em>8,420</em></span>
-                        <span><i>高流失区域</i><em>北美 7.8%</em></span>
+                        <span><i>地图维度</i><em>评论语言</em></span>
+                        <span><i>风险信号</i><em>推荐倾向</em></span>
+                        <span><i>玩家所在地</i><em>不可推断</em></span>
                     </div>
                     <p class="gi-hint">拖动旋转 · 滚轮缩放 · 双击复位 · 点击点位或热点标签查看区域详情</p>
                 </div>
@@ -1356,7 +1357,7 @@ body::after{
                 
             </div>
 
-            <p class="core-hint">拖动旋转 · 滚轮缩放 · 发光点为高流失区域</p>
+            <p class="core-hint">拖动旋转 · 滚轮缩放 · 点位为评论语言市场，颜色表示公开评论风险信号</p>
 
             <!-- 决策链：热点事件 → 玩家情绪 → 流失风险 → 召回策略（文档 §F1） -->
             <div class="chain" id="chain" aria-label="热点响应链路">
@@ -2063,21 +2064,40 @@ body::after{
     }
 
     /* ---------- 地球初始化（只执行一次） ---------- */
-    var points = D.playerPoints.map(function (p) {
-        var r = nearestRegion(p.lat, p.lng);
-        return Object.assign({}, p, { regionId: r ? r.id : null });
-    });
-
+    /* 地球不再从 DashboardData 的演示点位初始化；只在真实语言市场数据到达后绘制。 */
     var stage = window.GlobeStage ? window.GlobeStage.init({
         el: document.getElementById('globeContainer'),
-        data: { playerPoints: points, hotspots: D.hotspots, arcs: D.arcsWithCoords(), riskPillars: D.regionsFor('30d') },
+        data: { playerPoints: [], hotspots: [], arcs: [], riskPillars: [] },
         handlers: {
             onSelectRegion: function (id) { selectRegion(id, true); },
             onSelectHotspot: function (id) { selectHotspot(id, true); },
             onSelectArc: function (a) { showArc(a); },
+            onSelectMarket: function (market) { renderInfo('market', market); },
             onClearSelection: function () { clearSelection(); }
         }
     }) : null;
+
+    /* 只消费 data 分支生成的真实评论样本聚合；无数据时保持空地球，不回退 mock。 */
+    if (window.RealData) {
+        window.RealData.load('globe-daily.json').then(function (result) {
+            var markets = result && result.state === 'ready' && result.doc &&
+                Array.isArray(result.doc.markets) ? result.doc.markets : [];
+            if (stage && markets.length) stage.setMarketData(markets);
+            var stamp = document.getElementById('globeDataStatus');
+            if (stamp) {
+                var reviewTotal = markets.reduce(function (sum, market) {
+                    return sum + (Number(market.review_count) || 0);
+                }, 0);
+                stamp.textContent = markets.length
+                    ? (result.source === 'remote' ? 'LIVE' : 'SNAPSHOT') + ' · ' +
+                      markets.length + ' 个语言市场 / ' + reviewTotal.toLocaleString() + ' 条评论样本'
+                    : (result && result.state === 'ready' ? '暂无足够的真实评论样本' : '真实地球数据暂不可用');
+            }
+        }).catch(function () {
+            var stamp = document.getElementById('globeDataStatus');
+            if (stamp) stamp.textContent = '真实地球数据暂不可用';
+        });
+    }
 
     /* ---------- 信息卡 ---------- */
     function renderInfo(kind, data) {
@@ -2094,6 +2114,17 @@ body::after{
                 '<span><i>迁移路径</i><em>' + D.arcs.filter(function (a) { return a.from === data.id || a.to === data.id; }).length + ' 条</em></span>' +
                 '</div>' +
                 '<p class="gi-hint">双击地球可复位视角</p>';
+        } else if (kind === 'market') {
+            var pct = function (v) { return (Number(v || 0) * 100).toFixed(1) + '%'; };
+            html = '<span class="gi-k">评论语言市场 · ' + data.name + '</span>' +
+                '<b class="gi-title">' + data.name_en + '</b>' +
+                '<div class="gi-rows">' +
+                '<span><i>近 ' + data.period_days + ' 日评论样本</i><em>' + Number(data.review_count || 0).toLocaleString() + '</em></span>' +
+                '<span><i>不推荐比例</i><em>' + pct(data.negative_rate) + '</em></span>' +
+                '<span><i>风险信号</i><em>' + data.risk_score + ' / ' + riskText(data.risk) + '</em></span>' +
+                '<span><i>热点主题</i><em>' + (data.top_topic || '暂无') + '</em></span>' +
+                '</div>' +
+                '<p class="gi-hint">基于 Steam 评论语言聚合，不代表玩家真实所在地；不推荐比例不是模型情感分类。</p>';
         } else if (kind === 'hotspot') {
             html = '<span class="gi-k">热点详情 · ' + data.category + '</span>' +
                 '<b class="gi-title">' + data.name + '</b>' +
@@ -2120,11 +2151,11 @@ body::after{
     function renderDefaultInfo() {
         if (!infoEl) return;
         infoEl.innerHTML = '<span class="gi-k">全局态势</span>' +
-            '<b class="gi-title">全球玩家分布</b>' +
+            '<b class="gi-title">全球评论语言市场</b>' +
             '<div class="gi-rows">' +
-            '<span><i>活跃玩家</i><em>128.6K</em></span>' +
-            '<span><i>高危玩家</i><em>8,420</em></span>' +
-            '<span><i>高流失区域</i><em>北美 7.8%</em></span>' +
+            '<span><i>地图含义</i><em>评论语言市场</em></span>' +
+            '<span><i>风险信号</i><em>评论推荐倾向</em></span>' +
+            '<span><i>玩家地理位置</i><em>不可由此推断</em></span>' +
             '</div>' +
             '<p class="gi-hint">拖动旋转 · 滚轮缩放 · 双击复位 · 点击点位或热点标签查看详情</p>';
         infoEl.classList.remove('is-active');

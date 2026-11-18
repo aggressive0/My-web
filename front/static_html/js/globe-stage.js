@@ -102,7 +102,8 @@
 
     /* ---------- 玩家分布点：半径单位为角度，压到亚度级，呈现贴地微光 ---------- */
     function pointRadius(p) {
-        var r = Math.sqrt(Math.max(0, Number(p.players) || 0)) / 620;
+        var count = Number(p.review_count != null ? p.review_count : p.players) || 0;
+        var r = Math.sqrt(Math.max(0, count)) / 180;
         return Math.max(0.12, Math.min(0.42, r));
     }
 
@@ -286,18 +287,19 @@
             .pointLat('lat')
             .pointLng('lng')
             .pointColor(function (p) {
-                if (!state.selectedRegion) return riskColor(p.risk);
+                if (p.marketId || !state.selectedRegion) return riskColor(p.risk);
                 return p.regionId === state.selectedRegion ? riskColor(p.risk) : '#344c60';
             })
             .pointRadius(function (p) {
                 var r = pointRadius(p);
-                return (state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
+                return (!p.marketId && state.selectedRegion && p.regionId === state.selectedRegion) ? r * 1.16 : r;
             })
             .pointAltitude(0.004)
             .pointResolution(6)
             .pointsMerge(false)
             .onPointClick(function (p) {
-                if (p && p.regionId && state.handlers.onSelectRegion) state.handlers.onSelectRegion(p.regionId, 'globe');
+                if (p && p.marketId && state.handlers.onSelectMarket) state.handlers.onSelectMarket(p);
+                else if (p && p.regionId && state.handlers.onSelectRegion) state.handlers.onSelectRegion(p.regionId, 'globe');
             });
 
         /* ---------- 热点脉冲环（只给高/中风险，控制密度） ---------- */
@@ -480,6 +482,30 @@
         }
     }
 
+    function setMarketData(markets) {
+        if (!state.ready) return;
+        var rows = (markets || []).map(function (m) {
+            return Object.assign({}, m, {
+                marketId: m.id,
+                lat: Number(m.latitude),
+                lng: Number(m.longitude),
+                risk: m.risk_level || 'low'
+            });
+        }).filter(function (m) {
+            return Number.isFinite(m.lat) && Number.isFinite(m.lng);
+        });
+        state.points = rows;
+        state.hotspots = rows.map(function (m) {
+            return Object.assign({}, m, { risk: m.risk_level || 'low' });
+        });
+        state.arcs = [];
+        state.riskPillars = [];
+        state.globe.pointsData(rows);
+        state.globe.ringsData(rows.filter(function (m) { return m.risk !== 'low'; }));
+        state.globe.arcsData([]);
+        state.globe.htmlElementsData([]);
+    }
+
     function setRiskPillars(rows) {
         if (!state.ready) return;
         state.riskPillars = rows || [];
@@ -535,6 +561,7 @@
         setAutoRotate: setAutoRotate,
         setSelected: setSelected,
         setRiskPillars: setRiskPillars,
+        setMarketData: setMarketData,
         dispose: dispose,
         isReady: function () { return state.ready; },
         instance: function () { return state.globe; }
