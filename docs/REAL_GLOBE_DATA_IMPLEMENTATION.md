@@ -79,3 +79,34 @@ python -m unittest discover -s tests -p 'test_globe_publish.py' -v
 ```
 
 No synthetic market data is written when the sample file is missing or empty.
+
+## Language filter experiment (2026-11-18)
+
+Hypothesis tested: the `language` parameter might be ignored only under `filter=recent`
+(the collector already documents that `num_per_page` is ignored there), and might work
+under `filter=all`.
+
+Method: `backend/scripts/probe_review_language.py` calls the collector's own
+`fetch_page()` — the same channel, retries and fallback as production — varying only
+`language`. Matrix: 2 apps (730, 1091500) × 5 combinations
+(`recent`/`all` × `all`/`schinese`/`russian`), 100 reviews each.
+
+Result: **10 of 10 requests returned 100% `english`**, including `language=schinese`
+and `language=russian`, under both filters.
+
+Conclusion: this channel does not support language filtering at all. The 100% English
+sample is a property of the endpoint, not of the games or the collector. Additional
+language markets cannot be produced by changing the request parameters.
+
+A first version of the probe hand-built `store.steampowered.com/appreviews` URLs and
+got HTML on all 10 attempts (Steam bounced the requests to the storefront). That
+version measured nothing; it is recorded here because "the probe failed" and
+"the parameter is ignored" look identical if the probe is not validated against the
+production code path first.
+
+Options for real multi-language coverage, in order of cost:
+
+1. Keyed `IUserReviewsService` request (Steam WebAPI key) — cheap to test, unverified.
+2. Localised storefront with `l=`/`cc=` — not reachable from CI runners (302 to storefront).
+3. Regional egress proxies — operationally heavy for a student project.
+4. Accept single-market coverage and state it explicitly in the UI.

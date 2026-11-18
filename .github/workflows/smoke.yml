@@ -46,7 +46,20 @@ jobs:
         run: npx playwright install --with-deps chromium --only-shell
 
       - name: Run smoke test
-        run: node tests/smoke.mjs
+        # 已知基础设施工况：Node 24 的 undici 在本地 http.server 提前关闭连接时
+        # 会抛 assert(!this.paused) 并直接终止进程（约 1/5 概率，19-24s 处）。
+        # 这不是断言失败，也不是页面问题，但会让 PR 卡在 UNSTABLE。
+        # 策略：失败后重跑一次；真实失败会连续失败两次，结论不变。
+        run: |
+          set +e
+          node tests/smoke.mjs
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "::warning::冒烟首次失败（exit=$code），重跑一次以排除 undici 已知崩溃"
+            node tests/smoke.mjs
+            code=$?
+          fi
+          exit $code
 
       - name: Upload failure artifacts
         if: failure()
