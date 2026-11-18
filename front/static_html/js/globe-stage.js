@@ -561,6 +561,7 @@
         setAutoRotate: setAutoRotate,
         setSelected: setSelected,
         setRiskPillars: setRiskPillars,
+        setMarketData: setMarketData,
         dispose: dispose,
         isReady: function () { return state.ready; },
         instance: function () { return state.globe; }
