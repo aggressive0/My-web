@@ -1,0 +1,753 @@
+{
+ "version": "2026-11-18.v3",
+ "corpus_dir": "tests/fixtures/rag_corpus",
+ "top_k": 5,
+ "threshold": 0.35,
+ "chunk_size": 500,
+ "chunk_overlap": 80,
+ "annotation_provenance": {
+  "drafted_by": "AI assistant",
+  "review_status": "pending_human_review",
+  "verification": "每题的 must_contain 由 evaluate_retrieval.py 机械校验：字符串必须出现在 expected_gids 指向的公告正文里，否则评估直接失败",
+  "warning": "这不是人工标注的黄金标准。must_contain 能证明「答案确实在这份文档里」，但不能证明「除它以外没有别的文档能回答」。评审时应重点看后者",
+  "changelog": [
+   "v1: 30 题初版（仅检索指标）",
+   "v2: 修正 q05 与 q16 标注过窄，新增 match=any 等价族口径",
+   "v3: 每题增加 intent 与 answer_shape；q30 由 unanswerable 改判为 strategy_generation；新增 18 题覆盖 SQL / 策略 / 越界 / 歧义 / 答案形态样本。冻结为 Phase 6.3 基线"
+  ],
+  "intent_legend": {
+   "kb_factual_qa": "知识库事实问答，走检索 + 证据门",
+   "sql_analytics": "动态数据查询，应路由到 SQLite/分析模块，不查知识库",
+   "strategy_generation": "策略生成，走动态数据 + 运营证据 + 生成，不得伪装成事实回答",
+   "out_of_scope": "超出系统能力，应直接拒答",
+   "ambiguous": "问题不明确，应追问而非猜测"
+  }
+ },
+ "questions": [
+  {
+   "id": "q01",
+   "app_id": 1203220,
+   "category": "patch",
+   "query": "11月5日的版本更新，停机维护的时间窗口是几点到几点？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "Nov 5th, 2026 04"
+   ],
+   "note": "维护窗口 11-04 23:00 UTC 至 11-05 04:00 UTC",
+   "intent": "kb_factual_qa",
+   "answer_shape": "date"
+  },
+  {
+   "id": "q02",
+   "app_id": 1203220,
+   "category": "patch",
+   "query": "最近一次更新新加了哪个英雄？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "Kael"
+   ],
+   "note": "新英雄 Kael，与 Taotie 共魂",
+   "intent": "kb_factual_qa",
+   "answer_shape": "entity"
+  },
+  {
+   "id": "q03",
+   "app_id": 1203220,
+   "category": "patch",
+   "query": "本次更新新增的水下武器是什么，在哪里才能获得？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "Bident",
+    "Dark Pearl Abyss"
+   ],
+   "note": "Bident，仅在 Wanchu - Dark Pearl Abyss 获取",
+   "intent": "kb_factual_qa",
+   "answer_shape": "location"
+  },
+  {
+   "id": "q04",
+   "app_id": 1203220,
+   "category": "patch",
+   "query": "Vanquisher's Trials 有哪些难度，分别有几个阶段？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "Nightscream"
+   ],
+   "note": "Nightscream / Legend 两个难度，各三阶段",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count"
+  },
+  {
+   "id": "q05",
+   "app_id": 1203220,
+   "category": "feedback",
+   "query": "举报作弊玩家能拿到什么奖励？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702692939",
+    "1848664643359279",
+    "1847920302252036",
+    "1847286114049406",
+    "1846651706695473",
+    "1846018067943855",
+    "1845383656376400",
+    "1844751498218431",
+    "1844115010488275",
+    "1842846814456139",
+    "1842212951313370",
+    "1841579228678222",
+    "1840944183788968",
+    "1840944183774044"
+   ],
+   "must_contain": [
+    "Righteous Pole"
+   ],
+   "match": "any",
+   "note": "14 份封禁名单模板完全一致、都写了同一段奖励说明（机械枚举自语料），因此用 any 口径：命中任一份即正确。首版只标了 4 份，是标注错误——v1 的 recall=0 反映的是标注太窄，不是检索失败",
+   "intent": "kb_factual_qa",
+   "answer_shape": "policy"
+  },
+  {
+   "id": "q06",
+   "app_id": 1203220,
+   "category": "time",
+   "query": "最近一次版本更新公告是哪一份？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "Nov 4th, 2026 23"
+   ],
+   "note": "陷阱题：10-22 也有一份更新公告，排序必须把 11-05 放在前面",
+   "intent": "kb_factual_qa",
+   "answer_shape": "date"
+  },
+  {
+   "id": "q07",
+   "app_id": 1203220,
+   "category": "isolation",
+   "query": "最近的版本更新内容有哪些？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637",
+    "1847286114029068"
+   ],
+   "must_contain": [
+    "NARAKA"
+   ],
+   "note": "同题在 Apex 下问一次（q12），用来测跨游戏污染",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q08",
+   "app_id": 1172470,
+   "category": "patch",
+   "query": "11月17日的更新修复了什么问题？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702695438"
+   ],
+   "must_contain": [
+    "visual blur"
+   ],
+   "note": "Drain Gain 通配卡的画面模糊问题",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q09",
+   "app_id": 1172470,
+   "category": "patch",
+   "query": "Crypto 的无人机召回时间调整成了多少秒？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880481641"
+   ],
+   "must_contain": [
+    "0.7 seconds"
+   ],
+   "note": "从 6 秒缩短到 0.7 秒",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count"
+  },
+  {
+   "id": "q10",
+   "app_id": 1172470,
+   "category": "event",
+   "query": "哥斯拉联名活动的内容是什么？",
+   "answerable": true,
+   "expected_gids": [
+    "1848664643342057"
+   ],
+   "must_contain": [
+    "Godzilla"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q11",
+   "app_id": 1172470,
+   "category": "feedback",
+   "query": "官方对使用手柄作弊的玩家采取了什么措施？",
+   "answerable": true,
+   "expected_gids": [
+    "1849192144184215"
+   ],
+   "must_contain": [
+    "Controller Cheating"
+   ],
+   "note": "反作弊团队的竞技诚信更新",
+   "intent": "kb_factual_qa",
+   "answer_shape": "policy"
+  },
+  {
+   "id": "q12",
+   "app_id": 1172470,
+   "category": "isolation",
+   "query": "最近的版本更新内容有哪些？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702695438",
+    "1848664643360717",
+    "1848557880481641"
+   ],
+   "must_contain": [
+    "FIXED"
+   ],
+   "note": "与 q07 同题异游戏，用于检测跨 app_id 泄漏",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q13",
+   "app_id": 230410,
+   "category": "event",
+   "query": "TennoGen 这项社区创作计划已经进行多少年了？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702690281"
+   ],
+   "must_contain": [
+    "11 entire years"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "count"
+  },
+  {
+   "id": "q14",
+   "app_id": 230410,
+   "category": "patch",
+   "query": "Tau 星图系统什么时候上线？",
+   "answerable": true,
+   "expected_gids": [
+    "1847920302240077"
+   ],
+   "must_contain": [
+    "December"
+   ],
+   "note": "干扰项：Apex 补丁正文里也有 December",
+   "intent": "kb_factual_qa",
+   "answer_shape": "date"
+  },
+  {
+   "id": "q15",
+   "app_id": 230410,
+   "category": "event",
+   "query": "Icebind 是什么玩法，在哪里挑战？",
+   "answerable": true,
+   "expected_gids": [
+    "1846018067926568"
+   ],
+   "must_contain": [
+    "Icebind"
+   ],
+   "note": "Yuvan Peak 的实验性模式",
+   "intent": "kb_factual_qa",
+   "answer_shape": "location"
+  },
+  {
+   "id": "q16",
+   "app_id": 230410,
+   "category": "event",
+   "query": "这个月的慈善活动支持哪个基金会？",
+   "answerable": true,
+   "expected_gids": [
+    "1847920302249016",
+    "1845383656383401",
+    "1845383656394522"
+   ],
+   "must_contain": [
+    "Movember Foundation"
+   ],
+   "match": "any",
+   "note": "首版只标了 Movember，但同月还有 PMCF Quest（Quest to Conquer Cancer）与 October in Warframe 也在讲慈善活动，标注过窄；改为 any 口径，三份任一提及即算命中",
+   "intent": "kb_factual_qa",
+   "answer_shape": "entity"
+  },
+  {
+   "id": "q17",
+   "app_id": 230410,
+   "category": "event",
+   "query": "黑色星期五促销的折扣力度是多少？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702690279"
+   ],
+   "must_contain": [
+    "50%"
+   ],
+   "note": "干扰项：NARAKA 与 Apex 正文也出现 50%",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count"
+  },
+  {
+   "id": "q18",
+   "app_id": 238960,
+   "category": "patch",
+   "query": "Covens of Umbra 上线后，官方说正在修哪些问题？",
+   "answerable": true,
+   "expected_gids": [
+    "1849458702687828"
+   ],
+   "must_contain": [
+    "Thread"
+   ],
+   "note": "Thread mods 过强、早期体验过陡、Harvest 的 Wisps 等",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q19",
+   "app_id": 238960,
+   "category": "event",
+   "query": "Twitch Drops 活动什么时候开始？",
+   "answerable": true,
+   "expected_gids": [
+    "1849192144184779"
+   ],
+   "must_contain": [
+    "November 13th"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "date"
+  },
+  {
+   "id": "q20",
+   "app_id": 238960,
+   "category": "patch",
+   "query": "Covens of Umbra 这个资料片带来了什么新内容？",
+   "answerable": true,
+   "expected_gids": [
+    "1848664643347678"
+   ],
+   "must_contain": [
+    "Coven Queen"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q21",
+   "app_id": 238960,
+   "category": "event",
+   "query": "ExileCon 2026 的线上直播安排是怎么说的？",
+   "answerable": true,
+   "expected_gids": [
+    "1847286114042849"
+   ],
+   "must_contain": [
+    "Livestream time"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q22",
+   "app_id": 1091500,
+   "category": "patch",
+   "query": "2.5 更新里的 Edgerunners 支线任务叫什么，怎么解锁？",
+   "answerable": true,
+   "expected_gids": [
+    "1847286114029307"
+   ],
+   "must_contain": [
+    "Clampdown"
+   ],
+   "note": "完成 The Heist 与 Wakako 的两个委托后等消息",
+   "intent": "kb_factual_qa",
+   "answer_shape": "procedure"
+  },
+  {
+   "id": "q23",
+   "app_id": 1091500,
+   "category": "patch",
+   "query": "2.5 更新新增的电台叫什么名字？",
+   "answerable": true,
+   "expected_gids": [
+    "1847286114029307"
+   ],
+   "must_contain": [
+    "HKGN 102.0 FM"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "entity"
+  },
+  {
+   "id": "q24",
+   "app_id": 1091500,
+   "category": "patch",
+   "query": "哪个补丁加入了对 DLSS 4 的支持？",
+   "answerable": true,
+   "expected_gids": [
+    "1789580505302900"
+   ],
+   "must_contain": [
+    "DLSS 4"
+   ],
+   "note": null,
+   "intent": "kb_factual_qa",
+   "answer_shape": "entity"
+  },
+  {
+   "id": "q25",
+   "app_id": 1091500,
+   "category": "patch",
+   "query": "2.31 补丁包含哪些改动？",
+   "answerable": true,
+   "expected_gids": [
+    "1810503566412448"
+   ],
+   "must_contain": [
+    "AutoDrive"
+   ],
+   "note": "AutoDrive 升级与拍照模式调整",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q26",
+   "app_id": 578080,
+   "category": "patch",
+   "query": "2027 年 PUBG 电竞的赛区结构有什么变化？",
+   "answerable": true,
+   "expected_gids": [
+    "1847920302232660"
+   ],
+   "must_contain": [
+    "MENA"
+   ],
+   "note": "EMEA 拆分为 Europe/Eurasia/MENA，美洲拆为北美与南美，印度成为新赛区",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed"
+  },
+  {
+   "id": "q27",
+   "app_id": 1203220,
+   "category": "unanswerable",
+   "query": "游戏的退款政策具体是怎么规定的？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "知识库里没有退款政策文档，正确行为是拒答",
+   "intent": "kb_factual_qa",
+   "answer_shape": "policy"
+  },
+  {
+   "id": "q28",
+   "app_id": 230410,
+   "category": "unanswerable",
+   "query": "开发团队一共有多少名员工？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "公告不涉及团队规模",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count"
+  },
+  {
+   "id": "q29",
+   "app_id": 578080,
+   "category": "unanswerable",
+   "query": "游戏服务器机房部署在哪个国家？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "公告不涉及机房位置",
+   "intent": "kb_factual_qa",
+   "answer_shape": "location"
+  },
+  {
+   "id": "q30",
+   "app_id": 1203220,
+   "category": "operation",
+   "query": "如何针对近期活跃度下降设计一套召回活动？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "库里只有官方公告，没有运营方法论；这是 6.5 策略生成真正需要的知识，目前是缺口",
+   "intent": "strategy_generation",
+   "answer_shape": "procedure"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "s01",
+   "app_id": 1203220,
+   "category": "sql",
+   "intent": "sql_analytics",
+   "answer_shape": "mixed",
+   "query": "NARAKA 最近 7 天的同时在线人数怎么变化的？",
+   "note": "动态指标，必须查 SQLite 快照，不能由知识库回答"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "s02",
+   "app_id": 1203220,
+   "category": "sql",
+   "intent": "sql_analytics",
+   "answer_shape": "count",
+   "query": "六款游戏里近 30 天差评率最高的是哪一个？",
+   "note": "跨游戏聚合查询"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "s03",
+   "app_id": 578080,
+   "category": "sql",
+   "intent": "sql_analytics",
+   "answer_shape": "count",
+   "query": "PUBG 过去一周新增了多少条评论？",
+   "note": "按时间窗口计数"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "s04",
+   "app_id": 1172470,
+   "category": "sql",
+   "intent": "sql_analytics",
+   "answer_shape": "count",
+   "query": "Apex 最近 3 天的风险指数是多少？",
+   "note": "现有风险快照指标"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "t01",
+   "app_id": 1203220,
+   "category": "strategy",
+   "intent": "strategy_generation",
+   "answer_shape": "procedure",
+   "query": "针对 NARAKA 近期差评上升，设计一套召回活动方案",
+   "note": "需要动态数据 + 运营依据 + 建议；execution_status 必须是 suggested"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "t02",
+   "app_id": 230410,
+   "category": "strategy",
+   "intent": "strategy_generation",
+   "answer_shape": "procedure",
+   "query": "为 Warframe 设计面向流失玩家的回归活动",
+   "note": "同上"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "t03",
+   "app_id": 1091500,
+   "category": "strategy",
+   "intent": "strategy_generation",
+   "answer_shape": "procedure",
+   "query": "如何降低 Cyberpunk 2077 的负面评论占比？",
+   "note": "单机游戏的召回语境不同，需说明限制"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "o01",
+   "app_id": 1203220,
+   "category": "out_of_scope",
+   "intent": "out_of_scope",
+   "answer_shape": "mixed",
+   "query": "今天北京天气怎么样？",
+   "note": "与游戏运营无关"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "o02",
+   "app_id": 1203220,
+   "category": "out_of_scope",
+   "intent": "out_of_scope",
+   "answer_shape": "procedure",
+   "query": "帮我写一段 Python 快速排序代码",
+   "note": "代码生成，非本系统能力"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "a01",
+   "app_id": 1203220,
+   "category": "ambiguous",
+   "intent": "ambiguous",
+   "answer_shape": "mixed",
+   "query": "这个游戏最近怎么样？",
+   "note": "未指明是口碑、在线还是版本内容，应追问"
+  },
+  {
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "id": "a02",
+   "app_id": 230410,
+   "category": "ambiguous",
+   "intent": "ambiguous",
+   "answer_shape": "mixed",
+   "query": "有什么变化吗？",
+   "note": "缺少时间范围与对象"
+  },
+  {
+   "id": "k01",
+   "app_id": 1203220,
+   "category": "shape",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count",
+   "query": "Vanquisher's Trials 每个阶段有多少个挑战任务？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637"
+   ],
+   "must_contain": [
+    "4 Challenge quests"
+   ],
+   "note": "每个阶段 4 个挑战任务，每完成 1 个得 1 星"
+  },
+  {
+   "id": "k02",
+   "app_id": 1203220,
+   "category": "shape",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count",
+   "query": "Vanquisher's Trials 一共有几种难度？",
+   "answerable": true,
+   "expected_gids": [
+    "1848557880479637",
+    "1840944183774007"
+   ],
+   "must_contain": [
+    "two difficulties"
+   ],
+   "match": "any",
+   "note": "Nightscream 与 Legend 两种；两篇公告都写了同一句，按 any 口径"
+  },
+  {
+   "id": "k03",
+   "app_id": 1091500,
+   "category": "shape",
+   "intent": "kb_factual_qa",
+   "answer_shape": "procedure",
+   "query": "Clampdown 支线任务怎么解锁？",
+   "answerable": true,
+   "expected_gids": [
+    "1847286114029307"
+   ],
+   "must_contain": [
+    "The Heist"
+   ],
+   "note": "完成 The Heist 与 Wakako 两个委托后等待消息"
+  },
+  {
+   "id": "k04",
+   "app_id": 578080,
+   "category": "shape",
+   "intent": "kb_factual_qa",
+   "answer_shape": "procedure",
+   "query": "战队要怎样才能进入 PGS？",
+   "answerable": true,
+   "expected_gids": [
+    "1847920302232660"
+   ],
+   "must_contain": [
+    "Regional League"
+   ],
+   "note": "从各自 Regional League 打起，凭区域联赛成绩晋级"
+  },
+  {
+   "id": "k05",
+   "app_id": 230410,
+   "category": "shape",
+   "intent": "kb_factual_qa",
+   "answer_shape": "location",
+   "query": "Icebind 这个模式在哪里挑战？",
+   "answerable": true,
+   "expected_gids": [
+    "1846018067926568",
+    "1845383656394522"
+   ],
+   "must_contain": [
+    "Yuvan Peak"
+   ],
+   "match": "any",
+   "note": "Yuvan Peak；两篇公告都提到该地点"
+  },
+  {
+   "id": "u01",
+   "app_id": 1203220,
+   "category": "unanswerable",
+   "intent": "kb_factual_qa",
+   "answer_shape": "count",
+   "query": "NARAKA 目前有多少名注册玩家？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "语料中无 registered players / 注册玩家，0 命中"
+  },
+  {
+   "id": "u02",
+   "app_id": 1091500,
+   "category": "unanswerable",
+   "intent": "kb_factual_qa",
+   "answer_shape": "mixed",
+   "query": "Cyberpunk 2077 的官方客服响应时间是多久？",
+   "answerable": false,
+   "expected_gids": [],
+   "must_contain": [],
+   "note": "语料中无 customer service / 客服 / response time，0 命中"
+  }
+ ]
+}

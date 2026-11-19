@@ -35,6 +35,22 @@ try:
 except Exception as _ai_err:                     # pragma: no cover
     print("[ai] 路由注册失败：%s" % _ai_err)
 
+# 知识库路由（Phase 6.2）。单独 try：RAG 依赖缺失不应该连带打掉 LLM 健康检查，
+# 两者本来就是独立失败域。
+try:
+    from routes.knowledge_routes import bp as knowledge_bp
+    app.register_blueprint(knowledge_bp)
+except Exception as _kb_err:                     # pragma: no cover
+    print("[knowledge] 路由注册失败：%s" % _kb_err)
+
+# 召回策略路由（Phase 6.5）。同样独立 try：策略生成依赖 LLM，
+# 它坏了不该连带打掉知识库检索与健康检查。
+try:
+    from routes.recall_routes import bp as recall_bp
+    app.register_blueprint(recall_bp)
+except Exception as _recall_err:                 # pragma: no cover
+    print("[recall] 路由注册失败：%s" % _recall_err)
+
 # 定义数据模型
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)

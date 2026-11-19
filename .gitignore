@@ -10,6 +10,8 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/backup/
+# 向量库持久化目录（Phase 6.2，体积随知识库增长，不入库）
+backend/data/chroma/
 
 # 环境变量文件
 .env

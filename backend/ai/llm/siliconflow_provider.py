@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 
 from .base import (BaseLLMProvider, InvalidOutput, LLMTimeout, LLMUnavailable,
-                   ModelNotFound)
+                   ModelNotFound, failure_reason)
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -97,4 +97,6 @@ class SiliconFlowProvider(BaseLLMProvider):
                 r.read()
             return {"available": True, "model": self.model, "detail": None}
         except Exception as e:
-            return {"available": False, "model": self.model, "detail": str(e)[:200]}
+            # detail 会原样回给浏览器，不给原始异常文本（可能含地址与状态细节）
+            return {"available": False, "model": self.model,
+                    "detail": failure_reason(e)}
