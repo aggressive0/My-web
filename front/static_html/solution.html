@@ -635,6 +635,60 @@ body::before{
     white-space:pre-wrap;
 }
 
+/* ==================== AI 召回策略（本地模型） ==================== */
+.ai-live{
+    flex:none;
+    margin-top:10px;
+    padding:9px 10px 10px;
+    border-radius:9px;
+    border:1px solid rgba(90,140,200,.18);
+    background:rgba(8,15,27,.7);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+.ai-live-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ai-live-title{font-size:10.5px;letter-spacing:.08em;color:var(--ink-2)}
+.ai-live-tag{
+    font-family:var(--mono);font-size:9px;padding:1px 6px;border-radius:5px;
+    color:#BFF3FF;border:1px solid rgba(53,217,242,.35);background:rgba(53,217,242,.1);
+}
+.ai-live-tag[data-kind="demo"]{color:var(--amber);border-color:rgba(255,180,95,.4);background:rgba(255,180,95,.1)}
+.ai-live-ctrl{display:flex;gap:7px;align-items:center}
+.ai-live-ctrl select{
+    flex:1;min-width:0;padding:5px 7px;border-radius:7px;
+    border:1px solid rgba(90,140,200,.26);background:rgba(5,11,20,.9);
+    color:var(--ink);font-family:var(--sans);font-size:10.5px;
+}
+.ai-live-ctrl .btn-ai{align-self:auto;flex:none}
+.ai-live-status{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);line-height:1.6;word-break:break-all}
+.ai-live-status[data-state="ok"]{color:var(--green)}
+.ai-live-status[data-state="err"]{color:var(--red)}
+.ai-live-status[data-state="busy"]{color:var(--cyan)}
+.ai-live-body{display:flex;flex-direction:column;gap:7px;max-height:210px;overflow:auto}
+.ai-kv{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-2)}
+.ai-kv b{color:var(--ink);font-family:var(--mono)}
+.ai-sec-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:3px;
+}
+.ai-sec-head em{font-style:normal;font-family:var(--mono);color:var(--ink-3)}
+.ai-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.ai-list li{
+    font-size:10px;line-height:1.55;color:var(--ink-2);
+    padding-left:9px;position:relative;
+}
+.ai-list li::before{content:"·";position:absolute;left:0;color:var(--cyan)}
+.ai-list--mono li{font-family:var(--mono);font-size:9.5px}
+.ai-list--warn li::before{color:var(--amber)}
+.ai-history li{cursor:pointer;padding:3px 6px 3px 18px;border-radius:6px;border:1px solid transparent}
+.ai-history li::before{left:6px;top:3px}
+.ai-history li:hover{border-color:rgba(53,217,242,.3);background:rgba(53,217,242,.06)}
+.ai-history li b{color:var(--ink);font-weight:600}
+.ai-history li span{display:block;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.ai-list .ai-empty{color:var(--ink-3);font-size:10px}
+.ai-list .ai-empty::before{content:""}
+
 .btn-deploy{
     flex:none;
     margin-top:auto;
@@ -1086,14 +1140,37 @@ body::before{
                         <div class="steps-track" id="stepsTrack"></div>
                     </div>
 
-                    <details class="ai-fold">
-                        <summary>AI 生成依据（可选，模型调用）</summary>
-                        <div class="ai-body">
-                            <textarea id="modelPrompt" placeholder="描述场景，例如：北美高流失风险玩家、竞技平衡性争议升温，给出召回动作"></textarea>
-                            <button class="btn-ai" type="button" id="generateStrategy">生成召回依据</button>
-                            <div class="ai-out" id="responseContent" aria-live="polite"></div>
+                    <div class="ai-live" aria-label="AI 召回策略（本地模型 · 真实数据）">
+                        <div class="ai-live-head">
+                            <span class="ai-live-title">AI 召回策略 · 本地模型</span>
+                            <span class="ai-live-tag" id="aiSourceTag">真实数据</span>
                         </div>
-                    </details>
+                        <div class="ai-live-ctrl">
+                            <select id="aiGame" aria-label="选择游戏"></select>
+                            <button class="btn-ai" type="button" id="aiGenerate">生成策略</button>
+                        </div>
+                        <div class="ai-live-status" id="aiStatus" aria-live="polite">选择游戏后生成 · 约 15–30 秒</div>
+                        <div class="ai-live-body" id="aiResult" hidden>
+                            <div class="ai-kv"><span>风险等级</span><b id="aiRisk">—</b></div>
+                            <div class="ai-kv"><span>动态指标</span><b id="aiMetricCount">—</b></div>
+                            <div class="ai-sec">
+                                <div class="ai-sec-head">知识证据</div>
+                                <ul class="ai-list" id="aiEvidence"></ul>
+                            </div>
+                            <div class="ai-sec">
+                                <div class="ai-sec-head">数据指标</div>
+                                <ul class="ai-list ai-list--mono" id="aiMetrics"></ul>
+                            </div>
+                            <div class="ai-sec">
+                                <div class="ai-sec-head">限制说明</div>
+                                <ul class="ai-list ai-list--warn" id="aiLimits"></ul>
+                            </div>
+                        </div>
+                        <div class="ai-sec">
+                            <div class="ai-sec-head">历史策略 <em id="aiHistoryCount"></em></div>
+                            <ul class="ai-list ai-history" id="aiHistory"></ul>
+                        </div>
+                    </div>
 
                     <button class="btn-deploy" type="button" id="deployBtn">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
@@ -1119,7 +1196,8 @@ body::before{
     </section>
 
     <p class="foot">
-        <b>口径</b> · 示例数据集（<code>js/dashboard-data.js</code>）｜ 风险池 = 高风险 + 潜在流失 ｜ 可召回 = 风险池中近 30 天可触达人群 ｜ 尚未接入 <code>/api/churn-retention</code>
+        <b>口径</b> · 上方 KPI 为示例数据集（<code>js/dashboard-data.js</code>）｜ 风险池 = 高风险 + 潜在流失 ｜ 可召回 = 风险池中近 30 天可触达人群 ｜ 尚未接入 <code>/api/churn-retention</code><br>
+        <b>AI 召回策略</b> · 右下「AI 召回策略」为真实数据：动态指标取自 SQLite，知识证据取自本地知识库，策略由本地模型生成并经数值与引用双校验（<code>/api/recall/generate|history|detail</code>）
     </p>
 
     <div data-live-ticker></div>
@@ -1331,6 +1409,9 @@ body::before{
     function renderPlan() {
         var s = byId(state.selected);
         var n = baseNumbers(state.range);
+        // 一旦切回预设卡片，来源标记必须跟着变回「示例」，
+        // 否则用户会以为屏幕上这份是本地模型刚生成的
+        markSource('demo');
         $('planId').textContent = s.plan.code;
         $('planTitle').textContent = s.plan.title;
         $('planDesc').textContent = s.plan.desc;
@@ -1448,67 +1529,187 @@ body::before{
         toast('「' + s.name + '」已加入部署队列（本地演示，未下发真实触达）');
     });
 
-    /* ==================== 模型调用（可选） ==================== */
-    var KEY_STORAGE = 'liusheng.siliconflow.key';
-    var API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
-    var MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+    /* ==================== AI 召回策略（本地模型 · 真实数据） ====================
+       旧实现是浏览器直连 SiliconFlow 并要求用户粘贴 API Key：密钥落在 localStorage、
+       请求完全绕过后端，与「前端只经 Flask 取真实数据」的约定相反（writing-block §12.1）。
+       现在统一走 /api/recall/*，模型由本地 Ollama 提供；后端返回什么就显示什么，
+       失败也如实展示 reason/detail，不在前端编一个"看起来像"的方案。
+       ==================================================================== */
+    var AI_BASE = window.NEXUS_API_BASE ||
+        (location.protocol + '//' + location.hostname + ':5000');
 
-    function resolveApiKey() {
-        var key = '';
-        try { key = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch (e) { /* 隐私模式 */ }
-        if (key) return key;
-        var input = window.prompt('首次使用需填入 SiliconFlow API Key。\n密钥只保存在本机浏览器，不会写入仓库。');
-        key = (input || '').trim();
-        if (key) { try { localStorage.setItem(KEY_STORAGE, key); } catch (e) {} }
-        return key;
+    function esc(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
     }
 
-    $('generateStrategy').addEventListener('click', async function () {
-        var s = byId(state.selected);
-        var prompt = $('modelPrompt').value.trim() || ('当前策略：' + s.name + '。场景：' + s.desc);
+    function setStatus(text, state) {
+        var el = $('aiStatus');
+        el.textContent = text;
+        if (state) { el.dataset.state = state; } else { el.removeAttribute('data-state'); }
+    }
 
-        var apiKey = resolveApiKey();
-        if (!apiKey) {
-            $('responseContent').textContent =
-                '未配置 API Key，无法调用大模型。\n再次点击并输入密钥即可；密钥仅保存在本机浏览器（localStorage: ' +
-                KEY_STORAGE + '），不会写入仓库。';
+    function markSource(kind) {
+        var tag = $('aiSourceTag');
+        if (kind === 'real') {
+            tag.textContent = '本地模型生成';
+            tag.dataset.kind = 'real';
+        } else {
+            tag.textContent = '示例';
+            tag.dataset.kind = 'demo';
+        }
+    }
+
+    function renderAiList(id, items, mapper, emptyText) {
+        var host = $(id);
+        if (!items || !items.length) {
+            host.innerHTML = '<li class="ai-empty">' + esc(emptyText || '暂无') + '</li>';
             return;
         }
+        host.innerHTML = items.map(mapper).join('');
+    }
 
-        this.disabled = true;
-        this.textContent = '生成中…';
-        $('engineStatusText').textContent = '正在生成最优召回方案…';
+    function renderRealStrategy(payload) {
+        var s = payload.strategy || {};
+        var evidence = s.knowledge_evidence || [];
+        var metrics = s.data_evidence || [];
+        var actions = s.recall_actions || [];
+        var risk = (s.risk_analysis || {}).risk_level || '—';
+
+        /* 右上方案卡复用为真实结果：这些字段本来就是"当前方案"的展示位 */
+        $('planId').textContent = 'AI · ' + (payload.strategy_id || '未落库');
+        $('planTitle').textContent = s.summary || '（模型未给出摘要）';
+        $('planDesc').textContent = '风险等级 ' + risk + ' · ' + metrics.length +
+            ' 项动态指标 · ' + evidence.length + ' 条知识证据';
+        $('stepHint').textContent = actions.length + ' 条措施';
+        $('stepsTrack').innerHTML = actions.map(function (a) {
+            var color = a.priority === 'high' ? 'var(--red)'
+                : (a.priority === 'medium' ? 'var(--amber)' : 'var(--green)');
+            return '<div class="step" style="--c:' + color + '">' +
+                '<span class="step-ico" aria-hidden="true">' + svg(ICONS.chart) + '</span>' +
+                '<span>' + esc(a.name) + '</span></div>';
+        }).join('');
+        $('engineStatusText').textContent = '已生成本地模型策略 · ' + risk;
+        $('engineStatus').classList.add('is-done');
+        markSource('real');
+
+        $('aiResult').hidden = false;
+        $('aiRisk').textContent = risk;
+        $('aiMetricCount').textContent = metrics.length + ' 项';
+        renderAiList('aiEvidence', evidence, function (e) {
+            return '<li><b>' + esc(e.title || '（无标题）') + '</b>：' + esc(e.claim) + '</li>';
+        }, '本次没有检索到知识证据');
+        renderAiList('aiMetrics', metrics, function (m) {
+            return '<li>' + esc(m.name) + ' = ' + esc(m.value) + '</li>';
+        }, '没有可用的动态指标');
+        renderAiList('aiLimits', s.limitations || [], function (t) {
+            return '<li>' + esc(t) + '</li>';
+        }, '模型未声明限制');
+    }
+
+    async function aiGenerate() {
+        var btn = $('aiGenerate');
+        var appId = parseInt($('aiGame').value, 10);
+        if (!appId) { setStatus('请先选择游戏', 'err'); return; }
+
+        btn.disabled = true;
+        btn.textContent = '生成中…';
+        setStatus('动态指标 → 知识检索 → 本地模型 → 数值与引用校验…', 'busy');
+        var started = Date.now();
 
         try {
-            var res = await fetch(API_URL, {
+            var res = await fetch(AI_BASE + '/api/recall/generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [
-                        { role: 'system', content: '你是游戏运营策略师。基于给定场景输出：①核心诊断 ②2-3 条召回动作 ③预期效果。180 字内，中文，简洁专业。' },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 380
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ app_id: appId })
             });
-            if (!res.ok) {
-                var err = await res.json().catch(function () { return {}; });
-                throw new Error((err.error && err.error.message) || ('HTTP ' + res.status));
+            var body = await res.json();
+            var d = body.data || {};
+            var secs = ((Date.now() - started) / 1000).toFixed(1);
+
+            if (d.status === 'generated') {
+                renderRealStrategy(d);
+                setStatus('已生成并落库 · ' + secs + 's · ' + (d.strategy_id || ''), 'ok');
+                loadHistory();
+            } else {
+                setStatus('未生成 · ' + (d.status || 'unknown') + ' · ' +
+                    (d.reason || '') + (d.detail ? ' · ' + d.detail : ''), 'err');
             }
-            var data = await res.json();
-            var txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-            $('responseContent').textContent = txt || '未获取到有效回复';
-            $('engineStatusText').textContent = '方案已生成 · ' + s.short;
-            $('engineStatus').classList.add('is-done');
         } catch (err) {
-            $('responseContent').textContent = '【调用失败】' + err.message + '\n\n请检查网络或密钥后重试。';
+            setStatus('调用失败：' + err.message + '（后端 5000 端口是否已启动？）', 'err');
         } finally {
-            this.disabled = false;
-            this.textContent = '生成召回依据';
+            btn.disabled = false;
+            btn.textContent = '生成策略';
         }
-    });
+    }
+
+    async function loadHistory() {
+        var appId = parseInt($('aiGame').value, 10);
+        if (!appId) return;
+        try {
+            var res = await fetch(AI_BASE + '/api/recall/history?app_id=' + appId + '&limit=6',
+                { cache: 'no-store' });
+            var body = await res.json();
+            var data = body.data || {};
+            var items = data.items || [];
+            $('aiHistoryCount').textContent = (data.total || 0) + ' 条';
+            renderAiList('aiHistory', items, function (it) {
+                return '<li data-id="' + esc(it.strategy_id) + '"><b>' +
+                    esc((it.summary || '').slice(0, 28)) + '</b><span>' +
+                    esc((it.created_at || '').replace('T', ' ').slice(0, 16)) + ' · ' +
+                    it.action_count + ' 措施 · ' + esc(it.risk_level || '-') + '</span></li>';
+            }, '还没有生成过策略');
+            Array.prototype.forEach.call(
+                $('aiHistory').querySelectorAll('li[data-id]'),
+                function (li) {
+                    li.addEventListener('click', function () { loadDetail(li.dataset.id); });
+                });
+        } catch (err) {
+            renderAiList('aiHistory', [], null, '历史读取失败：' + err.message);
+        }
+    }
+
+    async function loadDetail(id) {
+        setStatus('正在载入历史策略 ' + id + ' …', 'busy');
+        try {
+            var res = await fetch(AI_BASE + '/api/recall/' + encodeURIComponent(id),
+                { cache: 'no-store' });
+            var body = await res.json();
+            if (!res.ok) {
+                throw new Error((body.error && body.error.message) || ('HTTP ' + res.status));
+            }
+            renderRealStrategy({ strategy: body.data.strategy, strategy_id: body.data.strategy_id });
+            setStatus('已载入历史策略 · ' + (body.data.created_at || ''), 'ok');
+        } catch (err) {
+            setStatus('读取失败：' + err.message, 'err');
+        }
+    }
+
+    async function loadGames() {
+        var sel = $('aiGame');
+        try {
+            var res = await fetch(AI_BASE + '/api/games', { cache: 'no-store' });
+            var body = await res.json();
+            var games = (body.data || []).filter(function (g) { return g && g.appid; });
+            if (!games.length) throw new Error('空列表');
+            sel.innerHTML = games.map(function (g) {
+                return '<option value="' + g.appid + '">' +
+                    esc(g.name || ('appid ' + g.appid)) + '</option>';
+            }).join('');
+            if (games.some(function (g) { return g.appid === 1203220; })) sel.value = '1203220';
+        } catch (err) {
+            sel.innerHTML = '<option value="1203220">永劫无间</option>';
+            setStatus('读取游戏列表失败：' + err.message + '（后端未启动？）', 'err');
+            return;
+        }
+        loadHistory();
+    }
+
+    $('aiGenerate').addEventListener('click', aiGenerate);
+    $('aiGame').addEventListener('change', loadHistory);
+    markSource('demo');
+    loadGames();
 
     /* ==================== 时间范围联动 ==================== */
     window.addEventListener('rangechange', function (ev) {
