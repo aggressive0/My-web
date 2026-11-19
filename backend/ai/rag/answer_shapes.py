@@ -106,6 +106,60 @@ _GOAL = re.compile(
     r"|(?:unlock|obtain|receive|goal|to\s+get)", re.I)
 _NAMED = re.compile(r"[A-Za-z][A-Za-z0-9'’\-]{2,}|[\u4e00-\u9fa5]{2,}")
 
+# ---------------------------------------------------------------- 主语约束
+# 「有数字」和「有玩家」同时成立，不代表这个数字是注册玩家数。
+# u01「NARAKA 有多少注册玩家」的候选全是封禁名单：有 players，也有数字，
+# 但没有一处说 registered。u02 同理：有日期，但日期在说版本更新，不在说客服。
+#
+# 跨语言是硬约束：问句中文、语料英文，纯字符串匹配必然失败，
+# 所以这里用一张**已知主语**的小词典把常见运营词映射到英文表述。
+# 词典里没有的主语**不加约束**（宁可不查，也不能乱拦）——
+# 这正是「规则只判必要条件」的边界，覆盖不到的部分留给第二层语义复核。
+_SUBJECT_SCOPE = [
+    # 问句侧要覆盖口语与同义改写，否则只对原话生效（实测「有多少人在玩」直接漏掉）。
+    # 文档侧必须**具体**：只用 "support" 会被 "added support for DLSS 4" 满足，
+    # 那正好是 u02 的候选之一。
+    (re.compile(r"注册玩家|注册用户|活跃玩家|活跃用户|在线人数|同时在线"
+                r"|多少(?:名|个)?玩家|多少用户|多少人在(?:玩|线)"
+                r"|registered\s+(?:players?|users?)", re.I),
+     re.compile(r"registered\s+(?:players?|users?)|active\s+(?:players?|users?)"
+                r"|concurrent\s+(?:players?|users?)|peak\s+(?:players?|users?)"
+                r"|注册(?:玩家|用户)|活跃(?:玩家|用户)|同时在线", re.I),
+     "玩家规模"),
+    (re.compile(r"客服|客户服务|技术支持|售后|customer\s+(?:service|support)", re.I),
+     re.compile(r"customer\s+(?:service|support)|technical\s+support|help\s*desk"
+                r"|客服|技术支持|售后", re.I),
+     "客服"),
+    (re.compile(r"响应时间|回复时间|多久回复|多快回复|response\s+time", re.I),
+     re.compile(r"response\s+time|响应时间|回复时间", re.I),
+     "响应时间"),
+    (re.compile(r"退款|退还|refund", re.I),
+     re.compile(r"refund|退款|退还", re.I),
+     "退款"),
+]
+
+
+def _near(element_re, subject_re, window=120):
+    """关键信息与主语在 window 字符内共现。
+
+    只要求「同一篇里都出现」会太松：一篇 500 字的公告里同时有日期和
+    "customer service" 的概率并不低，但两者未必在说同一件事。
+    """
+    def detect(text):
+        elements = [m.start() for m in element_re.finditer(text)]
+        subjects = [m.start() for m in subject_re.finditer(text)]
+        return any(abs(e - s) <= window for e in elements for s in subjects)
+    return detect
+
+
+def subject_requirements(question, element_re):
+    """按问题主语追加约束；词典未覆盖时返回空列表（不加约束）。"""
+    for question_re, doc_re, label in _SUBJECT_SCOPE:
+        if question_re.search(question or ""):
+            return [Requirement("subject_scope", _near(element_re, doc_re),
+                                "所问主语（%s）与实际信息同时出现" % label)]
+    return []
+
 
 @dataclass(frozen=True)
 class Requirement:
@@ -146,12 +200,12 @@ def resolve_requirements(question, shape):
                         "与问题同族的计数单位（%s）" % family),
             Requirement("subject_relation", _adjacent(_NUMBER, unit),
                         "数字与单位相邻，而不是各说各的"),
-        ]
+        ] + subject_requirements(question, _NUMBER)
     if shape == "date":
         return [
             Requirement("date_expression", lambda t: bool(_DATE.search(t)), "日期表达"),
             Requirement("event_relation", lambda t: bool(_EVENT_WORD.search(t)), "与所问事件相关"),
-        ]
+        ] + subject_requirements(question, _DATE)
     if shape == "location":
         # 问「机房在哪」和问「Icebind 在哪挑战」是两件事：
         # 前者要设施词（赛区/地区不是机房），后者只要「介词 + 专名」的场所表达。
@@ -197,7 +251,9 @@ def detect_shape(question):
     for shape, pattern in [
         ("policy", re.compile(r"退款|退货|补偿|政策|规定|条款|规则|封禁标准", re.I)),
         ("count", re.compile(r"多少|几个|几名|几次|几条|几款|几种|数量|占比|比例", re.I)),
-        ("date", re.compile(r"什么时候|何时|几点|哪天|日期|时间窗口|多久|预计", re.I)),
+        # 「多快回复」「多久回复」问的是时长，属 date 族；不补进来会判成 mixed，
+        # 而 mixed 层程序层无约束，正好是最需要拦的题漏过去。
+        ("date", re.compile(r"什么时候|何时|几点|哪天|日期|时间窗口|多久|多快|预计", re.I)),
         ("location", re.compile(r"哪里|在哪|位于|位置|地点|哪个城市|机房", re.I)),
         # 「是怎么说的」「怎么规定」不是在问步骤，是问原文表述——
         # 不加这个否定，q21「直播安排是怎么说的」会被判成方法题然后误拦。

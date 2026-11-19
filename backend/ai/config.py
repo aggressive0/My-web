@@ -86,7 +86,11 @@ class RAGConfig:
         self.collection = os.environ.get("CHROMA_COLLECTION") or "knowledge_chunks"
         # Phase 6.3：top_k 从 5 提到 10。阈值不再决定能否回答，候选数量就必须给够，
         # 否则证据门只能在 5 条里做判断，等于把召回损失转嫁给下游。
-        self.top_k = _int("RAG_TOP_K", 10)
+        # 50 是实测出来的：同样 31 道可答题，top_k=10 时 q23 的正确答案完全不出现
+        # （HNSW 近似搜索，n_results 变了返回集合也会变），top_k=50 时它排第 7；
+        # 同时误拦率 0.032 → 0.000（更深候选让证据门在 k04 上找到了所需表述）。
+        # 代价只是多扫描几十条向量（毫秒级），生成侧另有 max_evidence 控制上下文。
+        self.top_k = _int("RAG_TOP_K", 50)
 
         # 召回下限：只过滤「明显不相关」的候选，**不再作为回答许可条件**。
         # 默认留空 = 不过滤。实测依据：阈值 0.55 能把 4 道拒答题挡住，但 Recall 从
@@ -186,6 +190,11 @@ class AIConfig:
         # 生成参数
         self.max_output_tokens = _env_int_alias(
             "LLM_MAX_OUTPUT_TOKENS", "LLM_MAX_TOKENS", 3072, self.deprecations)
+
+        # 送进上下文的证据条数。与 RAG_TOP_K 是两回事：
+        # top_k 决定「召回多深」，这个决定「模型看几条」。
+        # 实测 4B 模型在 10 条长证据下会退化成输出 "..."，5 条是能稳住的上限。
+        self.max_evidence = _int("LLM_MAX_EVIDENCE", 5)
         self.min_actions = _int("STRATEGY_MIN_ACTIONS", 3)
         self.max_actions = _int("STRATEGY_MAX_ACTIONS", 5)
 
@@ -222,6 +231,8 @@ class AIConfig:
             problems.append("LLM_KEEP_ALIVE 不能为空（可填 30m / 0 / -1）")
         if self.context_length < 2048:
             problems.append("LLM_CONTEXT_LENGTH 过小（建议 ≥4096）")
+        if not (1 <= self.max_evidence <= 10):
+            problems.append("LLM_MAX_EVIDENCE 必须在 1–10 之间（超过 10 条 4B 模型会退化）")
         if self.max_output_tokens >= self.context_length:
             # 这不是「建议」，是硬冲突：输出上限撞满窗口时，输入永远放不下
             problems.append(
@@ -247,6 +258,7 @@ class AIConfig:
             "temperature": self.temperature,
             "enable_thinking": self.enable_thinking,
             "keep_alive": self.keep_alive,
+            "max_evidence": self.max_evidence,
             "deprecations": list(self.deprecations),
             "rag": self.rag.public_view(),
         }

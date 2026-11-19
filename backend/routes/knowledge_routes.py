@@ -209,8 +209,6 @@ def answer():
         question = (body.get("query") or body.get("question") or "").strip()
         if not question:
             return _error("INVALID_QUERY", "query 不能为空")
-        top_k = min(_as_int(body.get("top_k"), "top_k", 10) or 10, 50)
-
         provider = None
         checker = None
         cfg = None            # 必须在 try 之外初始化：初始化失败时下面还要判断它
@@ -227,14 +225,20 @@ def answer():
         except Exception as exc:                 # 生成不可用不该拖垮路由与拒答
             current_app.logger.warning("answer 的 LLM 初始化失败：%r", exc)
 
+        # 召回深度默认跟随配置（RAG_TOP_K），**不在路由里写死 10**：
+        # 写死过一次，结果是「配置改成 50，接口仍然只给 10 条」，配置形同虚设。
+        default_top_k = cfg.rag.top_k if cfg is not None else 10
+        top_k = min(_as_int(body.get("top_k"), "top_k", default_top_k) or default_top_k, 100)
+
         # 策略分支与 /api/recall/generate 共用同一个装配入口（参数不会分叉）
         strategy = None
         if cfg is not None:
             from ai.recall.factory import build_generator
             strategy = build_generator(provider, get_service(), cfg)
 
-        result = AnswerService(get_service(), provider=provider,
-                               checker=checker, strategy=strategy).answer(
+        result = AnswerService(
+            get_service(), provider=provider, checker=checker, strategy=strategy,
+            max_evidence=cfg.max_evidence if cfg is not None else 5).answer(
             app_id, question, top_k=top_k)
     except KnowledgeError as e:
         status = 503 if e.code in _UNAVAILABLE_CODES else 400

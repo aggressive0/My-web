@@ -230,15 +230,28 @@ class AnswerServiceTest(unittest.TestCase):
         self.assertEqual(result["reason"], "empty_answer")
 
     def test_evidence_sent_to_model_is_capped(self):
-        """4B 模型在 10 条长证据下会退化，只送前 N 条（默认 3）。"""
+        """4B 模型在 10 条长证据下会退化（实测输出 "..."），只送前 N 条。
+
+        默认 N=5：召回深度是 50，但上下文只放 5 条——Top-K 与上下文预算是两件事。
+        """
         hits = [dict(DATE_HITS[0], chunk_id="c%d" % i, document_id="d%d" % i)
                 for i in range(10)]
         provider = FakeProvider('{"answer": "维护时间为 11-04 23:00 至 11-05 04:00 UTC。",'
                                 ' "citations": ["E1"], "insufficient": false}')
         result = self.service(hits=hits, provider=provider).answer(1203220, DATE_QUESTION)
         self.assertEqual(result["status"], "answered")
-        self.assertNotIn("E4", provider.last_prompt)     # 第 4 条不该进提示词
-        self.assertIn("E3", provider.last_prompt)
+        self.assertIn("E5", provider.last_prompt)
+        self.assertNotIn("E6", provider.last_prompt)
+
+    def test_max_evidence_is_configurable(self):
+        hits = [dict(DATE_HITS[0], chunk_id="c%d" % i, document_id="d%d" % i)
+                for i in range(10)]
+        provider = FakeProvider('{"answer": "维护时间为 11-04 23:00 至 11-05 04:00 UTC。",'
+                                ' "citations": ["E1"], "insufficient": false}')
+        service = AnswerService(FakeRag(hits=hits), provider=provider, max_evidence=2)
+        service.answer(1203220, DATE_QUESTION)
+        self.assertIn("E2", provider.last_prompt)
+        self.assertNotIn("E3", provider.last_prompt)
 
     def test_invalid_json_is_generation_failed(self):
         provider = FakeProvider("这不是 JSON")
@@ -250,6 +263,22 @@ class AnswerServiceTest(unittest.TestCase):
         result = self.service(hits=DATE_HITS, provider=None).answer(1203220, DATE_QUESTION)
         self.assertEqual(result["status"], "generation_failed")
         self.assertEqual(result["reason"], "llm_provider_unavailable")
+
+    def test_llm_unavailable_is_reported_as_llm_error(self):
+        """模型服务没起 ≠ 调用出异常。两者混报会把排查引向错误方向。"""
+        from ai.llm.base import LLMUnavailable
+
+        class DownProvider:
+            last_metrics = {}
+
+            def generate(self, prompt, system_prompt=None):
+                raise LLMUnavailable("无法连接本地模型服务", "ConnectionRefusedError")
+
+        result = self.service(hits=DATE_HITS, provider=DownProvider()).answer(
+            1203220, DATE_QUESTION)
+        self.assertEqual(result["status"], "generation_failed")
+        self.assertEqual(result["reason"], "llm_error")
+        self.assertEqual(result["detail"], "LLM_UNAVAILABLE")
 
     def test_llm_failure_is_caught(self):
         provider = FakeProvider(raise_on_generate=True)

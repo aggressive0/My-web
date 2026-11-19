@@ -24,6 +24,7 @@ import re
 
 from pydantic import ValidationError
 
+from ..llm.base import LLMError
 from .answer_schema import GeneratedAnswer
 from .evidence_gate import STATUS_SUFFICIENT, EvidenceGate
 from .intent import (AMBIGUOUS, OUT_OF_SCOPE, SQL_ANALYTICS, STRATEGY,
@@ -62,7 +63,7 @@ def build_prompt(question, hits):
 
 
 class AnswerService:
-    def __init__(self, rag, provider=None, gate=None, max_evidence=3, checker=None,
+    def __init__(self, rag, provider=None, gate=None, max_evidence=5, checker=None,
                  strategy=None):
         self.rag = rag
         self.provider = provider
@@ -70,8 +71,9 @@ class AnswerService:
         # 策略生成器（6.5）。注入而不是在这里 new：装配逻辑统一在 recall.factory，
         # 否则 /answer 与 /api/recall/generate 会各写一遍参数，迟早分叉。
         self.strategy = strategy
-        # 送给模型的证据条数。实测 4B 模型在 10 条长证据下会退化成输出 "..."，
-        # 收敛到 3 条既省 token 也更稳（方案 §5.1 的 LLM_MAX_EVIDENCE 即此意）。
+        # 送给模型的证据条数，与召回深度（RAG_TOP_K=50）是两件事：
+        # 召回给够让证据门有得挑，上下文只放 5 条——实测 4B 模型在 10 条长证据下
+        # 会退化成输出 "..."，5 条是能稳住的上限（配置项 LLM_MAX_EVIDENCE）。
         self.max_evidence = max(1, int(max_evidence))
         # 第二层：只有 provider 可用时才建；不可用就跳过，并在 evidence 里如实标记
         self.checker = checker
@@ -182,12 +184,19 @@ class AnswerService:
         try:
             text = self.provider.generate(build_prompt(question, used),
                                           system_prompt=SYSTEM_PROMPT)
+        except LLMError as exc:
+            # 模型不可用（Ollama 未启动/超时/模型缺失）必须与「调用过程出异常」分开：
+            # 都报 llm_call_failed 会让人去查请求参数，而真正的原因是服务没起。
+            logger.warning("问答生成不可用 code=%s detail=%s", exc.code, exc.detail)
+            return dict(base, status=STATUS_GENERATION_FAILED, answer=None,
+                        evidence=evidence, citations=[], retrieval_summary=summary,
+                        reason="llm_error", detail=exc.code)
         except Exception as exc:
+            logger.exception("问答生成异常：%r", exc)
             return dict(base, status=STATUS_GENERATION_FAILED, answer=None,
                         evidence=evidence, citations=[], retrieval_summary=summary,
                         reason="llm_call_failed", detail=type(exc).__name__)
 
-        from ..llm.base import LLMError
         from ..recall.validation import parse_output
 
         raw_preview = (text or "")[:400].replace("\n", " ")

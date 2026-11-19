@@ -89,6 +89,53 @@ class ShapeTest(unittest.TestCase):
             resolve_requirements("已经多少年了？", "count")[1].detect("11 entire years"))
 
 
+class SubjectScopeTest(unittest.TestCase):
+    """主语约束：数字/日期必须和「所问的那件事」同时出现。
+
+    u01/u02 的形态是齐备的——有数字、有玩家、有日期、有事件词，
+    但主语不对：数字不是注册玩家数，日期不在说客服。
+    程序层原本只能判形态，这两题就是靠这一层漏过去的。
+    """
+
+    def setUp(self):
+        self.gate = EvidenceGate()
+
+    def test_registered_players_is_required_for_u01(self):
+        hits = load_hits(1203220, ["Banned Players List September 15th",
+                                   "Banned Players List August 25th"])
+        result = self.gate.evaluate("NARAKA 目前有多少名注册玩家？", hits)
+        self.assertEqual(result.status, STATUS_INSUFFICIENT)
+        self.assertIn("subject_scope", result.missing_elements)
+
+    def test_customer_service_is_required_for_u02(self):
+        hits = load_hits(1091500, ["Patch 2.31", "Update 2.2 is live!"])
+        result = self.gate.evaluate("Cyberpunk 2077 的官方客服响应时间是多久？", hits)
+        self.assertEqual(result.status, STATUS_INSUFFICIENT)
+        self.assertIn("subject_scope", result.missing_elements)
+
+    def test_subject_must_be_near_the_number(self):
+        """同一篇里都有、但隔了几百字，不算「指向」。"""
+        far = "Registered players total is unknown. " + ("filler " * 60) + "224 points."
+        near = "Registered players: 12,000,000 in total."
+        self.assertTrue(self.gate.evaluate(
+            "有多少注册玩家？", [{"document_id": "d", "content": near}]
+        ).status == STATUS_SUFFICIENT)
+        self.assertEqual(self.gate.evaluate(
+            "有多少注册玩家？", [{"document_id": "d", "content": far}]
+        ).status, STATUS_INSUFFICIENT)
+
+    def test_unknown_subject_adds_no_constraint(self):
+        """词典没覆盖的主语不加约束——宁可漏判，也不能乱拦。"""
+        from ai.rag.answer_shapes import resolve_requirements
+        names = [r.name for r in resolve_requirements("本次更新新增了几个段位？", "count")]
+        self.assertNotIn("subject_scope", names)
+
+    def test_answerable_count_question_unaffected(self):
+        hits = load_hits(1203220, ["BLADEPOINT Update – November 5th, 2026"])
+        result = self.gate.evaluate("Vanquisher's Trials 每个阶段有多少个挑战任务？", hits)
+        self.assertEqual(result.status, STATUS_SUFFICIENT)
+
+
 class LocationShapeTest(unittest.TestCase):
     """设施位置与游戏内地点是两种问题，要求必须不同。"""
 
@@ -254,7 +301,8 @@ class RetrievalConfigTest(unittest.TestCase):
 
     def test_defaults(self):
         cfg = self._cfg()
-        self.assertEqual(cfg.top_k, 10)
+        # 50 是实测值：top_k=10 时 q23 的正确答案根本不出现，50 时排第 7
+        self.assertEqual(cfg.top_k, 50)
         self.assertIsNone(cfg.retrieval_min_score, "默认不启用召回过滤")
         self.assertEqual(cfg.deprecations, [])
 
