@@ -5,3 +5,9 @@ pymysql
 python-dotenv
 # 情感模块（backend/ml）与后端测试需要；不含 torch/ST，那两个只装在情感推理环境
 numpy
+# 召回策略结构校验（Phase 6.2 T3）。直接依赖，不能只靠 chromadb 传递安装。
+pydantic>=2
+# 知识库 / RAG（Phase 6.2）：本地向量库。注意它会带进 60+ 个传递依赖
+# （kubernetes / grpcio / opentelemetry / onnxruntime 都是 PersistentClient 用不到的），
+# embedding 模型本身依赖 torch + sentence-transformers，它们装在独立环境，不列在这里。
+chromadb

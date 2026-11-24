@@ -722,7 +722,11 @@ main.page{position:relative;z-index:1}
         { c: '#35D399', edge: 'rgba(53,211,153,.32)', glow: 'rgba(53,211,153,.4)' }
     ];
 
-    document.getElementById('retKpi').innerHTML = R.kpis.map(function (k, i) {
+    /* 有真实数据层时绝不先画演示值：否则页面会先闪一下假数字再被替换。
+       这不是"数据没加载完"，是两套渲染同时在跑——旧演示渲染在解析阶段就执行了。 */
+    document.getElementById('retKpi').innerHTML = window.RealData
+        ? '<div class="rd-state">正在加载真实数据…</div>'
+        : (R && R.kpis ? R.kpis : []).map(function (k, i) {
         var col = KPI_C[i % KPI_C.length];
         var up = k.change >= 0;
         return '<article class="kpi" style="--c:' + col.c + ';--edge:' + col.edge + ';--glow:' + col.glow + '">' +
@@ -747,6 +751,8 @@ main.page{position:relative;z-index:1}
     var currentRange = '30d';
 
     function trendOption(rows) {
+        // rows 可能来自已停用的演示数据源，传进来是 undefined：这里兜底成空数组
+        rows = rows || [];
         var days = rows.map(function (r) { return r.timestamp; });
         var interval = rows.length > 40 ? Math.ceil(rows.length / 9) : Math.ceil(rows.length / 6);
 
@@ -817,9 +823,11 @@ main.page{position:relative;z-index:1}
     }
 
     function renderTrend(range) {
+        // 真实数据层接管趋势图；这里再画演示序列就会「先假后真」
+        if (window.RealData) return;
         currentRange = range;
         try {
-            trend.setOption(trendOption(R.trend(range)), true);
+            trend.setOption(trendOption((R && R.trend ? R.trend(range) : [])), true);
         } catch (e) {
             console.warn('留存趋势渲染失败，已降级为占位状态', e);
             document.getElementById('retTrendChart').innerHTML = '<div class="cohort-period" style="padding:16px">趋势数据暂不可用</div>';
@@ -852,8 +860,16 @@ main.page{position:relative;z-index:1}
 
     /* ---------- cohort 表 ---------- */
     (function renderCohort() {
+        // 这个 IIFE 会在解析阶段立即执行；有真实数据层时必须让位，
+        // 否则 cohort 会先画一版演示分桶再被真实时长分布替换
+        if (window.RealData) return;
         var host = document.getElementById('cohortBody');
         var max = 52;
+        // R.cohort 来自已清空的 mock 模块：没有就显式说明，不能整页抛异常
+        if (!R || !R.cohort || !R.cohort.length) {
+            host.innerHTML = '<div class="rd-state">cohort 演示数据已停用（Phase A）</div>';
+            return;
+        }
         host.innerHTML = R.cohort.map(function (row) {
             var cells = ['d1', 'd3', 'd7', 'd14', 'd30'].map(function (k) {
                 var v = row[k];
@@ -868,7 +884,14 @@ main.page{position:relative;z-index:1}
 
     /* ---------- 分群 ---------- */
     function renderSegments(seg) {
-        var rows = R.segments[seg] || R.segments.d1;
+        // 这块是标注「演示」的分群留存，但它的数据原先来自 dashboard-data.js，
+        // Phase A 清空 mock 后 R.segments 不复存在——必须显式降级，否则整页抛异常。
+        var rows = (R && R.segments && (R.segments[seg] || R.segments.d1)) || [];
+        if (!rows.length) {
+            document.getElementById('segRows').innerHTML =
+                '<div class="rd-state">分群演示数据已停用（Phase A 清除了虚构数值，待接入真实分层）</div>';
+            return;
+        }
         document.getElementById('segRows').innerHTML = rows.map(function (s, i) {
             var up = s.change >= 0;
             return '<div class="seg-row">' +
@@ -922,22 +945,32 @@ main.page{position:relative;z-index:1}
                 }
             },
             labelLine: { show: false },
-            data: R.factors.map(function (f) {
+            data: (R && R.factors ? R.factors : []).map(function (f) {
                 return { value: f.value, name: f.name, itemStyle: { color: f.c } };
             })
         }]
     });
 
-    document.getElementById('factorList').innerHTML = R.factors.map(function (f) {
-        return '<span class="factor-item"><i class="factor-dot" style="--c:' + f.c + '"></i>' +
-            '<span>' + f.name + '</span><b class="v">' + f.value.toFixed(1) + '%</b></span>';
-    }).join('');
+    // 这一行原先没有守卫：R.factors 随 mock 清除后为 undefined，
+    // 抛出异常会中断整个 IIFE —— 后面的 renderSegments 也就永远不会执行。
+    var factors = (R && R.factors) || [];
+    document.getElementById('factorList').innerHTML = factors.length
+        ? factors.map(function (f) {
+            return '<span class="factor-item"><i class="factor-dot" style="--c:' + f.c + '"></i>' +
+                '<span>' + f.name + '</span><b class="v">' + f.value.toFixed(1) + '%</b></span>';
+        }).join('')
+        : '<span class="rd-state">流失因素演示数据已停用（Phase A）</span>';
 
     /* ---------- AI 洞察 ---------- */
     (function renderInsights() {
         var host = document.getElementById('insightWrap');
         var TONE = { high: { c: '#FF6B75', icon: 'warn' }, mid: { c: '#FFB45F', icon: 'bolt' } };
-        host.innerHTML = R.insights.map(function (it) {
+        var list = (R && R.insights) || [];
+        if (!list.length) {
+            host.innerHTML = '<div class="rd-state">AI 洞察演示数据已停用（Phase A）</div>';
+            return;
+        }
+        host.innerHTML = list.map(function (it) {
             var t = TONE[it.tone] || TONE.mid;
             return '<div class="insight">' +
                 '<span class="insight-ico" style="--ic:' + t.c + '" aria-hidden="true">' + icon(t.icon, '') + '</span>' +
@@ -959,7 +992,17 @@ main.page{position:relative;z-index:1}
     })();
 
     /* ---------- 初始化 ---------- */
-    renderTrend('30d');
+    /* 初始化：有真实数据层就只放加载态，交给下面的覆盖层填真实值；
+       没有（脚本被拦）才退回演示渲染 */
+    if (window.RealData) {
+        ['retTrendChart', 'cohortBody'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="rd-state">正在加载真实数据…</div>';
+        });
+    } else {
+        renderTrend('30d');
+    }
+    // 分群表是标注「演示」的独立面板，不随真实数据层接管：始终渲染（无数据时它自己出空态）
     renderSegments('d1');
     window.addEventListener('resize', function () { trend.resize(); factor.resize(); });
 })();

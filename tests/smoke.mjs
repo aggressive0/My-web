@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 冒烟测试 — 「留声」玩家留存中枢静态站
  *
  * 判定标准只有一条：页面「能不能用」，不判「对不对」。
@@ -88,7 +88,9 @@ const PAGES = [
         // 选择器 → 最少数量；空字符串表示「存在即可」
         anchors: [
             ['#kpiActive', 1], ['#kpiAtRisk', 1], ['#kpiSent', 1], ['#kpiRec', 1],
-            ['#warnList .warn', 1],       // 曾因 stage 作用域 bug 恒为空
+            // Phase A 之后预警与区域排行改为真实数据源，无数据时渲染显式空态，
+            // 因此锚点从「必须有预警条」放宽为「容器必须有内容（含空态）」
+            ['#warnList > *', 1],
             ['#regionList > *', 1],
             ['#globeContainer', 1],
             ['#gamePick', 1],             // 游戏切换器由 config/games.yaml 驱动
@@ -111,15 +113,17 @@ const PAGES = [
         file: 'solution.html',
         label: '召回策略',
         canvases: [0, 99],          // 本页图表为内联 SVG，不引入 ECharts
+        // 该页不再依赖 DashboardData（Phase A 已把 mock 模块清空为兼容壳）
+        noDataLayer: true,
+        // 2026-11 重做后的结构：对话为主区域，策略与证据在右栏
+        // 只锚定「功能入口」，不锚定历史列表容器：该页的列表形态改过三次，
+        // 绑死 #strategyGrid / #aiHistoryCount 只会让 smoke 随改版反复误报。
         anchors: [
-            ['#strategyGrid .card', 4],
-            ['#stepsTrack .step', 4],
-            ['#deployBtn', 1],
-            ['#generateStrategy', 1], ['#responseContent', 1],
-            ['#riskArc', 1], ['#segDonut circle', 3],
-            ['#engineStatus', 1],
+            ['#chatForm', 1], ['#chatLog', 1], ['#chatInput', 1],
+            ['#aiGenerate', 1], ['#aiStatus', 1],
+            ['#stepsTrack', 1], ['#planTitle', 1], ['#aiGame', 1],
         ],
-        nonEmpty: ['#planTitle', '#vHigh', '#vPool', '#strategyGrid', '#segLegend'],
+        nonEmpty: ['#planTitle', '#aiStatus', '#aiGame'],
     },
     {
         file: 'validation.html',
@@ -127,7 +131,8 @@ const PAGES = [
         canvases: [1, 99],
         anchors: [
             ['#retTrendChart', 1], ['#factorChart', 1],
-            ['#cohortBody .cohort-row', 1], ['#segRows > *', 1], ['#retKpi', 1],
+            // cohort 演示数据已在 Phase A 停用，容器现在渲染空态；锚点改为「有内容即可」
+            ['#cohortBody > *', 1], ['#segRows > *', 1], ['#retKpi', 1],
         ],
         nonEmpty: ['#cohortBody', '#retKpi'],
     },
@@ -191,7 +196,9 @@ async function checkPage(browser, cfg) {
     record(cfg.label, 'L2', '标题非空', dom.title.length > 0, dom.title);
     record(cfg.label, 'L2', `canvas 数 ${dom.canvases} 在 [${cfg.canvases[0]},∞)`, dom.canvases >= cfg.canvases[0], `实际 ${dom.canvases}`);
     record(cfg.label, 'L2', '无横向溢出', dom.overflowX <= 1, `溢出 ${dom.overflowX}px`);
-    record(cfg.label, 'L2', '数据层已挂载', dom.hasData, dom.hasData ? '' : 'window.DashboardData 缺失');
+    if (!cfg.noDataLayer) {
+        record(cfg.label, 'L2', '数据层已挂载', dom.hasData, dom.hasData ? '' : 'window.DashboardData 缺失');
+    }
     if (cfg.file === 'index.html') {
         record(cfg.label, 'L2', '地球云层纹理已挂载', dom.cloudLayer, dom.cloudLayer ? '' : 'cloud mesh 未进入 globe scene');
     }
@@ -291,36 +298,37 @@ async function checkPage(browser, cfg) {
             topic.rows > 0 ? topic.rows + ' 个主题' : ('空态：' + topic.state));
     }
 
-    /* L3 交互 —— 策略页：缺密钥降级、方案联动、部署状态 */
+    /* L3 交互 —— 召回策略页（2026-11 重构后）
+       旧断言检查的是 .ai-fold / #modelPrompt / #deployBtn，这些元素已在重写中移除，
+       继续保留只会让 smoke 永远红灯。改为验证新页面的核心结构是否存在。 */
     if (cfg.file === 'solution.html') {
-        const hint = await page.evaluate(async () => {
-            const fold = document.querySelector('.ai-fold');
-            if (fold) fold.open = true;
-            window.prompt = () => null;                 // 模拟用户取消输入
-            document.getElementById('modelPrompt').value = '冒烟测试：北美玩家流失';
-            document.getElementById('generateStrategy').click();
-            await new Promise(r => setTimeout(r, 900));
-            const el = document.getElementById('responseContent');
-            return (el && el.textContent || '').trim();
+        const structure = await page.evaluate(() => {
+            const need = ['chatForm', 'chatInput', 'chatSend', 'aiGenerate',
+                          'aiStatus', 'planTitle'];
+            const missing = need.filter(id => !document.getElementById(id));
+            const chat = document.getElementById('chatForm');
+            // 引导问句的类名在两次改版里变过（.chat-chip → .prompt），用 data-q 作稳定契约
+            const hasHint = !!document.querySelector('[data-q]');
+            return { missing, chatVisible: !!(chat && chat.offsetParent !== null), hasHint };
         });
-        record(cfg.label, 'L3', '缺密钥时给出可读提示', hint.length > 0, hint.slice(0, 60) || '面板无反馈');
+        record(cfg.label, 'L3', '对话与生成入口存在',
+            structure.missing.length === 0,
+            structure.missing.length ? '缺少：' + structure.missing.join(',') : '全部存在');
+        record(cfg.label, 'L3', '对话区可见且带引导问句',
+            structure.chatVisible && structure.hasHint,
+            'chat=' + structure.chatVisible + ' hint=' + structure.hasHint);
 
-        const switched = await page.evaluate(async () => {
-            const before = document.getElementById('planTitle').textContent;
-            const btn = document.querySelector('#strategyGrid [data-view="emotion"]');
-            if (!btn) return 'no-card';
-            btn.click();
-            await new Promise(r => setTimeout(r, 250));
-            return document.getElementById('planTitle').textContent === before ? 'no-change' : 'changed';
+        const guarded = await page.evaluate(async () => {
+            // 没有后端时点发送，必须落到可读错误，而不是静默无反应
+            const input = document.getElementById('chatInput');
+            input.value = '冒烟测试：这周数据如何';
+            document.getElementById('chatForm').requestSubmit();
+            await new Promise(r => setTimeout(r, 1200));
+            const log = document.getElementById('chatLog');
+            return (log.innerText || '').trim();
         });
-        record(cfg.label, 'L3', '「查看方案」联动右侧方案', switched === 'changed', switched);
-
-        const deployed = await page.evaluate(async () => {
-            document.getElementById('deployBtn').click();
-            await new Promise(r => setTimeout(r, 300));
-            return (document.getElementById('deployLabel').textContent || '').trim();
-        });
-        record(cfg.label, 'L3', '部署按钮状态可切换', deployed.indexOf('部署队列') >= 0, deployed);
+        record(cfg.label, 'L3', '发送后有反馈（回答或可读错误）',
+            guarded.length > 0, guarded.slice(0, 60) || '无任何反馈');
     }
 
     /* 截图留档：仅本页有失败时写盘，供排查 */
@@ -339,6 +347,35 @@ const browser = await chromium.launch();
 
 try {
     for (const cfg of PAGES) await checkPage(browser, cfg);
+
+    /* ---------- Phase D：URL 参数能真正驱动筛选 ---------- */
+    const p = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await p.goto(BASE + '/analysis.html?appid=1203220', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(4000);
+    const urlState = await p.evaluate(() => ({
+        picked: (document.getElementById('gamePick') || {}).value,
+        kpi: (document.getElementById('kpiReviews') || {}).textContent,
+        src: (document.getElementById('trendSrc') || {}).textContent
+    }));
+    record('流失分析', 'L3', 'URL 的 appid 驱动筛选',
+        urlState.picked === '1203220' && urlState.src.indexOf('永劫无间') >= 0,
+        `picked=${urlState.picked} | kpi=${urlState.kpi}`);
+
+    const warnOk = await (async () => {
+        await p.goto(BASE + '/index.html', { waitUntil: 'domcontentloaded' });
+        await p.waitForTimeout(4000);
+        return p.evaluate(async () => {
+            const warn = document.querySelector('#warnList .warn');
+            if (!warn) return { ok: false, why: '没有预警项' };
+            warn.click();
+            await new Promise(r => setTimeout(r, 120));
+            const detail = warn.querySelector('.warn-detail');
+            return { ok: !!(detail && !detail.hidden && detail.textContent.length > 10),
+                     why: detail ? detail.textContent.slice(0, 40) : '缺少依据节点' };
+        });
+    })();
+    record('总览', 'L3', '预警可展开计算依据', warnOk.ok, warnOk.why);
+    await p.close();
 } finally {
     await browser.close();
     if (server) server.kill();

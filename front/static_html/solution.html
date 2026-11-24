@@ -2,849 +2,24 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070B16'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='%2335D9F2'/%3E%3Crect x='12' y='12' width='8' height='8' rx='2' fill='%23070B16'/%3E%3C/svg%3E">
 <title>召回策略 · 玩家留存中枢</title>
-<!-- 数据说明：本页数值由 js/dashboard-data.js 派生，属设计用示例数据，尚未接入 /api/churn-retention -->
+<!-- 数据说明：KPI 与策略、证据、历史均来自真实接口；接口失败时显示空态，不用 mock 填补 -->
 <link rel="stylesheet" href="ops-nav.css">
-<link rel="stylesheet" href="live-ticker.css">
-<script src="js/dashboard-data.js"></script>
-<script src="js/live-ticker.js" defer></script>
+<link rel="stylesheet" href="css/dot-field.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="js/dot-field.js" defer></script>
 <script src="js/ops-nav.js" defer></script>
-<style>
-:root{
-    --bg:#070B16;
-    --bg-2:#0B1424;
-    --panel:rgba(13,27,47,.82);
-    --cyan:#35D9F2;
-    --blue:#318BFF;
-    --violet:#9275FF;
-    --green:#35D399;
-    --amber:#FFB45F;
-    --red:#FF6B75;
-    --ink:#EAF3FF;
-    --ink-2:#9EB1CA;
-    --ink-3:#637A96;
-    --line:rgba(68,155,209,.22);
-    --mono: ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
-    --sans: system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
-}
-
-*{box-sizing:border-box}
-html,body{height:100%}
-
-body{
-    margin:0;
-    font-family:var(--sans);
-    font-size:13px;
-    color:var(--ink);
-    background:var(--bg);
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
-    -webkit-font-smoothing:antialiased;
-}
-
-/* 背景光晕：与总览页同一套语言，不使用位图 */
-body::before{
-    content:"";
-    position:fixed;
-    inset:0;
-    pointer-events:none;
-    z-index:0;
-    background:
-        radial-gradient(900px 520px at 50% -8%, rgba(49,139,255,.16), transparent 68%),
-        radial-gradient(700px 460px at 8% 92%, rgba(146,117,255,.12), transparent 70%),
-        radial-gradient(680px 420px at 96% 84%, rgba(53,217,242,.08), transparent 70%);
-}
-
-.board{
-    position:relative;
-    z-index:1;
-    flex:1;
-    min-height:0;
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-    padding:13px clamp(12px,1.6vw,22px) 12px;
-    animation:boardIn .45s cubic-bezier(.22,.61,.36,1) both;
-}
-@keyframes boardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-
-/* ==================== 三栏 ==================== */
-.stage{
-    flex:1;
-    min-height:0;
-    display:grid;
-    grid-template-columns:minmax(0,.88fr) minmax(0,1.62fr) minmax(0,.98fr);
-    gap:12px;
-}
-.wing{display:grid;gap:12px;min-height:0}
-.wing--left{grid-template-rows:1fr 1fr}
-
-/* ==================== 面板 ==================== */
-.panel{
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    min-height:0;
-    border-radius:14px;
-    background:linear-gradient(180deg, rgba(13,22,38,.9), rgba(6,11,21,.94));
-    border:1px solid var(--line);
-    box-shadow:0 30px 60px -42px #000, inset 0 1px 0 rgba(255,255,255,.04);
-    -webkit-backdrop-filter:blur(10px);
-    backdrop-filter:blur(10px);
-    overflow:hidden;
-}
-.panel::before{
-    content:"";
-    position:absolute;
-    top:0;left:12%;right:12%;
-    height:1px;
-    background:linear-gradient(90deg,transparent,var(--hair,rgba(34,211,238,.5)),rgba(146,117,255,.3),transparent);
-    opacity:.85;
-    pointer-events:none;
-}
-.p-head{
-    flex:none;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    padding:10px 13px 0;
-}
-.p-title{
-    display:flex;
-    align-items:center;
-    gap:7px;
-    margin:0;
-    font-size:12.5px;
-    font-weight:600;
-    letter-spacing:.06em;
-    white-space:nowrap;
-}
-.p-title::before{
-    content:"";
-    width:3px;height:11px;
-    border-radius:2px;
-    background:var(--accent,var(--cyan));
-    box-shadow:0 0 10px var(--accent,var(--cyan));
-}
-.p-meta{
-    display:inline-flex;
-    align-items:center;
-    gap:5px;
-    font-family:var(--mono);
-    font-size:9.5px;
-    letter-spacing:.1em;
-    color:var(--ink-3);
-    white-space:nowrap;
-}
-.p-body{
-    position:relative;
-    flex:1;
-    min-height:0;
-    margin:7px 10px 10px;
-    display:flex;
-    flex-direction:column;
-}
-
-/* ==================== 左：风险概览 ==================== */
-.risk-top{display:flex;align-items:center;gap:14px;flex:1;min-height:0}
-.risk-ring{position:relative;width:124px;height:124px;flex:none}
-.risk-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
-.risk-ring .track{stroke:rgba(90,140,200,.16)}
-.risk-ring .arc{
-    stroke:url(#riskGrad);
-    stroke-linecap:round;
-    stroke-dasharray:100;
-    stroke-dashoffset:100;
-    animation:arcIn 1.2s cubic-bezier(.22,.61,.36,1) .1s forwards;
-}
-@keyframes arcIn{to{stroke-dashoffset:var(--off,76.6)}}
-.risk-ring .cap{
-    position:absolute;
-    inset:0;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:1px;
-}
-.risk-ring .cap b{
-    font-family:var(--mono);
-    font-size:21px;
-    font-weight:600;
-    letter-spacing:-.02em;
-    line-height:1;
-}
-.risk-ring .cap span{font-size:9px;color:var(--ink-3);letter-spacing:.06em}
-.risk-ring .cap em{
-    font-style:normal;
-    font-family:var(--mono);
-    font-size:9.5px;
-    color:var(--red);
-}
-
-.risk-list{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
-.risk-row{display:flex;align-items:center;gap:7px;min-width:0}
-.risk-row i{
-    width:6px;height:6px;border-radius:50%;
-    flex:none;
-    background:var(--c);
-    box-shadow:0 0 8px var(--c);
-}
-.risk-row span{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.risk-row b{
-    margin-left:auto;
-    font-family:var(--mono);
-    font-size:13px;
-    font-weight:600;
-    color:var(--ink);
-    font-variant-numeric:tabular-nums;
-}
-.risk-foot{
-    flex:none;
-    margin-top:10px;
-    padding-top:9px;
-    border-top:1px dashed rgba(90,140,200,.18);
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:8px;
-    font-size:10px;
-    color:var(--ink-3);
-}
-.risk-foot b{font-family:var(--mono);color:var(--ink-2);font-weight:600}
-
-/* 可召回覆盖率：填补面板下方空档，同时给出一个可解释的口径 */
-.risk-bar{flex:none;margin-top:auto;padding-top:12px}
-.rb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9.5px;color:var(--ink-3);margin-bottom:6px}
-.rb-head b{font-family:var(--mono);font-size:11px;color:var(--cyan);font-weight:600}
-.rb-track{height:6px;border-radius:999px;background:rgba(90,140,200,.14);overflow:hidden}
-.rb-fill{
-    height:100%;
-    width:0;
-    border-radius:999px;
-    background:linear-gradient(90deg,rgba(53,217,242,.85),rgba(49,139,255,.95));
-    box-shadow:0 0 12px -2px rgba(53,217,242,.8);
-    transition:width .6s cubic-bezier(.22,.61,.36,1);
-}
-
-/* ==================== 左：人群细分 ==================== */
-.seg{
-    display:inline-flex;
-    gap:2px;
-    padding:2px;
-    border-radius:8px;
-    background:rgba(8,16,30,.8);
-    border:1px solid rgba(90,140,200,.16);
-    align-self:flex-start;
-}
-.seg-btn{
-    appearance:none;
-    border:0;
-    background:transparent;
-    color:var(--ink-3);
-    font-family:var(--sans);
-    font-size:10.5px;
-    padding:3px 8px;
-    border-radius:6px;
-    cursor:pointer;
-    white-space:nowrap;
-    transition:background .18s ease,color .18s ease;
-}
-.seg-btn:hover{color:var(--ink-2)}
-.seg-btn.is-on{
-    color:#06121F;
-    background:linear-gradient(180deg,#5FE6FF,#2FA9D8);
-    font-weight:600;
-    box-shadow:0 0 12px -3px rgba(53,217,242,.7);
-}
-
-.seg-wrap{display:flex;align-items:center;gap:14px;flex:1;min-height:0;margin-top:8px}
-.seg-donut{position:relative;width:108px;height:108px;flex:none}
-.seg-donut svg{width:100%;height:100%}
-.seg-donut .cap{
-    position:absolute;inset:0;
-    display:flex;flex-direction:column;
-    align-items:center;justify-content:center;
-    gap:1px;
-}
-.seg-donut .cap b{font-family:var(--mono);font-size:15px;font-weight:600;line-height:1}
-.seg-donut .cap span{font-size:9px;color:var(--ink-3)}
-
-.legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
-.legend-row{display:flex;align-items:center;gap:7px;min-width:0;transition:opacity .2s ease}
-.legend-row i{width:7px;height:7px;border-radius:2px;flex:none;background:var(--c);box-shadow:0 0 8px var(--c)}
-.legend-row span{font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.legend-row b{margin-left:auto;font-family:var(--mono);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
-
-/* ==================== 中央：AI 引擎 ==================== */
-.engine-col{
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    min-height:0;
-    border-radius:14px;
-    border:1px solid rgba(68,155,209,.16);
-    background:
-        radial-gradient(420px 300px at 50% 42%, rgba(49,139,255,.13), transparent 72%),
-        linear-gradient(180deg, rgba(10,18,32,.72), rgba(5,9,17,.86));
-    overflow:hidden;
-}
-.engine-head{flex:none;text-align:center;padding:12px 16px 0}
-.engine-title{
-    margin:0;
-    font-size:17px;
-    font-weight:700;
-    letter-spacing:.12em;
-    background:linear-gradient(92deg,#8FF0FF 0%,#7FA8FF 46%,#C9A6FF 100%);
-    -webkit-background-clip:text;
-    background-clip:text;
-    -webkit-text-fill-color:transparent;
-}
-.engine-sub{
-    margin:5px 0 0;
-    font-size:10.5px;
-    letter-spacing:.04em;
-    color:var(--ink-3);
-}
-
-.engine{
-    position:relative;
-    flex:1;
-    min-height:0;
-    display:grid;
-    grid-template-columns:0.86fr 1.28fr 0.86fr;
-    grid-template-rows:1fr 1fr;
-    align-items:center;
-    gap:8px 4px;
-    padding:6px 14px 0;
-    perspective:1400px;
-}
-
-.node{
-    position:relative;
-    z-index:2;
-    display:flex;
-    align-items:center;
-    gap:9px;
-    min-width:150px;
-    padding:9px 11px;
-    border-radius:11px;
-    border:1px solid rgba(68,155,209,.28);
-    background:linear-gradient(150deg, rgba(16,30,52,.94), rgba(7,13,24,.94));
-    box-shadow:0 18px 34px -26px #000, inset 0 1px 0 rgba(255,255,255,.05);
-    transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
-}
-.node:hover{transform:translateY(-1px);border-color:rgba(53,217,242,.5);box-shadow:0 22px 40px -26px #000, 0 0 22px -12px rgba(53,217,242,.7)}
-.node--l{justify-self:start}
-.node--r{justify-self:end;flex-direction:row-reverse;text-align:right}
-/* 显式定位：热点分析(左上)、玩家画像(左下)、策略生成(右上)、效果预测(右下) */
-.node--tl{grid-area:1/1}
-.node--bl{grid-area:2/1}
-.node--tr{grid-area:1/3}
-.node--br{grid-area:2/3}
-.node-ico{
-    flex:none;
-    width:30px;height:30px;
-    display:grid;
-    place-items:center;
-    border-radius:9px;
-    color:var(--c);
-    background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.01));
-    border:1px solid color-mix(in srgb, var(--c) 40%, transparent);
-    box-shadow:0 0 18px -6px var(--c);
-}
-.node-ico svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.node-txt{min-width:0}
-.node-txt b{display:block;font-size:11.5px;font-weight:600;letter-spacing:.03em;white-space:nowrap}
-.node-txt span{display:block;margin-top:2px;font-size:9.5px;color:var(--ink-3);white-space:nowrap}
-
-/* 核心聚合：以柔光取代硬连线，四个节点靠向心构图聚合，避免细线在大跨度下退化成碎点 */
-.engine::before{
-    content:"";
-    position:absolute;
-    left:50%;
-    top:50%;
-    width:min(560px,88%);
-    aspect-ratio:1/.78;
-    transform:translate(-50%,-50%);
-    pointer-events:none;
-    z-index:0;
-    background:radial-gradient(ellipse at 50% 50%, rgba(49,139,255,.16), rgba(49,139,255,.05) 46%, transparent 72%);
-}
-
-.core{position:relative;z-index:2;grid-column:2;grid-row:1 / span 2;display:grid;place-items:center;min-height:0}
-.core-plate{
-    position:absolute;
-    width:min(300px,94%);
-    aspect-ratio:1/.62;
-    border-radius:50%;
-    background:radial-gradient(ellipse at 50% 62%, rgba(49,139,255,.3), rgba(49,139,255,.06) 58%, transparent 72%);
-    border:1px solid rgba(53,217,242,.16);
-    box-shadow:0 0 60px -18px rgba(49,139,255,.6), inset 0 0 40px -20px rgba(53,217,242,.7);
-    transform:translateY(30%);
-}
-.core-plate::after{
-    content:"";
-    position:absolute;
-    inset:16% 12%;
-    border-radius:50%;
-    border:1px solid rgba(53,217,242,.13);
-}
-.core-hex{
-    position:relative;
-    width:148px;
-    height:168px;
-    display:grid;
-    place-items:center;
-    filter:drop-shadow(0 18px 30px rgba(49,139,255,.35));
-}
-.hex{position:absolute;inset:0;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
-.hex--out{background:linear-gradient(165deg, rgba(143,240,255,.95), rgba(49,139,255,.85) 46%, rgba(146,117,255,.8))}
-.hex--in{inset:2px;background:linear-gradient(170deg, #0C1B31, #060D1A 62%)}
-.hex--glow{
-    inset:0;
-    background:linear-gradient(150deg, rgba(143,240,255,.5), rgba(146,117,255,.32));
-    filter:blur(14px);
-    opacity:.75;
-}
-.core-ai{
-    position:relative;
-    font-family:var(--mono);
-    font-size:34px;
-    font-weight:700;
-    letter-spacing:.02em;
-    background:linear-gradient(180deg,#DFF8FF,#7FB2FF);
-    -webkit-background-clip:text;
-    background-clip:text;
-    -webkit-text-fill-color:transparent;
-    text-shadow:0 0 22px rgba(127,178,255,.5);
-}
-.core-orbit{
-    position:absolute;
-    left:50%;
-    top:50%;
-    border-radius:50%;
-    border:1px dashed rgba(53,217,242,.22);
-    transform:translate(-50%,-50%) rotateX(70deg);
-    pointer-events:none;
-}
-.core-orbit.o1{width:196px;height:196px;animation:orbit 26s linear infinite}
-.core-orbit.o2{width:244px;height:244px;border-color:rgba(146,117,255,.16);animation:orbit 40s linear infinite reverse}
-@keyframes orbit{
-    from{transform:translate(-50%,-50%) rotateX(70deg) rotate(0deg)}
-    to{transform:translate(-50%,-50%) rotateX(70deg) rotate(360deg)}
-}
-
-.engine-status{
-    position:relative;
-    flex:none;
-    margin:0 16px 14px;
-    display:flex;
-    align-items:center;
-    gap:8px;
-    padding:8px 14px;
-    border-radius:999px;
-    border:1px solid rgba(53,217,242,.24);
-    background:rgba(7,16,29,.86);
-    font-size:11px;
-    color:var(--ink-2);
-    overflow:hidden;
-}
-.engine-status .dot{
-    width:6px;height:6px;border-radius:50%;
-    background:var(--cyan);
-    box-shadow:0 0 9px var(--cyan);
-    animation:blink 1.8s ease-in-out infinite;
-    flex:none;
-}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.28}}
-.engine-status::after{
-    content:"";
-    position:absolute;
-    inset:0;
-    background:linear-gradient(90deg,transparent,rgba(53,217,242,.13),transparent);
-    transform:translateX(-100%);
-    animation:sweep 3.4s ease-in-out infinite;
-}
-@keyframes sweep{0%{transform:translateX(-100%)}55%,100%{transform:translateX(100%)}}
-.engine-status.is-done{border-color:rgba(53,211,153,.4)}
-.engine-status.is-done .dot{background:var(--green);box-shadow:0 0 9px var(--green);animation:none}
-
-/* ==================== 右：AI 生成方案 ==================== */
-.badge-rec{
-    flex:none;
-    font-family:var(--mono);
-    font-size:9px;
-    letter-spacing:.08em;
-    padding:2px 7px;
-    border-radius:999px;
-    color:#1B1005;
-    background:linear-gradient(180deg,#FFD98A,#F0A83C);
-    box-shadow:0 0 14px -4px rgba(240,168,60,.9);
-}
-.plan-title{
-    margin:8px 0 0;
-    font-size:13.5px;
-    font-weight:600;
-    line-height:1.45;
-    letter-spacing:.01em;
-    color:var(--ink);
-}
-.plan-desc{margin:6px 0 0;font-size:10.5px;line-height:1.6;color:var(--ink-3)}
-
-.plan-visual{
-    flex:1;
-    min-height:96px;
-    position:relative;
-    margin:8px 0 2px;
-    display:grid;
-    place-items:center;
-    border-radius:11px;
-    background:
-        radial-gradient(160px 80px at 50% 62%, rgba(146,117,255,.24), transparent 72%),
-        linear-gradient(180deg, rgba(20,32,56,.6), rgba(8,14,26,.5));
-    border:1px solid rgba(146,117,255,.18);
-    overflow:hidden;
-}
-.plan-visual::before{
-    content:"";
-    position:absolute;
-    width:132px;height:132px;
-    border-radius:50%;
-    border:1px dashed rgba(146,117,255,.28);
-    background:radial-gradient(circle, rgba(146,117,255,.18), transparent 70%);
-}
-.plan-visual::after{
-    content:"";
-    position:absolute;
-    width:178px;height:178px;
-    border-radius:50%;
-    border:1px solid rgba(146,117,255,.1);
-}
-.plan-visual svg{
-    position:relative;
-    z-index:1;
-    width:108px;
-    height:108px;
-    filter:drop-shadow(0 10px 18px rgba(146,117,255,.45));
-}
-
-.plan-metrics{flex:none;display:flex;flex-direction:column;gap:7px;margin-top:10px}
-.pm-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-2)}
-.pm-ico{
-    width:16px;height:16px;flex:none;
-    display:grid;place-items:center;
-    color:var(--c,var(--cyan));
-}
-.pm-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.pm-row b{
-    margin-left:auto;
-    font-family:var(--mono);
-    font-size:13px;
-    font-weight:600;
-    color:var(--ink);
-    font-variant-numeric:tabular-nums;
-}
-.pm-row em{font-style:normal;font-size:10px;color:var(--green);margin-left:3px}
-
-.steps{flex:none;margin-top:12px;padding-top:10px;border-top:1px dashed rgba(90,140,200,.18)}
-.steps-head{
-    display:flex;align-items:center;justify-content:space-between;
-    font-size:10px;color:var(--ink-3);letter-spacing:.08em;
-}
-.steps-track{display:flex;align-items:center;gap:2px;margin-top:9px}
-.step{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
-.step-ico{
-    width:26px;height:26px;border-radius:8px;
-    display:grid;place-items:center;
-    color:var(--c);
-    background:rgba(255,255,255,.045);
-    border:1px solid color-mix(in srgb, var(--c) 34%, transparent);
-}
-.step-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.step span{font-size:9.5px;color:var(--ink-3);white-space:nowrap}
-.step::before{
-    content:"";
-    position:absolute;
-    top:13px;
-    left:-6%;
-    width:12%;
-    height:1px;
-    background:linear-gradient(90deg,rgba(90,140,200,.1),rgba(90,140,200,.45));
-}
-.step:first-child::before{display:none}
-
-.ai-fold{flex:none;margin-top:10px;border-radius:9px;border:1px solid rgba(90,140,200,.18);background:rgba(8,15,27,.7)}
-.ai-fold>summary{
-    list-style:none;
-    cursor:pointer;
-    padding:7px 10px;
-    font-size:10px;
-    letter-spacing:.06em;
-    color:var(--ink-3);
-    display:flex;
-    align-items:center;
-    gap:6px;
-}
-.ai-fold>summary::-webkit-details-marker{display:none}
-.ai-fold>summary::after{content:"＋";margin-left:auto;font-family:var(--mono)}
-.ai-fold[open]>summary::after{content:"－"}
-.ai-fold>summary:hover{color:var(--ink-2)}
-.ai-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:7px}
-.ai-body textarea{
-    width:100%;
-    min-height:46px;
-    resize:vertical;
-    padding:7px 8px;
-    border-radius:7px;
-    border:1px solid rgba(90,140,200,.24);
-    background:rgba(4,9,18,.9);
-    color:var(--ink-2);
-    font-family:var(--sans);
-    font-size:10.5px;
-    line-height:1.55;
-    outline:none;
-    transition:border-color .18s ease;
-}
-.ai-body textarea:focus{border-color:rgba(53,217,242,.5)}
-.btn-ai{
-    align-self:flex-start;
-    appearance:none;
-    cursor:pointer;
-    padding:5px 12px;
-    border-radius:7px;
-    border:1px solid rgba(53,217,242,.4);
-    background:rgba(53,217,242,.1);
-    color:#BFF3FF;
-    font-family:var(--sans);
-    font-size:10.5px;
-    transition:background .18s ease,border-color .18s ease;
-}
-.btn-ai:hover{background:rgba(53,217,242,.18);border-color:rgba(53,217,242,.7)}
-.btn-ai[disabled]{opacity:.55;cursor:default}
-.ai-out{
-    max-height:110px;
-    overflow:auto;
-    font-size:10.5px;
-    line-height:1.7;
-    color:var(--ink-2);
-    white-space:pre-wrap;
-}
-
-.btn-deploy{
-    flex:none;
-    margin-top:auto;
-    width:100%;
-    padding:11px 14px;
-    border:0;
-    border-radius:10px;
-    cursor:pointer;
-    font-family:var(--sans);
-    font-size:12.5px;
-    font-weight:600;
-    letter-spacing:.04em;
-    color:#04121F;
-    background:linear-gradient(96deg,#7FE7FF 0%,#6FA8FF 52%,#B79CFF 100%);
-    box-shadow:0 16px 30px -18px rgba(111,168,255,.9), inset 0 1px 0 rgba(255,255,255,.4);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:8px;
-    transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
-}
-.btn-deploy:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 20px 36px -18px rgba(111,168,255,1)}
-.btn-deploy:active{transform:translateY(0)}
-.btn-deploy.is-done{
-    background:linear-gradient(96deg,rgba(53,211,153,.92),rgba(53,217,242,.86));
-    color:#04140E;
-    cursor:default;
-}
-.btn-deploy svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-
-/* ==================== 底部：策略对比 ==================== */
-.strategies{flex:none;display:flex;flex-direction:column;gap:8px;min-height:0}
-.strat-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.strat-title{display:flex;align-items:center;gap:7px;margin:0;font-size:12.5px;font-weight:600;letter-spacing:.06em}
-.strat-title::before{
-    content:"";width:3px;height:11px;border-radius:2px;
-    background:var(--violet);box-shadow:0 0 10px var(--violet);
-}
-.strat-grid{
-    display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
-    gap:12px;
-    height:186px;
-}
-
-.card{
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    min-width:0;
-    padding:10px 12px 9px;
-    border-radius:13px;
-    background:linear-gradient(168deg, rgba(17,29,49,.92), rgba(7,12,22,.95));
-    border:1px solid var(--line);
-    box-shadow:0 24px 44px -36px #000, inset 0 1px 0 rgba(255,255,255,.04);
-    overflow:hidden;
-    cursor:pointer;
-    transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
-}
-.card::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    pointer-events:none;
-    background:radial-gradient(140px 70px at 12% 0%, var(--tint), transparent 74%);
-}
-.card:hover{transform:translateY(-2px);border-color:color-mix(in srgb, var(--c) 46%, transparent);box-shadow:0 28px 50px -34px #000, 0 0 24px -14px var(--c)}
-.card.is-active{border-color:color-mix(in srgb, var(--c) 62%, transparent);box-shadow:0 28px 50px -34px #000, 0 0 26px -12px var(--c)}
-.card-top{display:flex;align-items:center;gap:7px;flex:none}
-.card-ico{
-    width:24px;height:24px;flex:none;
-    display:grid;place-items:center;
-    border-radius:7px;
-    color:var(--c);
-    background:rgba(255,255,255,.05);
-    border:1px solid color-mix(in srgb, var(--c) 34%, transparent);
-}
-.card-ico svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.card-name{
-    margin:0;
-    font-size:11.5px;
-    font-weight:600;
-    letter-spacing:.02em;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-}
-.tag-match{
-    margin-left:auto;
-    flex:none;
-    font-size:8.5px;
-    letter-spacing:.06em;
-    padding:1px 6px;
-    border-radius:999px;
-    color:#1A1305;
-    background:linear-gradient(180deg,#FFD98A,#F0A83C);
-}
-.card-desc{
-    flex:none;
-    margin:7px 0 0;
-    font-size:9.5px;
-    line-height:1.55;
-    color:var(--ink-3);
-    display:-webkit-box;
-    -webkit-line-clamp:2;
-    -webkit-box-orient:vertical;
-    overflow:hidden;
-}
-.card-spark{flex:none;height:28px;margin:6px 0 2px}
-.card-spark svg{width:100%;height:100%;overflow:visible}
-.card-metrics{flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:auto}
-.cm{min-width:0}
-.cm i{display:block;font-style:normal;font-size:8.5px;color:var(--ink-3);white-space:nowrap;letter-spacing:.02em}
-.cm b{
-    display:block;
-    margin-top:2px;
-    font-family:var(--mono);
-    font-size:12px;
-    font-weight:600;
-    color:var(--ink);
-    font-variant-numeric:tabular-nums;
-    white-space:nowrap;
-}
-.cm .stars{color:var(--amber);font-size:9.5px;letter-spacing:-1px}
-.card-foot{
-    flex:none;
-    margin-top:7px;
-    padding-top:7px;
-    border-top:1px solid rgba(90,140,200,.14);
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-}
-.btn-view{
-    appearance:none;
-    border:0;
-    background:transparent;
-    cursor:pointer;
-    padding:0;
-    font-family:var(--sans);
-    font-size:10px;
-    color:var(--ink-3);
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-    transition:color .18s ease;
-}
-.btn-view:hover{color:var(--c)}
-.btn-view span{transition:transform .18s ease}
-.btn-view:hover span{transform:translateX(3px)}
-
-/* ==================== 页脚 ==================== */
-.foot{
-    flex:none;
-    margin:0;
-    font-size:9.5px;
-    letter-spacing:.02em;
-    color:#4B5D75;
-}
-.foot b{color:#6B80A0;font-weight:600}
-.foot code{font-family:var(--mono);font-size:9px;color:#6B80A0}
-
-.toast{
-    position:fixed;
-    left:50%;
-    bottom:64px;
-    z-index:1200;
-    transform:translate(-50%,14px);
-    padding:9px 16px;
-    border-radius:999px;
-    border:1px solid rgba(53,217,242,.4);
-    background:rgba(6,14,26,.96);
-    color:var(--ink);
-    font-size:11.5px;
-    box-shadow:0 20px 40px -22px #000, 0 0 26px -14px rgba(53,217,242,.8);
-    opacity:0;
-    pointer-events:none;
-    transition:opacity .22s ease, transform .22s ease;
-}
-.toast.on{opacity:1;transform:translate(-50%,0)}
-
-/* ==================== 响应式 ==================== */
-@media (max-height:880px){
-    .plan-visual{height:66px}
-    .plan-visual svg{width:56px;height:56px}
-    .strat-grid{height:168px}
-    .card-desc{-webkit-line-clamp:1}
-}
-@media (max-height:780px){
-    .plan-visual{display:none}
-    .card-spark{height:20px}
-    .engine-sub{display:none}
-    .foot{display:none}
-    .strat-grid{height:152px}
-}
-@media (max-width:1380px){
-    .stage{grid-template-columns:minmax(0,.95fr) minmax(0,1.42fr) minmax(0,1.02fr)}
-    .node-txt span{display:none}
-}
-@media (prefers-reduced-motion:reduce){
-    .board{animation:none}
-    .core-orbit,.engine-status::after,.engine-status .dot{animation:none}
-    .risk-ring .arc{animation:none;stroke-dashoffset:var(--off,76.6)}
-}
-</style>
-    <link rel="stylesheet" href="css/realdata.css">
 </head>
 <body>
 
-<!-- 顶部导航：与其余三页完全一致，仅当前页高亮不同 -->
+<a class="skip" href="#workspace">跳到主内容</a>
+
+<!-- 背景点阵：Canvas 2D，鼠标靠近时局部唤醒并连线；窄屏与 reduced-motion 下不加载 -->
+<canvas id="bgDots" class="dot-field" aria-hidden="true"></canvas>
+
+<!-- ==================== 顶部导航（与其他页面同一份标记） ==================== -->
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top ops-nav" aria-label="主导航">
     <div class="ops-bar">
         <a class="ops-brand" href="index.html" aria-label="NEXUS 玩家留存中枢 · 返回总览">
@@ -879,15 +54,16 @@ body::before{
         </ul>
         <div class="ops-meta">
             <span class="ops-range-wrap">
-                <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择统计时间范围">
+                <button class="ops-range" type="button" id="rangeBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="选择历史策略的时间范围">
                     <svg class="ops-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.6" width="14" height="11.8" rx="2"/><path d="M3 8.2h14M6.8 2.9v3.1M13.2 2.9v3.1"/></svg>
-                    <span id="rangeLabel">10.16 – 11.14</span>
+                    <span id="rangeLabel">全部历史</span>
                     <svg class="ops-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.6l3 3 3-3"/></svg>
                 </button>
-                <ul class="ops-range-menu" id="rangeMenu" role="listbox" aria-label="统计时间范围" hidden>
-                    <li><button type="button" role="option" data-range="7d" data-label="11.08 – 11.14" aria-selected="false">近 7 天<em>11.08–11.14</em></button></li>
-                    <li><button type="button" role="option" data-range="30d" data-label="10.16 – 11.14" aria-selected="true">近 30 天<em>10.16–11.14</em></button></li>
-                    <li><button type="button" role="option" data-range="90d" data-label="8.17 – 11.14" aria-selected="false">近 90 天<em>8.17–11.14</em></button></li>
+                <ul class="ops-range-menu" id="rangeMenu" role="listbox" aria-label="历史策略时间范围" hidden>
+                    <li><button type="button" role="option" data-range="all" data-label="全部历史" aria-selected="true">全部历史<em>不限</em></button></li>
+                    <li><button type="button" role="option" data-range="7d" data-label="近 7 天" aria-selected="false">近 7 天<em>最近一周</em></button></li>
+                    <li><button type="button" role="option" data-range="30d" data-label="近 30 天" aria-selected="false">近 30 天<em>最近一月</em></button></li>
+                    <li><button type="button" role="option" data-range="90d" data-label="近 90 天" aria-selected="false">近 90 天<em>最近一季</em></button></li>
                 </ul>
             </span>
             <span class="ops-live"><i aria-hidden="true"></i>LIVE<span class="ops-signal" aria-hidden="true"><b></b><b></b><b></b><b></b></span></span>
@@ -896,641 +72,1111 @@ body::before{
     </div>
 </nav>
 
-<main class="board">
-    <div class="rd-bar" role="note" style="margin:10px 14px 0"><span class="rd-chip is-warn">数据边界</span><span class="rd-note">召回率与回流人数需要触达与回流事件，本项目无此数据；下列策略为设计示意，状态固定为「建议」，未执行任何触达。</span></div>
+<main class="shell relative z-10">
+  <h1 class="sr-only">召回策略 · AI 召回助手</h1>
 
-    <section class="stage" aria-label="召回决策工作台">
+  <!-- ==================== 顶部信号（全部真实） ==================== -->
+  <section class="kpi-row reveal" style="--delay:40ms" aria-label="系统实时状态">
+    <article class="kpi kpi--cyan">
+      <span class="kpi-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.2c.6-3.1 3.1-5 6.2-5s5.6 1.9 6.2 5"/><circle cx="17" cy="7" r="2.4"/><path d="M16.4 12.6c2.6.3 4.3 2 4.8 4.6"/></svg>
+      </span>
+      <div class="kpi-main">
+        <span class="kpi-label" title="Steam ISteamUserStats/GetNumberOfCurrentPlayers 快照；这是同时在线，不是 DAU">最近采集 CCU</span>
+        <div id="kpiCcu" class="kpi-num is-muted">—</div>
+        <span id="kpiCcuMeta" class="kpi-meta">读取中</span>
+      </div>
+    </article>
 
-        <!-- ============ 左：流失风险识别 ============ -->
-        <div class="wing wing--left">
+    <article class="kpi kpi--violet">
+      <span class="kpi-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+      </span>
+      <div class="kpi-main">
+        <span class="kpi-label" title="knowledge_documents 表内的官方公告数，全部来自 Steam 公告频道">知识库文档</span>
+        <div id="kpiDocs" class="kpi-num is-muted">—</div>
+        <span id="kpiDocsMeta" class="kpi-meta">官方公告 · 可回溯</span>
+      </div>
+    </article>
 
-            <article class="panel" style="--hair:rgba(240,83,107,.5)">
-                <div class="p-head">
-                    <h2 class="p-title" style="--accent:var(--red)">流失风险概览</h2>
-                    <span class="p-meta">风险池</span>
-                </div>
-                <div class="p-body">
-                    <div class="risk-top">
-                        <div class="risk-ring">
-                            <svg viewBox="0 0 120 120" role="img" aria-label="高风险玩家占风险池 23.4%">
-                                <defs>
-                                    <linearGradient id="riskGrad" x1="0" y1="0" x2="1" y2="1">
-                                        <stop offset="0" stop-color="#FF8A96"/><stop offset="1" stop-color="#F0536B"/>
-                                    </linearGradient>
-                                </defs>
-                                <circle class="track" cx="60" cy="60" r="50" fill="none" stroke-width="9" pathLength="100"/>
-                                <circle class="arc" id="riskArc" cx="60" cy="60" r="50" fill="none" stroke-width="9"
-                                        pathLength="100" style="--off:76.6"/>
-                            </svg>
-                            <div class="cap">
-                                <b id="riskPct">23.4%</b>
-                                <span>高风险占比</span>
-                                <em id="riskDelta">▲ 1.2pp</em>
-                            </div>
-                        </div>
-                        <div class="risk-list">
-                            <div class="risk-row" style="--c:var(--red)">
-                                <i aria-hidden="true"></i><span>高风险玩家</span><b id="vHigh">8,780</b>
-                            </div>
-                            <div class="risk-row" style="--c:var(--amber)">
-                                <i aria-hidden="true"></i><span>潜在流失玩家</span><b id="vPotential">28,740</b>
-                            </div>
-                            <div class="risk-row" style="--c:var(--cyan)">
-                                <i aria-hidden="true"></i><span>可召回玩家</span><b id="vReachable">24,190</b>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="risk-bar">
-                        <div class="rb-head"><span>可召回覆盖率</span><b id="vCover">64.5%</b></div>
-                        <div class="rb-track"><div class="rb-fill" id="rbFill"></div></div>
-                    </div>
-                    <div class="risk-foot">
-                        <span>风险池合计</span>
-                        <b id="vPool">37,520</b>
-                    </div>
-                </div>
-            </article>
+    <article class="kpi kpi--blue">
+      <span class="kpi-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3l8.4 4.2L12 11.4 3.6 7.2z"/><path d="M3.6 12.2L12 16.4l8.4-4.2M3.6 16.9L12 21l8.4-4.1"/></svg>
+      </span>
+      <div class="kpi-main">
+        <span class="kpi-label" title="Chroma collection knowledge_chunks 的 chunk 总数；BAAI/bge-m3 编码">知识库向量块</span>
+        <div id="kpiChunks" class="kpi-num is-muted">—</div>
+        <span id="kpiChunksMeta" class="kpi-meta">/api/ai/health</span>
+      </div>
+    </article>
 
-            <article class="panel" style="--hair:rgba(146,117,255,.5)">
-                <div class="p-head">
-                    <h2 class="p-title" style="--accent:var(--violet)">目标人群细分</h2>
-                    <span class="p-meta" id="segMeta">全量</span>
-                </div>
-                <div class="p-body">
-                    <div class="seg" role="group" aria-label="人群筛选">
-                        <button class="seg-btn is-on" type="button" data-seg="all" aria-pressed="true">全部</button>
-                        <button class="seg-btn" type="button" data-seg="high" aria-pressed="false">高风险</button>
-                        <button class="seg-btn" type="button" data-seg="silent" aria-pressed="false">沉默用户</button>
-                        <button class="seg-btn" type="button" data-seg="back" aria-pressed="false">回流用户</button>
-                    </div>
-                    <div class="seg-wrap">
-                        <div class="seg-donut">
-                            <svg id="segDonut" viewBox="0 0 120 120" role="img" aria-label="目标人群构成占比"></svg>
-                            <div class="cap">
-                                <b id="segTotal">37.5K</b>
-                                <span id="segTotalLabel">风险池</span>
-                            </div>
-                        </div>
-                        <div class="legend" id="segLegend"></div>
-                    </div>
-                </div>
-            </article>
+    <article class="kpi kpi--green">
+      <span class="kpi-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.2"/><path d="M9.5 3v3.5M14.5 3v3.5M9.5 17.5V21M14.5 17.5V21M3 9.5h3.5M3 14.5h3.5M17.5 9.5H21M17.5 14.5H21"/></svg>
+      </span>
+      <div class="kpi-main">
+        <span class="kpi-label" title="本机 Ollama 推理，数据不出机；thinking 已关闭">生成模型</span>
+        <div id="kpiModel" class="kpi-num is-muted">—</div>
+        <span id="kpiModelMeta" class="kpi-meta">本地推理 · 数据不出机</span>
+      </div>
+    </article>
 
+
+  </section>
+
+  <!-- ==================== 工作区 ==================== -->
+  <div id="workspace" class="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-12">
+
+    <!-- 主区域：AI 召回助手 -->
+    <section class="panel panel--focus reveal order-1 flex flex-col lg:col-span-8 lg:col-start-1"
+             style="--delay:80ms;min-height:clamp(470px, calc(100vh - 268px), 820px)" aria-label="AI 召回助手">
+      <div class="panel-head flex-wrap gap-y-2">
+        <div class="flex items-center gap-2.5">
+          <h2 class="panel-title">AI 召回助手</h2>
+          <span id="chatModel" class="chip chip-info">本地模型</span>
         </div>
-
-        <!-- ============ 中：AI 召回引擎 ============ -->
-        <section class="engine-col" aria-label="AI 智能召回引擎">
-            <div class="engine-head">
-                <h2 class="engine-title">AI 智能召回引擎</h2>
-                <p class="engine-sub">基于热点情感与玩家行为的个性化召回方案</p>
-            </div>
-
-            <div class="engine">
-                <div class="node node--l node--tl" style="--c:var(--cyan)">
-                    <span class="node-ico" aria-hidden="true">
-                        <svg viewBox="0 0 24 24"><path d="M3 17l4.6-5.4 3.2 3.1L20 6.6"/><path d="M15.4 6.6H20v4.4"/><path d="M3 21h18"/></svg>
-                    </span>
-                    <div class="node-txt"><b>热点分析</b><span>识别流失诱因</span></div>
-                </div>
-
-                <div class="node node--l node--bl" style="--c:var(--violet)">
-                    <span class="node-ico" aria-hidden="true">
-                        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.4 20c.5-3.6 3.2-5.7 6.6-5.7s6.1 2.1 6.6 5.7"/></svg>
-                    </span>
-                    <div class="node-txt"><b>玩家画像</b><span>精准定位人群</span></div>
-                </div>
-
-                <div class="core" aria-hidden="true">
-                    <div class="core-orbit o1"></div>
-                    <div class="core-orbit o2"></div>
-                    <div class="core-plate"></div>
-                    <div class="core-hex">
-                        <span class="hex hex--glow"></span>
-                        <span class="hex hex--out"></span>
-                        <span class="hex hex--in"></span>
-                        <b class="core-ai">AI</b>
-                    </div>
-                </div>
-
-                <div class="node node--r node--tr" style="--c:var(--blue)">
-                    <span class="node-ico" aria-hidden="true">
-                        <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4.2"/><path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
-                    </span>
-                    <div class="node-txt"><b>策略生成</b><span>多方案编排</span></div>
-                </div>
-
-                <div class="node node--r node--br" style="--c:var(--green)">
-                    <span class="node-ico" aria-hidden="true">
-                        <svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7.5 15.5l4-5 3 2.6 4.5-6"/></svg>
-                    </span>
-                    <div class="node-txt"><b>效果预测</b><span>预估召回收益</span></div>
-                </div>
-            </div>
-
-            <div class="engine-status" id="engineStatus">
-                <span class="dot" aria-hidden="true"></span>
-                <span id="engineStatusText">正在生成最优召回方案…</span>
-            </div>
-        </section>
-
-        <!-- ============ 右：AI 生成方案 ============ -->
-        <div class="wing wing--right">
-            <article class="panel" style="--hair:rgba(240,168,60,.55)">
-                <div class="p-head">
-                    <h2 class="p-title" style="--accent:#F0A83C">AI 生成方案</h2>
-                    <span class="badge-rec">推荐方案</span>
-                </div>
-                <div class="p-body">
-                    <span class="p-meta" id="planId">PLAN-01 · 热点回流组合</span>
-                    <h3 class="plan-title" id="planTitle">「热点回流 + 专属福利」组合策略</h3>
-                    <p class="plan-desc" id="planDesc">结合近期热门话题与流失玩家行为，输出可执行的个性化召回动作。</p>
-
-                    <div class="plan-visual" aria-hidden="true">
-                        <svg viewBox="0 0 64 64">
-                            <defs>
-                                <linearGradient id="giftBody" x1="0" y1="0" x2="1" y2="1">
-                                    <stop offset="0" stop-color="#C4AEFF"/><stop offset="1" stop-color="#7B5BF0"/>
-                                </linearGradient>
-                                <linearGradient id="giftLid" x1="0" y1="0" x2="1" y2="1">
-                                    <stop offset="0" stop-color="#E6DCFF"/><stop offset="1" stop-color="#9C82FF"/>
-                                </linearGradient>
-                            </defs>
-                            <rect x="12" y="28" width="40" height="26" rx="4" fill="url(#giftBody)"/>
-                            <rect x="9" y="20" width="46" height="11" rx="3.4" fill="url(#giftLid)"/>
-                            <rect x="28.4" y="20" width="7.2" height="34" fill="#8FF0FF" opacity=".92"/>
-                            <path d="M32 20c-3.4-6.2-9.6-7.4-11.6-4.2-1.9 3.1 1.9 5.6 11.6 4.2z" fill="#8FF0FF" opacity=".85"/>
-                            <path d="M32 20c3.4-6.2 9.6-7.4 11.6-4.2 1.9 3.1-1.9 5.6-11.6 4.2z" fill="#8FF0FF" opacity=".85"/>
-                            <circle cx="50" cy="16" r="1.7" fill="#BFF3FF"/>
-                            <circle cx="14" cy="49" r="1.3" fill="#BFF3FF" opacity=".8"/>
-                            <circle cx="47" cy="52" r="1" fill="#E6DCFF" opacity=".7"/>
-                        </svg>
-                    </div>
-
-                    <div class="plan-metrics">
-                        <div class="pm-row" style="--c:var(--green)">
-                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 3.4 3.4L21 6"/><path d="M15.6 6H21v5.4"/></svg></span>
-                            <span>预计召回率</span><b id="mRecall">未接入</b><em id="mRecallDelta">需触达日志</em>
-                        </div>
-                        <div class="pm-row" style="--c:var(--cyan)">
-                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.2c.6-3.1 3.1-5 6.2-5s5.6 1.9 6.2 5"/><circle cx="17" cy="7" r="2.4"/><path d="M16.4 12.6c2.6.3 4.3 2 4.8 4.6"/></svg></span>
-                            <span>预计回流玩家</span><b id="mReach">未接入</b>
-                        </div>
-                        <div class="pm-row" style="--c:var(--violet)">
-                            <span class="pm-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.4-3.8L14 13.4 19 7.6"/></svg></span>
-                            <span>预计留存提升</span><b id="mRetention">12.3%</b>
-                        </div>
-                    </div>
-
-                    <div class="steps">
-                        <div class="steps-head"><span>策略详情</span><span id="stepHint">4 步执行</span></div>
-                        <div class="steps-track" id="stepsTrack"></div>
-                    </div>
-
-                    <details class="ai-fold">
-                        <summary>AI 生成依据（可选，模型调用）</summary>
-                        <div class="ai-body">
-                            <textarea id="modelPrompt" placeholder="描述场景，例如：北美高流失风险玩家、竞技平衡性争议升温，给出召回动作"></textarea>
-                            <button class="btn-ai" type="button" id="generateStrategy">生成召回依据</button>
-                            <div class="ai-out" id="responseContent" aria-live="polite"></div>
-                        </div>
-                    </details>
-
-                    <button class="btn-deploy" type="button" id="deployBtn">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
-                        <span id="deployLabel">部署该策略</span>
-                    </button>
-                </div>
-            </article>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="engine hidden sm:inline-flex">
+            <span id="engineDot" class="dot" style="background:var(--ink-3)"></span>
+            <span id="engineLabel" class="hidden sm:inline">检测引擎…</span>
+          </span>
+          <select id="aiGame" class="input !min-h-0 !w-auto max-w-[168px] !py-1 font-mono" aria-label="选择游戏"></select>
+          <button id="paletteOpen" type="button" class="btn btn-sm !px-2" aria-label="打开命令面板">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+            </svg>
+            <span class="kbd hidden md:inline-flex">Ctrl K</span>
+          </button>
         </div>
+      </div>
 
+      <div class="chat-log thin-scroll" id="chatLog" aria-live="polite">
+        <div id="chatHint" class="chat-hint">
+          <p class="hint-label">试试这样问</p>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button type="button" class="prompt" data-q="这周同时在线下降，优先排查什么？">
+              <span class="prompt-q">这周同时在线下降，优先排查什么？</span>
+              <span class="prompt-note">走指标链，给出排查顺序与依据</span>
+            </button>
+            <button type="button" class="prompt" data-q="最近一次更新改了什么？">
+              <span class="prompt-q">最近一次更新改了什么？</span>
+              <span class="prompt-note">引用官方公告原文，附出处</span>
+            </button>
+            <button type="button" class="prompt" data-q="玩家主要在抱怨什么？">
+              <span class="prompt-q">玩家主要在抱怨什么？</span>
+              <span class="prompt-note">归纳近期差评高频主题</span>
+            </button>
+            <button type="button" class="prompt" data-q="游戏退款政策是什么？">
+              <span class="prompt-q">游戏退款政策是什么？</span>
+              <span class="prompt-note">知识库里没有时会明确拒答</span>
+            </button>
+          </div>
+          <p class="hint-foot">回答带可追溯引用；证据不足时说明缺什么，而不是编答案。</p>
+        </div>
+      </div>
+
+      <form id="chatForm" class="chat-form" autocomplete="off">
+        <div class="flex items-end gap-2">
+          <textarea id="chatInput" rows="1" aria-label="向 AI 提问"
+                    class="input thin-scroll max-h-32 resize-none !py-2.5"
+                    placeholder="问一句，例如「这周数据下滑，先做什么？」"></textarea>
+          <button type="submit" id="chatSend" class="btn btn-primary btn-icon" aria-label="发送问题">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 19V5M6 11l6-6 6 6"/>
+            </svg>
+          </button>
+        </div>
+        <p class="chat-hintline">Enter 发送 · Shift+Enter 换行 · Ctrl K 命令面板</p>
+      </form>
     </section>
 
-    <!-- ============ 底部：多策略横向比较 ============ -->
-    <section class="strategies" aria-label="多种召回策略方案">
-        <div class="strat-head">
-            <h2 class="strat-title">多种召回策略方案</h2>
-            <div class="seg" role="group" aria-label="排序方式">
-                <button class="seg-btn is-on" type="button" data-sort="mix" aria-pressed="true">综合推荐</button>
-                <button class="seg-btn" type="button" data-sort="effect" aria-pressed="false">按效果排序</button>
-                <button class="seg-btn" type="button" data-sort="cost" aria-pressed="false">按成本排序</button>
-            </div>
+    <!-- 本次策略 -->
+    <aside class="order-2 self-start lg:order-2 lg:col-span-4 lg:col-start-9">
+      <section id="strategyCard" class="panel reveal scroll-mt-[104px]" style="--delay:120ms" aria-label="本次策略">
+        <div class="panel-head flex-wrap gap-y-2">
+          <h2 class="panel-title">本次策略</h2>
+          <div class="ml-auto flex items-center gap-1.5">
+            <span id="aiSourceTag" class="chip" data-kind="demo">未生成</span>
+            <span id="planId" class="chip"></span>
+            <button id="aiGenerate" type="button" class="btn btn-primary btn-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+                <circle cx="12" cy="12" r="3.2"/>
+              </svg>
+              生成策略
+              <span class="kbd">G</span>
+            </button>
+          </div>
         </div>
-        <div class="strat-grid" id="strategyGrid"></div>
-    </section>
 
-    <p class="foot">
-        <b>口径</b> · 示例数据集（<code>js/dashboard-data.js</code>）｜ 风险池 = 高风险 + 潜在流失 ｜ 可召回 = 风险池中近 30 天可触达人群 ｜ 尚未接入 <code>/api/churn-retention</code>
-    </p>
+        <div id="aiStatus" class="status-line" data-state="idle" role="status" aria-live="polite">尚无本次结果 · 可生成策略或直接提问</div>
 
-    <div data-live-ticker></div>
+        <div class="strategy-body thin-scroll">
+          <h3 id="planTitle" class="plan-title">还没有生成策略</h3>
+          <p id="planMeta" class="plan-meta">等待真实指标</p>
+
+          <div id="planEmpty" class="empty-block">
+            <p class="empty-title">生成后会在这里出现什么</p>
+            <p class="empty-note">
+              一份风险研判、3–5 条可执行措施、每条措施的衡量指标，
+              以及模型实际引用的公告片段（含相似度与发布日期）。
+            </p>
+            <button type="button" class="btn btn-sm" data-generate>
+              用当前游戏生成
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </button>
+          </div>
+
+          <div id="aiResult" hidden>
+            <div class="risk-row">
+              <div class="risk-cell">风险等级<b id="planRisk">—</b></div>
+              <div class="risk-cell">引用证据<b id="planCited">0</b></div>
+              <div class="risk-cell">召回措施<b id="planActions">0</b></div>
+            </div>
+
+            <div class="block">
+              <div class="block-head"><span>召回措施</span><span id="stepHint">—</span></div>
+              <div id="stepsTrack" class="space-y-1.5"></div>
+            </div>
+
+            <div class="block">
+              <div class="block-head"><span>引用证据</span><span>可回溯</span></div>
+              <div id="aiEvidence" class="space-y-1.5"></div>
+            </div>
+
+            <div class="block" id="inferenceBlock" hidden>
+              <div class="block-head"><span>模型推理</span><span id="inferenceConf">—</span></div>
+              <p id="aiInference" class="inference"></p>
+            </div>
+
+            <div class="block">
+              <div class="block-head"><span>口径与边界</span></div>
+              <ul id="aiLimits" class="limit-list"></ul>
+            </div>
+          </div>
+
+          <!-- 生成中：明确占位，绝不让上一次的结论看起来像这一次的结果 -->
+          <div id="planLoading" class="mt-3" hidden>
+            <div class="flex items-center gap-2">
+              <span class="spinner"></span>
+              <span class="font-mono text-[9px] uppercase tracking-[0.16em] text-ink-dim">指标 → 检索 → 生成 → 校验</span>
+            </div>
+            <div class="mt-3 space-y-2.5">
+              <div class="skeleton" style="width:94%"></div>
+              <div class="skeleton" style="width:76%;height:8px"></div>
+              <div class="skeleton" style="width:88%;height:8px"></div>
+              <div class="skeleton" style="width:62%;height:8px"></div>
+            </div>
+            <p class="mt-3 text-[10px] leading-relaxed text-ink-dim">
+              本机 4B 模型约需 20 秒。校验不通过时不会落库，历史里不会出现空策略。
+            </p>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- 知识命中 / 动态指标 -->
+    <div class="order-3 grid gap-2.5 md:grid-cols-2 lg:col-span-12 lg:col-start-1">
+      <section id="evidence" class="panel reveal scroll-mt-[104px]" style="--delay:200ms" aria-label="知识库命中">
+        <div class="panel-head">
+          <h2 class="panel-title">知识库命中</h2>
+          <span id="hitsMeta" class="chip ml-auto" title="相似度 = 1 − cosine distance；分数只表示检索接近程度，不代表能否回答">—</span>
+        </div>
+        <p id="hitsQuery" class="hits-query">查询：—</p>
+        <div id="aiRetrieved" class="thin-scroll max-h-[260px] space-y-1.5 overflow-y-auto px-3 pb-3"></div>
+      </section>
+
+      <section id="metrics" class="panel reveal scroll-mt-[104px]" style="--delay:240ms" aria-label="动态指标">
+        <div class="panel-head">
+          <h2 class="panel-title">动态指标</h2>
+          <span id="metricsMeta" class="chip ml-auto">—</span>
+        </div>
+        <div id="aiMetrics" class="thin-scroll max-h-[260px] overflow-y-auto px-3 py-1.5"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-white/[0.05] pt-3 text-[10px] text-ink-dim">
+    <span>口径：CCU 为 Steam 同时在线快照，不是 DAU；风险指数为群体级研判，不是流失概率。</span>
+    <span class="font-mono">/api/recall/* · /api/knowledge/answer · /api/ai/health</span>
+    <span id="footStamp" class="ml-auto font-mono">—</span>
+  </footer>
 </main>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- ==================== 命令面板 ==================== -->
+<div id="palette" class="palette-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="paletteLabel">
+  <div class="palette-backdrop" data-close-palette></div>
+  <div class="palette">
+    <div class="palette-input-row">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="text-ink-dim" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+      </svg>
+      <input id="paletteInput" class="palette-input" type="text"
+             placeholder="搜索策略、跳转区块、或直接提问…" aria-label="命令面板输入" autocomplete="off">
+      <span class="kbd">Esc</span>
+    </div>
+    <p id="paletteLabel" class="sr-only">命令面板</p>
+    <div id="paletteList" class="palette-list thin-scroll"></div>
+    <div id="paletteEmpty" class="palette-empty hidden">没有匹配项</div>
+    <div class="palette-foot">
+      <span>↑↓ 选择</span><span>Enter 执行</span><span>Esc 关闭</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Toast ==================== -->
+<div id="toast" class="pointer-events-none fixed bottom-6 right-6 z-[1120] flex flex-col items-end gap-2" role="status" aria-live="polite"></div>
+
+<!-- ==================== Modal ==================== -->
+<div id="modal" class="fixed inset-0 z-[1100] hidden items-center justify-center p-5" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="absolute inset-0 bg-black/65 backdrop-blur-sm" data-close-modal></div>
+  <div class="modal-card">
+    <div class="flex items-start justify-between gap-4 border-b border-white/[0.07] px-5 py-3.5">
+      <h3 id="modalTitle" class="text-[13px] text-ink">详情</h3>
+      <button type="button" class="btn btn-ghost btn-sm !px-2" data-close-modal aria-label="关闭">关闭</button>
+    </div>
+    <div id="modalBody" class="thin-scroll max-h-[64vh] overflow-y-auto px-5 py-4 text-[11.5px] leading-relaxed text-ink-2"></div>
+  </div>
+</div>
 
 <script>
 /* =========================================================================
-   召回策略页 —— 数值均由 dashboard-data.js 派生；交互为本地演示，不下发真实触达
+   召回策略页 · 单文件控制器
+   数据来源（全部真实，失败即如实呈现，不回退 mock）：
+     /api/games                游戏列表 + 最近 CCU 快照
+     /api/ai/health            LLM / embedding / 向量库状态
+     /api/recall/history       历史列表
+     /api/recall/<id>          历史详情（含当时检索到的原文片段）
+     /api/recall/generate      指标 → 检索 → 生成 → 双校验 → 落库
+     /api/knowledge/answer     九种状态如实呈现（含拒答）
+   历史策略列表与证据链模块已按需求移除：只保留「最近一次策略」自动载入。
    ========================================================================= */
 (function () {
-    'use strict';
+  'use strict';
 
-    var D = window.DashboardData;
-    var $ = function (id) { return document.getElementById(id); };
+  var API = window.NEXUS_API_BASE || (location.protocol + '//' + location.hostname + ':5000');
+  var $ = function (id) { return document.getElementById(id); };
 
-    /* 高风险玩家占风险池的固定比例：用来把总览页的高危人数还原成风险池口径 */
-    var HIGH_SHARE = 0.234;
-    var REACHABLE_RATE = 0.645;
+  var state = {
+    app: 0, games: [], health: null,
+    busy: false, lastPayload: null, hits: []
+  };
 
-    function baseNumbers(range) {
-        var k = D ? D.kpis(range) : null;
-        var high = k ? k.atRiskPlayers.value : 8780;
-        var pool = Math.round(high / HIGH_SHARE);
-        return {
-            high: high,
-            pool: pool,
-            potential: pool - high,
-            reachable: Math.round(pool * REACHABLE_RATE)
-        };
-    }
+  var RISK = {
+    high:    { cn: '高',   key: 'HIGH',    cls: 'chip-err',  color: 'var(--red)' },
+    medium:  { cn: '中',   key: 'MEDIUM',  cls: 'chip-warn', color: 'var(--amber)' },
+    low:     { cn: '低',   key: 'LOW',     cls: 'chip-ok',   color: 'var(--green)' },
+    unknown: { cn: '未知', key: 'UNKNOWN', cls: '',          color: 'var(--ink-3)' }
+  };
+  var RISK_RANK = { high: 3, medium: 2, low: 1 };
+  var PRIORITY = {
+    high:   { txt: '高', cls: 'chip-err' },
+    medium: { txt: '中', cls: 'chip-warn' },
+    low:    { txt: '低', cls: 'chip-ok' }
+  };
+  var CHAT_STATUS = {
+    answered:                    { cls: 'chip-ok',   label: '依据证据回答' },
+    insufficient_evidence:       { cls: 'chip-warn', label: '证据不足 · 拒答' },
+    route_to_sql:                { cls: 'chip-info', label: '需要动态数据' },
+    strategy_generation_pending: { cls: 'chip-info', label: '策略待生成' },
+    strategy_generated:          { cls: 'chip-ok',   label: '策略已生成' },
+    out_of_scope:                { cls: 'chip-info', label: '超出知识库范围' },
+    ambiguous_query:             { cls: 'chip-info', label: '问题不明确' },
+    generation_failed:           { cls: 'chip-err',  label: '生成失败' },
+    retrieval_failed:            { cls: 'chip-err',  label: '检索失败' }
+  };
 
-    function fmt(n) { return n.toLocaleString('en-US'); }
+  var IC = {
+    chev: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    arrow: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>',
+    alert: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
+    spark: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="3.4"/></svg>',
+    jump: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>'
+  };
 
-    /* ---------- 四种策略 ---------- */
-    var STRATEGIES = [
-        {
-            id: 'hotspot', name: '热点回流策略', short: '热点回流', tag: '高匹配',
-            color: '#9275FF',
-            desc: '结合近期热门话题，定向召回与热点强关联的沉默玩家',
-            recall: 27.3, cost: 3, retention: 12.3, match: 0.94,
-            plan: { code: 'PLAN-01 · 热点回流组合', title: '「热点回流 + 专属福利」组合策略',
-                    desc: '结合近期热门话题与流失玩家行为，输出可执行的个性化召回动作。' },
-            steps: [
-                { t: '热点引流', ico: 'flame', c: '#F0536B' },
-                { t: '专属活动', ico: 'gift', c: '#9275FF' },
-                { t: '情感触达', ico: 'mail', c: '#318BFF' },
-                { t: '效果追踪', ico: 'chart', c: '#35D399' }
-            ],
-            spark: [38, 41, 39, 47, 52, 49, 58, 63, 61, 72]
-        },
-        {
-            id: 'benefit', name: '专属福利策略', short: '专属福利', tag: '',
-            color: '#35D9F2',
-            desc: '为高风险玩家发放梯度福利包，用即时收益换取回流窗口',
-            recall: 25.1, cost: 1, retention: 10.6, match: 0.86,
-            plan: { code: 'PLAN-02 · 福利驱动', title: '「梯度福利包 + 限时领取」召回策略',
-                    desc: '按风险分档投放差异化福利，压缩决策成本，提升即时回流率。' },
-            steps: [
-                { t: '人群分档', ico: 'layers', c: '#35D9F2' },
-                { t: '福利配置', ico: 'gift', c: '#9275FF' },
-                { t: '限时推送', ico: 'mail', c: '#318BFF' },
-                { t: '效果追踪', ico: 'chart', c: '#35D399' }
-            ],
-            spark: [30, 34, 33, 38, 44, 47, 45, 53, 58, 62]
-        },
-        {
-            id: 'level', name: '等级召回策略', short: '等级召回', tag: '',
-            color: '#FFB45F',
-            desc: '对流失边缘的高等级玩家触发专属成长任务与段位保护',
-            recall: 22.5, cost: 2, retention: 14.8, match: 0.78,
-            plan: { code: 'PLAN-03 · 成长驱动', title: '「等级成长任务 + 段位保护」召回策略',
-                    desc: '以沉没成本与成长预期为杠杆，激活高等级流失边缘人群。' },
-            steps: [
-                { t: '等级识别', ico: 'layers', c: '#FFB45F' },
-                { t: '任务编排', ico: 'flame', c: '#F0536B' },
-                { t: '段位保护', ico: 'shield', c: '#318BFF' },
-                { t: '效果追踪', ico: 'chart', c: '#35D399' }
-            ],
-            spark: [44, 42, 46, 43, 49, 47, 52, 50, 56, 59]
-        },
-        {
-            id: 'emotion', name: '情感安抚策略', short: '情感安抚', tag: '',
-            color: '#35D399',
-            desc: '针对负面情绪集中的玩家推送回应式内容与人工关怀',
-            recall: 20.8, cost: 2, retention: 18.4, match: 0.71,
-            plan: { code: 'PLAN-04 · 情感修复', title: '「负面情绪回应 + 人工关怀」召回策略',
-                    desc: '以官方回应与一对一触达修复情感裂痕，降低二次流失。' },
-            steps: [
-                { t: '情绪识别', ico: 'flame', c: '#35D399' },
-                { t: '内容回应', ico: 'mail', c: '#318BFF' },
-                { t: '人工关怀', ico: 'user', c: '#9275FF' },
-                { t: '效果追踪', ico: 'chart', c: '#35D399' }
-            ],
-            spark: [26, 29, 27, 33, 31, 37, 40, 38, 44, 48]
-        }
-    ];
-
-    var ICONS = {
-        flame: '<path d="M12 3c3.2 3.4 5.2 5.6 5.2 8.7A5.2 5.2 0 0 1 12 17a5.2 5.2 0 0 1-5.2-5.3C6.8 8.6 8.8 6.4 12 3z"/>',
-        gift: '<rect x="4" y="10" width="16" height="9.4" rx="1.8"/><path d="M3.2 9.4h17.6v3.2H3.2z"/><path d="M12 9.4v10"/><path d="M12 9.4c-.9-2.6-2.6-3.6-3.9-3.2-1.5.5-1.3 2.5 3.9 3.2z"/><path d="M12 9.4c.9-2.6 2.6-3.6 3.9-3.2 1.5.5 1.3 2.5-3.9 3.2z"/>',
-        mail: '<rect x="3" y="5.6" width="18" height="12.8" rx="2"/><path d="M3.4 7l8.6 6 8.6-6"/>',
-        chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M7.6 15.4l3.8-4.6 3 2.6 4.5-5.6"/>',
-        layers: '<path d="M12 3.4l8 4.3-8 4.3-8-4.3z"/><path d="M4 12.2l8 4.3 8-4.3"/><path d="M4 16.4l8 4.3 8-4.3"/>',
-        shield: '<path d="M12 3.2l7 2.2v5.4c0 4-3 7-7 8.8-4-1.8-7-4.8-7-8.8V5.4z"/><path d="M9 11.6l2.2 2.2 3.9-4.4"/>',
-        user: '<circle cx="12" cy="8.4" r="3.4"/><path d="M5.6 20c.5-3.6 3.1-5.7 6.4-5.7s5.9 2.1 6.4 5.7"/>'
-    };
-
-    function svg(path) {
-        return '<svg viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>';
-    }
-
-    /* ---------- 迷你面积图（内联 SVG，不引入图表库） ---------- */
-    function sparkBand(vals) {
-        var w = 120, h = 30;
-        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
-        var span = (max - min) || 1;
-        var pts = vals.map(function (v, i) {
-            var x = (i / (vals.length - 1)) * w;
-            var y = h - ((v - min) / span) * (h - 4) - 2;
-            return x.toFixed(1) + ' ' + y.toFixed(1);
-        });
-        var line = 'M' + pts.join('L');
-        return { line: line, area: line + 'L' + w + ' ' + h + 'L0 ' + h + 'Z', w: w, h: h };
-    }
-
-    function sparkSvg(vals, color, uid) {
-        var p = sparkBand(vals);
-        return '<svg viewBox="0 0 ' + p.w + ' ' + p.h + '" preserveAspectRatio="none" aria-hidden="true">' +
-            '<defs><linearGradient id="sp-' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
-            '<stop offset="0" stop-color="' + color + '" stop-opacity=".22"/>' +
-            '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
-            '</linearGradient></defs>' +
-            '<path d="' + p.area + '" fill="url(#sp-' + uid + ')"/>' +
-            '<path d="' + p.line + '" fill="none" stroke="' + color + '" stroke-width="1.6" ' +
-            'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
-            '</svg>';
-    }
-
-    function hexA(hex, a) {
-        var h = hex.replace('#', '');
-        return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' +
-            parseInt(h.slice(4, 6), 16) + ',' + a + ')';
-    }
-
-    var state = { range: '30d', seg: 'all', sort: 'mix', selected: 'hotspot' };
-
-    /* ==================== 左：风险概览 ==================== */
-    function renderRisk() {
-        var n = baseNumbers(state.range);
-        $('vHigh').textContent = fmt(n.high);
-        $('vPotential').textContent = fmt(n.potential);
-        $('vReachable').textContent = fmt(n.reachable);
-        $('vPool').textContent = fmt(n.pool);
-        $('riskPct').textContent = (HIGH_SHARE * 100).toFixed(1) + '%';
-        var cover = n.pool ? (n.reachable / n.pool * 100) : 0;
-        $('vCover').textContent = cover.toFixed(1) + '%';
-        $('rbFill').style.width = cover.toFixed(1) + '%';
-    }
-
-    /* ==================== 左：人群细分 ==================== */
-    function segments() {
-        var n = baseNumbers(state.range);
-        return [
-            { k: 'high', name: '高风险玩家', pct: 23.4, v: n.high, c: '#F0536B' },
-            { k: 'silent', name: '沉默用户', pct: 45.8, v: Math.round(n.pool * 0.458), c: '#9275FF' },
-            { k: 'back', name: '流失边缘', pct: 30.8, v: Math.round(n.pool * 0.308), c: '#35D9F2' }
-        ];
-    }
-
-    function renderSegments() {
-        var all = segments();
-        var hi = state.seg;
-        var C = 2 * Math.PI * 46;
-        var acc = 0;
-
-        $('segDonut').innerHTML = all.map(function (s) {
-            var len = C * s.pct / 100 - 4;
-            var on = hi === 'all' || hi === s.k;
-            var ring = '<circle cx="60" cy="60" r="46" fill="none" stroke="' + s.c + '" stroke-width="13"' +
-                ' opacity="' + (on ? 1 : 0.22) + '"' +
-                ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"' +
-                ' stroke-dashoffset="' + (-C * acc / 100).toFixed(2) + '"' +
-                ' transform="rotate(-90 60 60)"/>';
-            acc += s.pct;
-            return ring;
-        }).join('');
-
-        var total = all.reduce(function (a, s) { return a + s.v; }, 0);
-        var picked = all.filter(function (s) { return s.k === hi; })[0];
-        $('segTotal').textContent = (total / 1000).toFixed(1) + 'K';
-        $('segTotalLabel').textContent = picked ? picked.name : '风险池';
-        $('segMeta').textContent = picked ? picked.name : '全量';
-
-        $('segLegend').innerHTML = all.map(function (s) {
-            var on = hi === 'all' || hi === s.k;
-            return '<div class="legend-row" style="--c:' + s.c + ';opacity:' + (on ? 1 : .38) + '">' +
-                '<i aria-hidden="true"></i><span>' + s.name + '</span>' +
-                '<b>' + s.pct.toFixed(1) + '%</b></div>';
-        }).join('');
-    }
-
-    /* ==================== 右：方案 ==================== */
-    function byId(id) {
-        return STRATEGIES.filter(function (s) { return s.id === id; })[0] || STRATEGIES[0];
-    }
-
-    function renderPlan() {
-        var s = byId(state.selected);
-        var n = baseNumbers(state.range);
-        $('planId').textContent = s.plan.code;
-        $('planTitle').textContent = s.plan.title;
-        $('planDesc').textContent = s.plan.desc;
-        $('mRecall').textContent = s.recall.toFixed(1) + '%';
-        $('mReach').textContent = fmt(Math.round(n.reachable * s.recall / 100));
-        $('mRetention').textContent = s.retention.toFixed(1) + '%';
-        $('stepHint').textContent = s.steps.length + ' 步执行';
-
-        $('stepsTrack').innerHTML = s.steps.map(function (st) {
-            return '<div class="step" style="--c:' + st.c + '">' +
-                '<span class="step-ico" aria-hidden="true">' + svg(ICONS[st.ico] || ICONS.chart) + '</span>' +
-                '<span>' + st.t + '</span></div>';
-        }).join('');
-
-        Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
-            c.classList.toggle('is-active', c.dataset.id === s.id);
-        });
-    }
-
-    /* ==================== 底部：策略卡 ==================== */
-    function sortedList() {
-        var arr = STRATEGIES.slice();
-        if (state.sort === 'effect') arr.sort(function (a, b) { return b.recall - a.recall; });
-        else if (state.sort === 'cost') arr.sort(function (a, b) { return b.cost - a.cost; });
-        else arr.sort(function (a, b) { return b.match - a.match; });
-        return arr;
-    }
-
-    function stars(n) {
-        var s = '';
-        for (var i = 0; i < 3; i++) s += i < n ? '★' : '☆';
-        return '<span class="stars" aria-label="成本指数 ' + n + ' 星">' + s + '</span>';
-    }
-
-    var CARD_ICON = { hotspot: 'flame', benefit: 'gift', level: 'layers', emotion: 'shield' };
-
-    function renderCards() {
-        var n = baseNumbers(state.range);
-        var list = sortedList();
-
-        $('strategyGrid').innerHTML = list.map(function (s, i) {
-            var reach = Math.round(n.reachable * s.recall / 100);
-            var badge = s.tag || (state.sort === 'mix' && i === 0 ? '首选' : '');
-            return '<article class="card' + (s.id === state.selected ? ' is-active' : '') + '"' +
-                ' data-id="' + s.id + '"' +
-                ' style="--c:' + s.color + ';--tint:' + hexA(s.color, .1) + '">' +
-                '<div class="card-top">' +
-                    '<span class="card-ico" aria-hidden="true">' + svg(ICONS[CARD_ICON[s.id]]) + '</span>' +
-                    '<h3 class="card-name">' + s.name + '</h3>' +
-                    (badge ? '<span class="tag-match">' + badge + '</span>' : '') +
-                '</div>' +
-                '<p class="card-desc">' + s.desc + '</p>' +
-                '<div class="card-spark">' + sparkSvg(s.spark, s.color, s.id) + '</div>' +
-                '<div class="card-metrics">' +
-                    '<div class="cm"><i>预计召回率</i><b>' + s.recall.toFixed(1) + '%</b></div>' +
-                    '<div class="cm"><i>预期回流</i><b>' + fmt(reach) + '</b></div>' +
-                    '<div class="cm"><i>成本指数</i><b>' + stars(s.cost) + '</b></div>' +
-                '</div>' +
-                '<div class="card-foot">' +
-                    '<button class="btn-view" type="button" data-view="' + s.id + '">查看方案 <span aria-hidden="true">→</span></button>' +
-                '</div>' +
-            '</article>';
-        }).join('');
-    }
-
-    /* ==================== 交互 ==================== */
-    function toast(msg) {
-        var t = $('toast');
-        t.textContent = msg;
-        t.classList.add('on');
-        clearTimeout(t._t);
-        t._t = setTimeout(function () { t.classList.remove('on'); }, 2400);
-    }
-
-    function bindChips(selector, key, after) {
-        Array.prototype.forEach.call(document.querySelectorAll(selector), function (b) {
-            b.addEventListener('click', function () {
-                state[key] = b.dataset[key === 'seg' ? 'seg' : 'sort'];
-                Array.prototype.forEach.call(document.querySelectorAll(selector), function (x) {
-                    var on = x === b;
-                    x.classList.toggle('is-on', on);
-                    x.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
-                after();
-            });
-        });
-    }
-
-    bindChips('.seg-btn[data-seg]', 'seg', renderSegments);
-    bindChips('.seg-btn[data-sort]', 'sort', renderCards);
-
-    function select(id) {
-        state.selected = id;
-        renderPlan();
-    }
-
-    $('strategyGrid').addEventListener('click', function (ev) {
-        var view = ev.target.closest('[data-view]');
-        if (view) {
-            select(view.dataset.view);
-            toast('已载入「' + byId(view.dataset.view).name + '」到右侧方案');
-            return;
-        }
-        var card = ev.target.closest('.card');
-        if (card) select(card.dataset.id);
+  /* ---------------- 工具 ---------------- */
+  function esc(text) {
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
-    $('deployBtn').addEventListener('click', function () {
-        var s = byId(state.selected);
-        this.classList.add('is-done');
-        this.disabled = true;
-        $('deployLabel').textContent = '已加入部署队列';
-        $('engineStatusText').textContent = '方案已部署 · ' + s.short + '｜等待触达窗口';
-        $('engineStatus').classList.add('is-done');
-        toast('「' + s.name + '」已加入部署队列（本地演示，未下发真实触达）');
-    });
+  function fmtNum(v) {
+    if (v == null || v === '' || isNaN(Number(v))) return '—';
+    var n = Number(v);
+    if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    if (Number.isInteger(n)) return String(n);
+    return n.toFixed(2);
+  }
+  function fmtMetric(name, value) {
+    if (value == null || isNaN(Number(value))) return '—';
+    var key = String(name || '');
+    if (/_pct$/.test(key)) return Number(value).toFixed(2) + '%';
+    if (/_ratio/.test(key)) return (Number(value) * 100).toFixed(2) + '%';
+    if (/_minutes$/.test(key)) return fmtNum(value) + ' 分';
+    return fmtNum(value);
+  }
+  function fmtDT(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso).replace('T', ' ').slice(0, 16);
+    return (d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function fmtAgo(iso) {
+    if (!iso) return '时间未知';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '时间未知';
+    var diff = Math.max(0, Date.now() - d.getTime()) / 60000;
+    if (diff < 2) return '刚刚';
+    if (diff < 60) return Math.round(diff) + ' 分钟前';
+    if (diff < 60 * 24) return Math.round(diff / 60) + ' 小时前';
+    return Math.round(diff / 1440) + ' 天前';
+  }
 
-    /* ==================== 模型调用（可选） ==================== */
-    var KEY_STORAGE = 'liusheng.siliconflow.key';
-    var API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
-    var MODEL = 'Qwen/Qwen2.5-7B-Instruct';
-
-    function resolveApiKey() {
-        var key = '';
-        try { key = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch (e) { /* 隐私模式 */ }
-        if (key) return key;
-        var input = window.prompt('首次使用需填入 SiliconFlow API Key。\n密钥只保存在本机浏览器，不会写入仓库。');
-        key = (input || '').trim();
-        if (key) { try { localStorage.setItem(KEY_STORAGE, key); } catch (e) {} }
-        return key;
-    }
-
-    $('generateStrategy').addEventListener('click', async function () {
-        var s = byId(state.selected);
-        var prompt = $('modelPrompt').value.trim() || ('当前策略：' + s.name + '。场景：' + s.desc);
-
-        var apiKey = resolveApiKey();
-        if (!apiKey) {
-            $('responseContent').textContent =
-                '未配置 API Key，无法调用大模型。\n再次点击并输入密钥即可；密钥仅保存在本机浏览器（localStorage: ' +
-                KEY_STORAGE + '），不会写入仓库。';
-            return;
-        }
-
-        this.disabled = true;
-        this.textContent = '生成中…';
-        $('engineStatusText').textContent = '正在生成最优召回方案…';
-
-        try {
-            var res = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [
-                        { role: 'system', content: '你是游戏运营策略师。基于给定场景输出：①核心诊断 ②2-3 条召回动作 ③预期效果。180 字内，中文，简洁专业。' },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 380
-                })
-            });
-            if (!res.ok) {
-                var err = await res.json().catch(function () { return {}; });
-                throw new Error((err.error && err.error.message) || ('HTTP ' + res.status));
-            }
-            var data = await res.json();
-            var txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-            $('responseContent').textContent = txt || '未获取到有效回复';
-            $('engineStatusText').textContent = '方案已生成 · ' + s.short;
-            $('engineStatus').classList.add('is-done');
-        } catch (err) {
-            $('responseContent').textContent = '【调用失败】' + err.message + '\n\n请检查网络或密钥后重试。';
-        } finally {
-            this.disabled = false;
-            this.textContent = '生成召回依据';
-        }
-    });
-
-    /* ==================== 时间范围联动 ==================== */
-    window.addEventListener('rangechange', function (ev) {
-        state.range = (ev.detail && ev.detail.range) || '30d';
-        renderRisk();
-        renderSegments();
-        renderPlan();
-        renderCards();
-    });
-
-    /* ==================== 初始化 ==================== */
-    renderRisk();
-    renderSegments();
-    renderCards();
-    renderPlan();
-
+  function toast(message, kind) {
+    var host = $('toast');
+    if (!host) return;
+    var el = document.createElement('div');
+    el.className = 'toast-item';
+    el.dataset.kind = kind || '';
+    el.innerHTML = (kind === 'err' ? IC.alert : IC.check) + '<span>' + esc(message) + '</span>';
+    host.appendChild(el);
     setTimeout(function () {
-        if ($('engineStatus').classList.contains('is-done')) return;
-        $('engineStatusText').textContent = '已就绪 · 4 个环节 · 等待选择策略';
-    }, 2600);
+      el.style.transition = 'opacity .32s ease, transform .32s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(6px)';
+      setTimeout(function () { el.remove(); }, 340);
+    }, 2800);
+  }
+
+  function setStatus(text, kind) {
+    var el = $('aiStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.state = kind || '';
+  }
+
+  function markSource(kind) {
+    var tag = $('aiSourceTag');
+    if (!tag) return;
+    if (kind === 'real') {
+      tag.textContent = '真实生成';
+      tag.className = 'chip chip-ok';
+      tag.dataset.kind = 'real';
+    } else {
+      tag.textContent = '未生成';
+      tag.className = 'chip';
+      tag.dataset.kind = 'demo';
+    }
+  }
+
+  function setGenerateEnabled(on) {
+    if ($('aiGenerate')) $('aiGenerate').disabled = !on;
+    [].slice.call(document.querySelectorAll('[data-generate]')).forEach(function (b) {
+      b.disabled = !on;
+    });
+  }
+
+  function syncScrollFade() {
+    var body = document.querySelector('.strategy-body');
+    var card = $('strategyCard');
+    if (!body || !card) return;
+    card.classList.toggle('has-overflow', (body.scrollHeight - body.clientHeight) > 4);
+  }
+
+  /* ---------------- 滚动揭示 ---------------- */
+  (function revealOnScroll() {
+    var nodes = [].slice.call(document.querySelectorAll('.reveal'));
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window)) {
+      nodes.forEach(function (n) { n.classList.add('is-in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.07 });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+
+
+  /* ---------------- 状态 ---------------- */
+  function setEngine(online, model, loaded) {
+    var dot = $('engineDot');
+    var label = $('engineLabel');
+    if (dot) dot.style.background = online ? 'var(--green)' : 'var(--red)';
+    if (label) label.textContent = online ? ('引擎在线 · ' + (loaded ? '已驻留' : '待机')) : '引擎不可达';
+    if (model && $('chatModel')) $('chatModel').textContent = model;
+  }
+
+  function loadHealth() {
+    fetch(API + '/api/ai/health', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        var d = (body && body.data) || {};
+        var llm = d.llm || {};
+        var vec = d.vector_db || {};
+        var emb = d.embedding || {};
+        state.health = d;
+        var online = d.llm !== undefined && llm.available !== false;
+
+        setEngine(online, llm.model, llm.loaded);
+        if ($('kpiModel')) {
+          $('kpiModel').textContent = llm.model || '—';
+          $('kpiModel').classList.toggle('is-muted', !online);
+        }
+        if ($('kpiModelMeta')) {
+          $('kpiModelMeta').textContent = online
+            ? ('Ollama · ' + (llm.loaded ? '已驻留显存' : '待机，首次调用需加载'))
+            : '本地推理服务不可达';
+        }
+        if ($('kpiChunks') && vec.count != null) {
+          $('kpiChunks').textContent = fmtNum(vec.count);
+          $('kpiChunks').classList.remove('is-muted');
+        }
+        if ($('kpiChunksMeta')) {
+          $('kpiChunksMeta').textContent =
+            (emb.model ? String(emb.model).split('/').pop() : 'embedding') +
+            ' · ' + String(emb.device || 'cpu').toUpperCase();
+        }
+      })
+      .catch(function () {
+        setEngine(false);
+        if ($('kpiModel')) { $('kpiModel').textContent = '—'; $('kpiModel').classList.add('is-muted'); }
+        if ($('kpiModelMeta')) $('kpiModelMeta').textContent = '/api/ai/health 不可达';
+      });
+  }
+
+  function loadDocs() {
+    fetch(API + '/api/knowledge/documents?limit=1', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        var d = (body && body.data) || {};
+        if (d.total == null) return;
+        $('kpiDocs').textContent = fmtNum(d.total);
+        $('kpiDocs').classList.remove('is-muted');
+        $('kpiDocsMeta').textContent = '官方公告 · 全部可回溯';
+      })
+      .catch(function () {
+        $('kpiDocsMeta').textContent = '/api/knowledge/documents 不可达';
+      });
+  }
+
+  /* ---------------- 游戏与 CCU ---------------- */
+  function updateCcu() {
+    var game = null;
+    for (var i = 0; i < state.games.length; i++) {
+      if (state.games[i].appid === state.app) game = state.games[i];
+    }
+    var c = (game && game.collection) || {};
+    if (c.last_ccu_players != null) {
+      $('kpiCcu').textContent = fmtNum(c.last_ccu_players);
+      $('kpiCcu').classList.remove('is-muted');
+      $('kpiCcuMeta').textContent = (game.name || '') + ' · ' + fmtAgo(c.last_ccu_ts);
+    } else {
+      $('kpiCcu').textContent = '—';
+      $('kpiCcu').classList.add('is-muted');
+      $('kpiCcuMeta').textContent = '该游戏暂无 CCU 快照';
+    }
+  }
+
+  function loadGames() {
+    var sel = $('aiGame');
+    return fetch(API + '/api/games', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        var games = ((body && body.data) || []).filter(function (g) { return g && g.appid; });
+        if (!games.length) throw new Error('empty');
+        state.games = games;
+        sel.innerHTML = games.map(function (g) {
+          return '<option value="' + g.appid + '">' + esc(g.name || ('appid ' + g.appid)) + '</option>';
+        }).join('');
+        var prefer = 1203220;
+        var exists = games.some(function (g) { return g.appid === prefer; });
+        state.app = exists ? prefer : games[0].appid;
+        sel.value = String(state.app);
+        setGenerateEnabled(true);
+        updateCcu();
+        return loadLatestStrategy();
+      })
+      .catch(function () {
+        sel.innerHTML = '<option value="">游戏列表不可用</option>';
+        sel.disabled = true;
+        setGenerateEnabled(false);
+        setStatus('游戏列表读取失败：后端 5000 未启动，或 /api/games 异常', 'err');
+        $('engineLabel').textContent = '引擎不可达';
+        $('kpiCcuMeta').textContent = '后端未连接';
+        $('chatModel').textContent = '本地模型';
+      });
+  }
+
+  /* ---------------- 最近一次策略 ---------------- */
+  function loadLatestStrategy() {
+    if (!state.app) return Promise.resolve();
+    return fetch(API + '/api/recall/history?app_id=' + state.app + '&limit=1', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        if (body && body.success === false) {
+          throw new Error((body.error && body.error.message) || '读取失败');
+        }
+        var d = (body && body.data) || {};
+        var items = d.items || [];
+        if (!items.length) { resetStrategy(); return; }
+        var latest = items[0];
+        return loadDetail(latest.strategy_id, true).then(function (ok) {
+          if (ok) setStatus('已载入最近一次生成 · ' + fmtDT(latest.created_at), 'ok');
+          else setStatus('最近一次策略读取失败 · 可重新生成', 'err');
+        });
+      })
+      .catch(function () {
+        setStatus('最近一次策略读取失败 · 可重新生成', 'err');
+      });
+  }
+
+  /* ---------------- 策略渲染 ---------------- */
+  function resetStrategy() {
+    $('planTitle').textContent = '还没有生成策略';
+    $('planMeta').textContent = '等待真实指标';
+    $('planId').textContent = '';
+    $('aiResult').hidden = true;
+    $('planLoading').hidden = true;
+    $('planEmpty').hidden = false;
+    $('stepsTrack').innerHTML = '';
+    $('aiEvidence').innerHTML = '';
+    $('aiMetrics').innerHTML = '';
+    $('aiLimits').innerHTML = '';
+    $('aiRetrieved').innerHTML = '<p class="py-7 text-center text-[10.5px] text-ink-dim">生成策略后显示本次检索到的公告片段。</p>';
+    $('hitsMeta').textContent = '—';
+    $('metricsMeta').textContent = '—';
+    $('planRisk').textContent = '—';
+    $('planCited').textContent = '0';
+    $('planActions').textContent = '0';
+    markSource('demo');
+    setStatus('尚无本次结果 · 可生成策略或直接提问', 'idle');
+    syncScrollFade();
+  }
+
+  function renderStrategy(payload) {
+    var s = payload.strategy || {};
+    var metrics = s.data_evidence || [];
+    var evidence = s.knowledge_evidence || [];
+    var actions = s.recall_actions || [];
+    var limits = s.limitations || [];
+    var inference = s.ai_inference || [];
+    var riskKey = (s.risk_analysis || {}).risk_level || 'unknown';
+    var risk = RISK[riskKey] || RISK.unknown;
+
+    var retrieved = payload.retrieved;
+    if (Array.isArray(retrieved)) retrieved = { query: payload.knowledge_query || '', hits: retrieved, legacy: true };
+    if (!retrieved) retrieved = { query: payload.knowledge_query || '', hits: payload.retrieved_evidence || [] };
+    var hits = retrieved.hits || [];
+    state.hits = hits;
+    var query = retrieved.query || payload.knowledge_query || '';
+
+    var id = payload.strategy_id || '';
+    state.lastPayload = payload;
+    $('planId').textContent = id ? ('AI · ' + String(id).slice(-8)) : 'AI';
+    $('planTitle').textContent = s.summary || '（模型未给出摘要）';
+    $('planMeta').textContent =
+      (payload.created_at ? fmtDT(payload.created_at) + ' · ' : '') +
+      (payload.model || '本地模型') +
+      ' · execution_status = ' + (s.execution_status || 'suggested');
+
+    $('aiResult').hidden = false;
+    $('planEmpty').hidden = true;
+    $('planLoading').hidden = true;
+    $('planRisk').innerHTML = '<span class="dot" style="color:' + risk.color + ';margin-right:5px"></span>' +
+      esc(risk.cn) + '<span class="ml-1 font-mono text-[9px] text-ink-dim">' + risk.key + '</span>';
+    $('planCited').textContent = String(evidence.length);
+    $('planActions').textContent = String(actions.length);
+    $('stepHint').textContent = actions.length + ' 条 · 按优先级';
+
+    $('stepsTrack').innerHTML = actions.map(function (a, i) {
+      var p = PRIORITY[a.priority] || PRIORITY.low;
+      var kv = [
+        ['目标', a.objective],
+        ['对象', a.target_group],
+        ['类型', a.action_type],
+        ['预期', a.expected_effect]
+      ].filter(function (x) { return x[1]; });
+      return '<div data-action="1" class="act">' +
+        '<button type="button" class="act-head" data-act aria-expanded="false">' +
+          '<span class="act-no">' + pad(i + 1) + '</span>' +
+          '<span class="act-name">' + esc(a.name || '') + '</span>' +
+          '<span class="chip ' + p.cls + '">' + p.txt + '</span>' +
+          '<span class="act-chev">' + IC.chev + '</span>' +
+        '</button>' +
+        '<div class="act-body">' +
+          '<dl class="act-kv">' +
+            kv.map(function (x) { return '<dt>' + x[0] + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') +
+            (a.measurement && a.measurement.length
+              ? '<dt>衡量</dt><dd>' + esc(a.measurement.join(' · ')) + '</dd>' : '') +
+          '</dl>' +
+          (a.description ? '<p class="mt-1.5 text-[10.5px] leading-relaxed text-ink-dim">' + esc(a.description) + '</p>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    $('aiEvidence').innerHTML = evidence.length ? evidence.map(function (e, i) {
+      var tag = e.source_url ? 'a' : 'div';
+      var attr = e.source_url ? ' href="' + esc(e.source_url) + '" target="_blank" rel="noopener noreferrer"' : '';
+      return '<' + tag + attr + ' class="cite">' +
+        '<div class="cite-top">' +
+          '<span class="cite-id">E' + (i + 1) + '</span>' +
+          '<span class="cite-title">' + esc(e.title || e.document_id || '') + '</span>' +
+        '</div>' +
+        '<div class="cite-claim">' + esc(e.claim || '') + '</div>' +
+        '<div class="cite-id-line">' + esc(e.chunk_id || '无 chunk_id') + '</div>' +
+      '</' + tag + '>';
+    }).join('') : '<p class="text-[10.5px] text-ink-dim">本次没有可引用的知识证据。</p>';
+
+    $('inferenceBlock').hidden = !inference.length;
+    if (inference.length) {
+      $('aiInference').textContent = inference[0].reasoning || '';
+      $('inferenceConf').textContent = '置信度 ' + (inference[0].confidence || 'medium');
+    }
+
+    $('aiLimits').innerHTML = limits.length
+      ? limits.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('')
+      : '<li>模型未声明额外限制；仍需按群体级指标解读。</li>';
+
+    $('aiMetrics').innerHTML = metrics.length ? metrics.map(function (m) {
+      return '<div class="metric-row">' +
+        '<span class="metric-name" title="' + esc(m.description || m.name || '') + '">' + esc(m.name || '') + '</span>' +
+        '<span class="metric-value">' + esc(fmtMetric(m.name, m.value)) + '</span>' +
+      '</div>';
+    }).join('') : '<p class="py-7 text-center text-[10.5px] text-ink-dim">本次没有动态指标。</p>';
+
+    $('metricsMeta').textContent = metrics.length + ' 项 · SQLite';
+
+    $('aiRetrieved').innerHTML = hits.length ? hits.map(function (h) {
+      var score = h.score == null ? null : Number(h.score);
+      return '<button type="button" class="hit" data-hit="' + esc(h.chunk_id || '') + '">' +
+        '<div class="hit-top">' +
+          '<span class="hit-title">' + esc(h.title || h.document_id || '') + '</span>' +
+          (score == null ? '' : '<span class="hit-score">' + score.toFixed(3) + '</span>') +
+        '</div>' +
+        (score == null ? '' : '<div class="score-bar"><i style="width:' +
+          Math.max(2, Math.min(100, score * 100)) + '%"></i></div>') +
+        '<div class="hit-excerpt">' + esc(h.excerpt || '') + '</div>' +
+        (h.publish_date ? '<div class="mt-1 font-mono text-[9px] text-ink-dim">' + esc(h.publish_date) + '</div>' : '') +
+      '</button>';
+    }).join('') : '<p class="py-7 text-center text-[10.5px] text-ink-dim">' +
+      (retrieved.legacy ? '该记录生成于检索明细落库之前，未保存命中列表' : '本次没有检索到知识库证据') + '</p>';
+    $('hitsMeta').textContent = hits.length + ' 篇';
+
+    $('hitsQuery').textContent = query ? ('查询：' + query) : '未记录检索查询';
+    $('hitsQuery').title = query || '';
+
+    $('footStamp').textContent = 'policy ' + (id || '—') + ' · ' + fmtDT(payload.created_at);
+
+    markSource('real');
+    syncScrollFade();
+  }
+
+  function loadDetail(id, silent) {
+    if (!silent) setStatus('正在载入 ' + id + ' …', 'busy');
+    return fetch(API + '/api/recall/' + encodeURIComponent(id), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        if (!body || body.success === false || !body.data) {
+          throw new Error((body && body.error && body.error.message) || '读取详情失败');
+        }
+        renderStrategy({
+          strategy: body.data.strategy,
+          strategy_id: body.data.strategy_id,
+          created_at: body.data.created_at,
+          model: body.data.model,
+          retrieved: body.data.retrieved || null
+        });
+        if (!silent) setStatus('已载入 ' + fmtDT(body.data.created_at), 'ok');
+        return true;
+      })
+      .catch(function (err) {
+        if (!silent) setStatus('载入失败：' + err.message, 'err');
+        return false;
+      });
+  }
+
+  /* ---------------- 命中详情 ---------------- */
+  function openHit(chunkId) {
+    var hit = null;
+    (state.hits || []).forEach(function (h) { if (h.chunk_id === chunkId) hit = h; });
+    if (!hit) return;
+    var rows = [
+      ['相似度', hit.score == null ? '—' : Number(hit.score).toFixed(4) + '（1 − cosine）'],
+      ['发布日期', hit.publish_date || '—'],
+      ['chunk_id', hit.chunk_id || '—'],
+      ['文档', hit.document_id || '—']
+    ];
+    var html = '<p class="text-[12px] leading-[1.75] text-ink">' + esc(hit.excerpt || '（该记录未保存片段）') + '</p>' +
+      '<dl class="mt-4 grid grid-cols-[76px_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-white/[0.06] pt-3 font-mono text-[10px]">' +
+      rows.map(function (r) {
+        return '<dt class="text-ink-dim">' + r[0] + '</dt><dd class="break-all text-ink-2">' + esc(r[1]) + '</dd>';
+      }).join('') + '</dl>' +
+      (hit.source_url
+        ? '<a class="btn btn-sm mt-4" href="' + esc(hit.source_url) + '" target="_blank" rel="noopener noreferrer">打开公告原文' +
+          IC.arrow + '</a>'
+        : '');
+    openModal(hit.title || '知识库原文片段', html);
+  }
+
+  /* ---------------- 生成 ---------------- */
+  function generate() {
+    if (state.busy) return Promise.resolve();
+    var appId = parseInt($('aiGame').value, 10);
+    if (!appId) { setStatus('请先选择游戏', 'err'); toast('没有可用的游戏', 'err'); return Promise.resolve(); }
+
+    state.busy = true;
+    var btn = $('aiGenerate');
+    var label = btn.innerHTML;
+    var timer = null;
+    var t0 = Date.now();
+
+    function stopTimer() {
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+    function restoreButton() {
+      btn.disabled = false;
+      btn.setAttribute('aria-busy', 'false');
+      btn.innerHTML = label;
+      state.busy = false;
+    }
+
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.innerHTML = '<span class="spinner"></span>生成中';
+
+    // 生成期间清空旧结论：上一次的策略不能长得像这一次的结果
+    $('aiResult').hidden = true;
+    $('planEmpty').hidden = true;
+    $('planLoading').hidden = false;
+    $('planId').textContent = '';
+    $('planTitle').textContent = '正在用真实信号生成策略…';
+    $('planMeta').textContent = '约 20 秒；校验不通过不会落库';
+    $('aiSourceTag').textContent = '生成中';
+    $('aiSourceTag').className = 'chip chip-info';
+    $('aiSourceTag').dataset.kind = 'demo';
+
+    setStatus('生成中 0.0s · 指标 → 检索 → 生成 → 校验', 'busy');
+    timer = setInterval(function () {
+      setStatus('生成中 ' + ((Date.now() - t0) / 1000).toFixed(1) + 's · 指标 → 检索 → 生成 → 校验', 'busy');
+    }, 120);
+    syncScrollFade();
+
+    return fetch(API + '/api/recall/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: appId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        stopTimer();
+        var d = (body && body.data) || {};
+        var secs = ((Date.now() - t0) / 1000).toFixed(1);
+        if (d.status === 'generated') {
+          renderStrategy(d);
+          setStatus('已生成并落库 · ' + secs + 's', 'ok');
+          toast('策略已生成，引用可追溯', 'ok');
+          return;
+        }
+        $('planLoading').hidden = true;
+        if (state.lastPayload) {
+          renderStrategy(state.lastPayload);
+        } else {
+          $('planEmpty').hidden = false;
+          $('planTitle').textContent = '还没有生成策略';
+          $('planMeta').textContent = '等待真实指标';
+          markSource('demo');
+        }
+        var reason = [d.status, d.reason, d.detail].filter(Boolean).join(' · ');
+        setStatus('未生成 · ' + (reason || '未知原因'), 'err');
+        toast('未生成：' + (d.reason || d.status || '未知原因'), 'err');
+      })
+      .catch(function (err) {
+        stopTimer();
+        $('planLoading').hidden = true;
+        if (state.lastPayload) renderStrategy(state.lastPayload);
+        else $('planEmpty').hidden = false;
+        setStatus('调用失败：' + err.message, 'err');
+        toast('生成失败，请检查后端', 'err');
+      })
+      .then(restoreButton, restoreButton);
+  }
+
+  /* ---------------- 对话 ---------------- */
+  function chatAdd(role, text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'msg ' + (role === 'me' ? 'is-me' : 'is-ai');
+    var who = document.createElement('span');
+    who.className = 'msg-who';
+    who.textContent = role === 'me' ? '你' : 'AI · 检索增强';
+    var body = document.createElement('div');
+    body.className = 'msg-body';
+    body.textContent = text;
+    wrap.appendChild(who);
+    wrap.appendChild(body);
+    $('chatLog').appendChild(wrap);
+    $('chatLog').scrollTop = $('chatLog').scrollHeight;
+    return body;
+  }
+
+  function chatAsk(question) {
+    var appId = parseInt($('aiGame').value, 10);
+    if (!appId) { setStatus('请先选择游戏', 'err'); return Promise.resolve(); }
+
+    var hint = $('chatHint');
+    if (hint) hint.remove();
+
+    chatAdd('me', question);
+    var body = chatAdd('ai', '');
+    body.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+    var send = $('chatSend');
+    send.disabled = true;
+
+    return fetch(API + '/api/knowledge/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: appId, query: question })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        var d = (payload && payload.data) || {};
+        var meta = CHAT_STATUS[d.status] || { cls: 'chip-err', label: d.status || '未知状态' };
+        var html = '<span class="chip ' + meta.cls + '">' + esc(meta.label) + '</span>';
+        html += '<p class="mt-2">' + esc(d.answer || (d.reason ? '原因：' + d.reason : '没有返回内容')) + '</p>';
+
+        var missing = (d.evidence && d.evidence.missing_elements) || [];
+        if (missing.length) {
+          html += '<p class="mt-2 font-mono text-[9.5px] leading-relaxed text-ink-dim">缺少：' + esc(missing.join('、')) + '</p>';
+        }
+        var cites = d.citations || [];
+        if (cites.length) {
+          html += '<div class="msg-cites">' + cites.map(function (c) {
+            var tail = c.chunk_id ? String(c.chunk_id).split('#').pop() : '';
+            return '<div class="msg-cite"><b>' + esc(c.label || 'E') + '</b><span>' +
+              esc(c.title || c.chunk_id || '') +
+              (tail && tail !== c.chunk_id ? ' <span class="text-ink-dim">#' + esc(tail) + '</span>' : '') +
+              '</span></div>';
+          }).join('') + '</div>';
+        }
+        body.innerHTML = html;
+      })
+      .catch(function (err) {
+        body.textContent = '调用失败：' + err.message;
+      })
+      .then(function () {
+        send.disabled = false;
+        $('chatLog').scrollTop = $('chatLog').scrollHeight;
+      });
+  }
+
+  /* ---------------- 命令面板 ---------------- */
+  var palette = { list: [], active: 0 };
+
+  function goTo(id) {
+    var el = $(id);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function buildCommands() {
+    var list = [
+      { group: '动作', label: '生成策略（当前游戏）', meta: 'G', icon: IC.spark, run: generate }
+    ];
+    [
+      ['AI 召回助手', 'chatLog', '01'],
+      ['知识库命中', 'evidence', '04'],
+      ['动态指标', 'metrics', '05']
+    ].forEach(function (x) {
+      list.push({ group: '跳转', label: '跳到 · ' + x[0], meta: x[2], icon: IC.jump, run: function () { goTo(x[1]); } });
+    });
+    [
+      '这周同时在线下降，优先排查什么？',
+      '最近一次更新改了什么？',
+      '玩家主要在抱怨什么？'
+    ].forEach(function (q) {
+      list.push({ group: '直接提问', label: q, icon: IC.spark, run: function () { chatAsk(q); } });
+    });
+    return list;
+  }
+
+  function renderPalette(query) {
+    var all = buildCommands();
+    var kw = String(query || '').trim().toLowerCase();
+    var list = kw ? all.filter(function (c) { return String(c.label).toLowerCase().indexOf(kw) >= 0; }) : all;
+    palette.list = list;
+    palette.active = 0;
+    if (!list.length) {
+      $('paletteList').innerHTML = '';
+      $('paletteEmpty').classList.remove('hidden');
+      return;
+    }
+    $('paletteEmpty').classList.add('hidden');
+    var html = '';
+    var group = '';
+    list.forEach(function (c, i) {
+      if (c.group !== group) {
+        group = c.group;
+        html += '<div class="palette-group">' + esc(group) + '</div>';
+      }
+      html += '<button type="button" class="palette-item' + (i === 0 ? ' is-active' : '') + '" data-cmd="' + i + '">' +
+        c.icon + '<span class="line-clamp-1">' + esc(c.label) + '</span>' +
+        (c.meta ? '<span class="p-meta">' + esc(c.meta) + '</span>' : '') +
+        '</button>';
+    });
+    $('paletteList').innerHTML = html;
+  }
+
+  function openPalette() {
+    $('palette').classList.remove('hidden');
+    $('paletteInput').value = '';
+    renderPalette('');
+    if ($('paletteInput').focus) $('paletteInput').focus();
+  }
+  function closePalette() {
+    $('palette').classList.add('hidden');
+  }
+  function runCommand(index) {
+    var cmd = palette.list[index];
+    if (!cmd) return;
+    closePalette();
+    cmd.run();
+  }
+
+  /* ---------------- Modal ---------------- */
+  function openModal(title, html) {
+    $('modalTitle').textContent = title;
+    $('modalBody').innerHTML = html;
+    $('modal').classList.remove('hidden');
+    $('modal').classList.add('flex');
+  }
+  function closeModal() {
+    $('modal').classList.add('hidden');
+    $('modal').classList.remove('flex');
+  }
+
+  /* ---------------- 事件绑定 ---------------- */
+  $('aiGame').addEventListener('change', function () {
+    state.app = parseInt($('aiGame').value, 10) || 0;
+    markSource('demo');
+    updateCcu();
+    loadLatestStrategy();
+  });
+
+  $('aiGenerate').addEventListener('click', generate);
+  $('paletteOpen').addEventListener('click', openPalette);
+
+  $('chatForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var input = $('chatInput');
+    var q = (input.value || '').trim();
+    if (!q || $('chatSend').disabled) return;
+    input.value = '';
+    input.style.height = 'auto';
+    chatAsk(q);
+  });
+
+  $('chatLog').addEventListener('click', function (ev) {
+    var chip = ev.target.closest('[data-q]');
+    if (chip) chatAsk(chip.dataset.q);
+  });
+
+  $('chatInput').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      $('chatForm').requestSubmit();
+    }
+  });
+  $('chatInput').addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+  });
+
+  $('stepsTrack').addEventListener('click', function (ev) {
+    var head = ev.target.closest('[data-act]');
+    if (!head) return;
+    var act = head.parentNode;
+    var open = act.classList.toggle('is-open');
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    syncScrollFade();
+  });
+
+  $('aiRetrieved').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-hit]');
+    if (btn) openHit(btn.dataset.hit);
+  });
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-generate]')) { generate(); return; }
+    if (ev.target.closest('[data-close-modal]')) { closeModal(); return; }
+    if (ev.target.closest('[data-close-palette]')) { closePalette(); }
+  });
+
+  $('paletteList').addEventListener('click', function (ev) {
+    var item = ev.target.closest('[data-cmd]');
+    if (item) runCommand(parseInt(item.dataset.cmd, 10));
+  });
+
+  $('paletteInput').addEventListener('input', function () {
+    renderPalette(this.value);
+  });
+
+  $('paletteInput').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { closePalette(); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!palette.list.length) return;
+      palette.active = (palette.active + (ev.key === 'ArrowDown' ? 1 : -1) + palette.list.length) % palette.list.length;
+      [].slice.call($('paletteList').querySelectorAll('[data-cmd]')).forEach(function (el, i) {
+        el.classList.toggle('is-active', i === palette.active);
+      });
+      return;
+    }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      runCommand(palette.active);
+    }
+  });
+
+  window.addEventListener('resize', function () { syncScrollFade(); });
+
+  document.addEventListener('keydown', function (ev) {
+    var key = String(ev.key || '').toLowerCase();
+    if ((ev.ctrlKey || ev.metaKey) && key === 'k') {
+      ev.preventDefault();
+      if ($('palette').classList.contains('hidden')) openPalette();
+      else closePalette();
+      return;
+    }
+    if (ev.key === 'Escape') {
+      closePalette();
+      closeModal();
+      return;
+    }
+    if (key === 'g' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      if (!$('modal').classList.contains('hidden')) return;
+      var ae = document.activeElement;
+      var tag = ae && ae.tagName ? String(ae.tagName).toUpperCase() : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      generate();
+    }
+  });
+
+  /* ---------------- 初始化 ---------------- */
+  resetStrategy();
+  setGenerateEnabled(false);
+  loadHealth();
+  loadDocs();
+  loadGames();
 })();
 </script>
-
 </body>
 </html>

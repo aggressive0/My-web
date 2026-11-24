@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 
 from .base import (BaseLLMProvider, InvalidOutput, LLMTimeout, LLMUnavailable,
-                   ModelNotFound)
+                   ModelNotFound, failure_reason)
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -35,7 +35,7 @@ class SiliconFlowProvider(BaseLLMProvider):
             "Authorization": "Bearer %s" % self.api_key,
         }
 
-    def generate(self, prompt, system_prompt="", response_schema=None):
+    def generate(self, prompt, system_prompt="", response_schema=None, options=None):
         if not self.api_key:
             raise LLMUnavailable("未配置 SILICONFLOW_API_KEY")
 
@@ -47,7 +47,8 @@ class SiliconFlowProvider(BaseLLMProvider):
         payload = {
             "model": self.model,
             "messages": messages,
-            "temperature": self.config.temperature,
+            # 按调用覆盖（判定类调用传 temperature=0 求可重复）
+            "temperature": (options or {}).get("temperature", self.config.temperature),
             "max_tokens": self.config.max_output_tokens,
             "stream": False,
             "response_format": {"type": "json_object"},
@@ -97,4 +98,6 @@ class SiliconFlowProvider(BaseLLMProvider):
                 r.read()
             return {"available": True, "model": self.model, "detail": None}
         except Exception as e:
-            return {"available": False, "model": self.model, "detail": str(e)[:200]}
+            # detail 会原样回给浏览器，不给原始异常文本（可能含地址与状态细节）
+            return {"available": False, "model": self.model,
+                    "detail": failure_reason(e)}

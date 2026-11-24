@@ -12,6 +12,8 @@
 <script src="libs/echarts.min.js"></script>
 <script src="libs/globe.gl.min.js"></script>
 <script src="js/realdata.js"></script>
+<script src="js/dashboard-adapters.js"></script>
+<script src="js/url-state.js"></script>
 <script src="js/dashboard-data.js"></script>
 <script src="js/globe-stage.js"></script>
 <script src="js/ops-nav.js" defer></script>
@@ -546,7 +548,10 @@ body::after{
 }
 
 .region .rank{font-family:var(--mono);font-size:10px;color:#4E5E76;text-align:center}
-.region .name{color:var(--ink-2);white-space:nowrap}
+/* 英文游戏名（Apex Legends / Cyberpunk 2077）在 60px 列里会溢出压住进度条，
+   这里加宽并省略——名字完整版在 title 里 */
+.region{grid-template-columns:16px 104px minmax(0,1fr) 42px 30px}
+.region .name{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .region .track{
     position:relative;
@@ -1315,6 +1320,8 @@ body::after{
 
             <article class="panel" style="--hair:rgba(240,83,107,.45)">
                 <div class="p-head">
+                    <!-- 这个面板由页面内已有实现渲染（按真实评论负向占比排序，带 n= 样本条），
+                         Phase B 绑定层不再写它，避免两套实现互相覆盖 -->
                     <h2 class="p-title" style="--accent:#F0536B">游戏舆情排行</h2>
                     <span class="p-meta">负面占比 / 风险指数</span>
                 </div>
@@ -1364,26 +1371,26 @@ body::after{
             <div class="chain" id="chain" aria-label="热点响应链路">
                 <button class="chain-node chain-node--btn" type="button" data-chain="hotspot" style="--c:#FF6B75">
                     <span class="cn-k">热点事件</span>
-                    <b id="chainHotspot">竞技平衡性争议</b>
-                    <span class="cn-v" id="chainHotspotHeat">热度 320</span>
+                    <b id="chainHotspot">未接入</b>
+                    <span class="cn-v" id="chainHotspotHeat">—</span>
                 </button>
                 <span class="chain-arrow" aria-hidden="true">→</span>
                 <div class="chain-node" style="--c:#FFB45F">
                     <span class="cn-k">玩家情绪变化</span>
-                    <b id="chainNeg">负面占比 68%</b>
-                    <span class="cn-v" id="chainNegChg">▲ 12.4pp</span>
+                    <b id="chainNeg">—</b>
+                    <span class="cn-v" id="chainNegChg">—</span>
                 </div>
                 <span class="chain-arrow" aria-hidden="true">→</span>
                 <div class="chain-node" style="--c:#FF6B75">
                     <span class="cn-k">玩家流失风险</span>
-                    <b id="chainAffected">受影响 8,420 人</b>
-                    <span class="cn-v" id="chainRiskLevel">风险 高</span>
+                    <b id="chainAffected">—</b>
+                    <span class="cn-v" id="chainRiskLevel">—</span>
                 </div>
                 <span class="chain-arrow" aria-hidden="true">→</span>
                 <button class="chain-node chain-node--btn" type="button" data-chain="strategy" style="--c:#35D399" aria-label="查看召回策略详情">
                     <span class="cn-k">召回策略</span>
-                    <b id="chainStrategy">定向回流活动</b>
-                    <span class="cn-v" id="chainRecovery">预期 +18%</span>
+                    <b id="chainStrategy">—</b>
+                    <span class="cn-v" id="chainRecovery">预期收益未接入</span>
                 </button>
             </div>
         </div>
@@ -1393,18 +1400,20 @@ body::after{
             <article class="panel" style="--hair:rgba(52,211,153,.45)">
                 <div class="p-head">
                     <h2 class="p-title" style="--accent:#34D399">情感信号</h2>
-                    <select class="mini-select" id="sentiRegion" aria-label="按区域筛选情感趋势"></select>
+                    <!-- 区域维度已在 Phase A 停用（没有真实区域数据），下拉保留只会显示
+                         「尚未接入真实数据」徒增困惑；改成来源条，直接说明这份图是谁的数据 -->
+                    <span class="p-meta" id="sentiSrc">加载中…</span>
                 </div>
                 <div class="p-body">
                     <div id="sentimentChart" style="position:absolute;inset:0" role="img"
-                         aria-label="近 7 天玩家情感构成：正面 68.7%，中性 22.4%，负面 8.9%，整体向好。"></div>
+                         aria-label="情感信号：正在加载真实情感聚合数据"></div>
                 </div>
             </article>
 
             <article class="panel" style="--hair:rgba(245,165,36,.45)">
                 <div class="p-head">
-                    <h2 class="p-title" style="--accent:#F5A524">AI 预警<span class="mock-badge">演示</span></h2>
-                    <span class="p-meta">实时监测</span>
+                    <h2 class="p-title" style="--accent:#F5A524">规则预警</h2>
+                    <span class="p-meta" id="warnSrc">阈值触发 · 非模型生成</span>
                 </div>
                 <div class="p-body">
                     <div class="warn-list" id="warnList"></div>
@@ -1421,18 +1430,20 @@ body::after{
                         <div class="action-top">
                             <span class="action-ico" aria-hidden="true">◎</span>
                             <div>
-                                <b>针对北美高流失风险玩家推送专属回流活动</b>
-                                <span class="sub">预计可挽回 <em>12.8%</em> 的潜在流失用户 · 预算消耗约为常规投放的 0.4 倍</span>
+                                <!-- 原先是硬编码的「挽回 12.8% / 成本 0.4 倍」：属于无依据的业务结论，
+                                     Phase B 改为规则推导 + 证据引用，数值只来自真实字段 -->
+                                <b id="adviceTitle">正在根据真实指标生成建议…</b>
+                                <span class="sub" id="adviceSub">—</span>
                             </div>
                         </div>
                         <div class="action-detail" id="actionDetail" hidden>
-                            <div class="ad-row"><i>目标人群</i><span id="adAudience"></span></div>
-                            <div class="ad-row"><i>触达渠道</i><span id="adChannel"></span></div>
-                            <div class="ad-row"><i>判断依据</i><span id="adReason"></span></div>
+                            <div class="ad-row"><i>目标人群</i><span id="adAudience">—</span></div>
+                            <div class="ad-row"><i>触达渠道</i><span id="adChannel">—</span></div>
+                            <div class="ad-row"><i>判断依据</i><span id="adReason">—</span></div>
                         </div>
                         <div class="action-foot">
-                            <span class="af-metric"><b>12.8%</b> 预计挽回 · <b>0.4×</b> 成本</span>
-                            <button class="btn-run" type="button" data-action-id="ac1">查看策略 <span aria-hidden="true">→</span></button>
+                            <span class="af-metric" id="adviceFoot">证据不足时不给出效果承诺</span>
+                            <button class="btn-run" type="button" id="adviceEvidence">查看依据 <span aria-hidden="true">→</span></button>
                         </div>
                     </div>
                 </div>
@@ -1441,8 +1452,9 @@ body::after{
     </section>
 
     <!-- ==================== 底部实时动态 ==================== -->
-    <footer class="ticker" aria-label="实时动态">
-        <span class="tk-live"><i aria-hidden="true"></i>实时动态</span>
+    <!-- 这里原来写「实时动态」，但 data 分支是批次发布快照，不是实时流（Phase D 改口径） -->
+    <footer class="ticker" aria-label="数据新鲜度与样本覆盖">
+        <span class="tk-live"><i aria-hidden="true"></i>数据新鲜度</span>
         <span class="tk-sep" aria-hidden="true"></span>
         <div class="tk-track" id="ticker"></div>
         <div class="tk-wave" id="tkWave" aria-hidden="true"></div>
@@ -1456,28 +1468,36 @@ body::after{
     var track = document.getElementById('ticker');
     if (!track || !window.DashboardData) return;
 
-    var TYPE = {
-        player:    { c: '#35D9F2', t: '玩家' },
-        hotspot:   { c: '#9275FF', t: '热点' },
-        churn:     { c: '#FFB45F', t: '流失' },
-        sentiment: { c: '#35D399', t: '情感' }
-    };
-
-    DashboardData.liveActivities.forEach(function (a) {
-        var ty = TYPE[a.type] || TYPE.player;
+    /* Phase A：原先是编造的动态流（"亚太活跃度上升 12.3%" 等）。
+       现在改为展示真实采集状态：更新时间、采集游戏数、新增评论数、新鲜度。 */
+    function chip(text, tone) {
         var el = document.createElement('span');
-        el.className = 'tk-item';
-        el.innerHTML =
-            '<i class="tk-type" style="--c:' + ty.c + '">' + ty.t + '</i>' +
-            a.message + ' <b>' + a.value + '</b>' +
-            '<span class="' + (a.direction === 'down' ? 'down' : 'up') + '">' +
-            (a.direction === 'down' ? '▼' : '▲') + '</span>' +
-            '<em class="tk-time">' + a.timestamp.slice(11, 16) + '</em>';
+        el.className = 'tk-item on';
+        el.textContent = text;
+        if (tone) el.style.color = tone;
         track.appendChild(el);
-    });
+    }
 
-    /* 四条并排展示，而不是逐条轮播留白 */
-    track.querySelectorAll('.tk-item').forEach(function (el) { el.classList.add('on'); });
+    if (!window.RealData) { chip('采集状态不可用'); return; }
+
+    RealData.load('collection-status.json').then(function (r) {
+        var doc = (r && r.state === 'ready') ? r.doc : null;
+        var f = window.DashboardAdapters ? DashboardAdapters.freshness(doc) : null;
+        if (!f || f.state !== 'ready') {
+            chip('采集状态不可用（未取到 collection-status.json）', '#FFB45F');
+            return;
+        }
+        var v = f.value;
+        var ok = v.games.filter(function (g) { return !g.error; }).length;
+        var added = v.games.reduce(function (s, g) { return s + (g.added || 0); }, 0);
+
+        chip('数据更新 ' + String(v.updatedAt || '').replace('T', ' ').slice(0, 16));
+        chip('采集游戏 ' + v.games.length + ' 款（成功 ' + ok + '）');
+        chip('最近新增评论 ' + added + ' 条');
+        if (v.state !== 'fresh') {
+            chip('数据可能过期 · ' + Math.round(v.ageHours) + ' 小时前', '#FFB45F');
+        }
+    });
 })();
 
 /* -------------------- 波形装饰 -------------------- */
@@ -1972,12 +1992,30 @@ body::after{
         }
         try {
             var rows = realSentimentRows();
+            var srcEl = document.getElementById('sentiSrc');
             if (rows.length >= 2) {
                 lastSenti = rows;                  // 先更新引用，图例再取
                 senti.setOption(sentimentOption(rows), true);
+
+                // 来源条 + 无障碍描述都跟着真实值走：
+                // 之前 aria-label 写死「正面 68.7%」，读屏用户会以为这是演示数据。
+                var last = rows[rows.length - 1];
+                var meta = ((window.__realState || {}).sent || {}).doc || {};
+                var samples = (meta.games || []).reduce(function (s, g) {
+                    return s + ((g.totals && g.totals.n) || 0);
+                }, 0);
+                if (srcEl) {
+                    srcEl.textContent = '最新 ' + last.timestamp + ' 正面 ' + last.positive +
+                        '% · 负面 ' + last.negative + '% · 样本 ' + samples + ' 条';
+                }
+                sentiEl.setAttribute('aria-label',
+                    '情感信号：最近 ' + rows.length + ' 天每日构成，最后一天正面 ' +
+                    last.positive + '%、中性 ' + last.neutral + '%、负面 ' + last.negative + '%');
             } else {
                 senti.clear();
                 senti.setOption(emptyOption('暂无情感数据', '每日情感聚合尚未产出'), true);
+                if (srcEl) srcEl.textContent = '情感数据不可用';
+                sentiEl.setAttribute('aria-label', '情感信号：暂无可用数据');
             }
         } catch (e) {
             console.warn('情感趋势渲染失败', e);
@@ -2125,6 +2163,14 @@ body::after{
                 '<span><i>风险信号</i><em>' + data.risk_score + ' / ' + riskText(data.risk) + '</em></span>' +
                 '<span><i>热点主题</i><em>' + (data.top_topic || '暂无') + '</em></span>' +
                 '</div>' +
+                // Phase D：从市场点直接带着 appid + 主题跳到分析页，落点就在对应主题行
+                (window.UrlState
+                    ? '<a href="' + window.UrlState.href('analysis.html',
+                        { appid: data.appid, topic: data.top_topic || '' }) + '"' +
+                      ' style="display:inline-block;margin-top:8px;font-size:10px;' +
+                      'color:var(--cyan);text-decoration:none">查看该游戏分析' +
+                      (data.top_topic ? '（定位到「' + data.top_topic + '」）' : '') + ' →</a>'
+                    : '') +
                 '<p class="gi-hint">基于 Steam 评论语言聚合，不代表玩家真实所在地；不推荐比例不是模型情感分类。</p>';
         } else if (kind === 'hotspot') {
             html = '<span class="gi-k">热点详情 · ' + data.category + '</span>' +
@@ -2282,7 +2328,10 @@ body::after{
     var chainHotspotBtn = document.querySelector('[data-chain="hotspot"]');
     if (chainHotspotBtn) {
         chainHotspotBtn.addEventListener('click', function () {
-            var target = state.hotspotId || D.hotspots[0].id;
+            // hotspots 已停用（Phase A）；没有真实热点时什么都不做，不伪造目标
+            var first = D.hotspots[0];
+            var target = state.hotspotId || (first && first.id);
+            if (!target) return;
             selectHotspot(target, true);
         });
     }
@@ -2488,10 +2537,13 @@ body::after{
 
     /* ---------- 区域筛选 ---------- */
     if (sentiRegion) {
+        // 区域维度已停用（Phase A 删除虚构的区域流失率）：
+        // 没有真实数据时必须显式说明，不能只留一个「全部区域」让人以为功能坏了
+        var regionOptions = D.regions.map(function (r) {
+            return '<option value="' + r.id + '">' + r.name + '</option>';
+        }).join('');
         sentiRegion.innerHTML = '<option value="">全部区域</option>' +
-            D.regions.map(function (r) {
-                return '<option value="' + r.id + '">' + r.name + '</option>';
-            }).join('');
+            (regionOptions || '<option value="" disabled>区域维度尚未接入真实数据</option>');
         sentiRegion.addEventListener('change', function () {
             state.region = sentiRegion.value;
             if (window.DashboardCharts) window.DashboardCharts.setRegion(state.region);
@@ -2503,7 +2555,7 @@ body::after{
         if (!warnList) return;
         var active = D.alerts.filter(function (a) { return a.status === 'active'; });
         if (!active.length) {
-            warnList.innerHTML = '<div class="empty-state">当前没有活动预警</div>';
+            warnList.innerHTML = '<div class="empty-state">预警尚未接入真实规则（Phase B）</div>';
             return;
         }
         warnList.innerHTML = active.map(function (a) {
@@ -2538,7 +2590,11 @@ body::after{
     var actionBtn = document.querySelector('[data-action-id]');
     var actionDetail = document.getElementById('actionDetail');
     if (actionBtn && actionDetail) {
-        var action = D.actions[0];
+        // actions 已停用（Phase A）：不再有虚构召回动作，这里只给占位文案
+        var action = D.actions[0] || {
+            audience: '—', channel: '—',
+            reason: '尚未接入真实策略建议（Phase B）'
+        };
         var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
         set('adAudience', action.audience);
         set('adChannel', action.channel);
@@ -2640,6 +2696,9 @@ body::after{
 
     /* 保留原函数名：applyRange 仍在调用它，改成只读真实数据，不再看时间范围 */
     function renderRegions(range) { renderGameRanks(); }
+    // 暴露给后一个 IIFE 里的同名函数：那份是旧实现，会写空态覆盖排行。
+    // 排行只能有一个写入方——renderGameRanks。
+    window.__renderGameRanks = renderGameRanks;
 
     RealData.load('sentiment-daily.json').then(function (r) {
         rankSent = r;
@@ -2824,10 +2883,13 @@ body::after{
 
     /* ---------- 区域筛选 ---------- */
     if (sentiRegion) {
+        // 区域维度已停用（Phase A 删除虚构的区域流失率）：
+        // 没有真实数据时必须显式说明，不能只留一个「全部区域」让人以为功能坏了
+        var regionOptions = D.regions.map(function (r) {
+            return '<option value="' + r.id + '">' + r.name + '</option>';
+        }).join('');
         sentiRegion.innerHTML = '<option value="">全部区域</option>' +
-            D.regions.map(function (r) {
-                return '<option value="' + r.id + '">' + r.name + '</option>';
-            }).join('');
+            (regionOptions || '<option value="" disabled>区域维度尚未接入真实数据</option>');
         sentiRegion.addEventListener('change', function () {
             state.region = sentiRegion.value;
             if (window.DashboardCharts) window.DashboardCharts.setRegion(state.region);
@@ -2839,7 +2901,7 @@ body::after{
         if (!warnList) return;
         var active = D.alerts.filter(function (a) { return a.status === 'active'; });
         if (!active.length) {
-            warnList.innerHTML = '<div class="empty-state">当前没有活动预警</div>';
+            warnList.innerHTML = '<div class="empty-state">预警尚未接入真实规则（Phase B）</div>';
             return;
         }
         warnList.innerHTML = active.map(function (a) {
@@ -2874,7 +2936,11 @@ body::after{
     var actionBtn = document.querySelector('[data-action-id]');
     var actionDetail = document.getElementById('actionDetail');
     if (actionBtn && actionDetail) {
-        var action = D.actions[0];
+        // actions 已停用（Phase A）：不再有虚构召回动作，这里只给占位文案
+        var action = D.actions[0] || {
+            audience: '—', channel: '—',
+            reason: '尚未接入真实策略建议（Phase B）'
+        };
         var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
         set('adAudience', action.audience);
         set('adChannel', action.channel);
@@ -2899,35 +2965,12 @@ body::after{
         if (ev.detail && ev.detail.range && ev.detail.range !== state.range) applyRange(ev.detail.range);
     });
 
-    /* ---------- 区域排行（数据驱动，随范围变化） ---------- */
-    var RISK_C = { high: '#FF6B75', medium: '#FFB45F', low: '#35D9F2' };
-
+    /* ---------- 排行（委托给唯一写入方） ----------
+       这一段原先是「区域流失率排行」的旧实现，依赖已删除的虚构区域数据，
+       Phase A 之后它只会把 #regionList 写成空态，并把 renderGameRanks
+       渲染的真实排行覆盖掉。排行只能有一个所有者，因此这里改为委托。 */
     function renderRegions(range) {
-        var list = document.getElementById('regionList');
-        if (!list) return;
-        var activeId = null;
-        var prev = list.querySelector('.region.is-active');
-        if (prev) activeId = prev.dataset.regionId;
-
-        var rows = D.regionsFor(range);
-        var max = rows.reduce(function (m, r) { return Math.max(m, r.churnRate); }, 0) || 1;
-
-        list.innerHTML = rows.map(function (r, idx) {
-            var w = Math.max(12, Math.round(r.churnRate / max * 82));
-            var up = r.change > 0;
-            var title = r.name + '：流失率 ' + r.churnRate + '%（环比 ' + (up ? '+' : '') + r.change +
-                'pp）· 高危玩家 ' + r.atRisk.toLocaleString() + ' 人';
-            return '<div class="region' + (r.id === activeId ? ' is-active' : '') + '"' +
-                ' role="button" tabindex="0" data-region-id="' + r.id + '" title="' + title + '">' +
-                '<span class="rank">' + String(idx + 1).padStart(2, '0') + '</span>' +
-                '<span class="name">' + r.name + '</span>' +
-                '<span class="track"><span class="fill" style="--c:' + (RISK_C[r.risk] || RISK_C.low) +
-                ';width:' + w + '%"></span></span>' +
-                '<span class="val">' + r.churnRate.toFixed(1) + '%</span>' +
-                '<span class="delta ' + (up ? 'up' : 'down') + '">' + (up ? '▲' : '▼') + ' ' +
-                Math.abs(r.change).toFixed(1) + '%</span>' +
-            '</div>';
-        }).join('');
+        if (window.__renderGameRanks) window.__renderGameRanks();
     }
 
     /* ---------- 初始化 ---------- */
@@ -2935,5 +2978,7 @@ body::after{
     renderAlerts();
 })();
 </script>
+<!-- Phase B 绑定层：风险排行 / 规则预警 / 证据建议 / 决策链（必须在所有内联脚本之后执行） -->
+<script src="js/index-phaseb.js" defer></script>
 </body>
 </html>

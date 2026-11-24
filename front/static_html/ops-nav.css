@@ -392,3 +392,12 @@
     .ops-live { font-size: 9.5px; letter-spacing: .1em; }
     .ops-signal { display: none; }
 }
+
+/* ---------- 超窄屏：优先保住四个板块，收起装饰性信息 ---------- */
+@media (max-width: 520px) {
+    .ops-bar { gap: 8px; }
+    .ops-nav .ops-live { display: none; }
+    .ops-nav .ops-clock { display: none; }
+    .ops-nav .ops-range { padding: 0 7px; gap: 0; }
+    .ops-nav .ops-range #rangeLabel { display: none; }
+}

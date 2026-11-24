@@ -26,7 +26,10 @@ import db as store                # noqa: E402
 import game_config                # noqa: E402
 
 NOW = "2026-11-16T11:00:00+00:00"
-CUTOFF = (datetime.now(timezone.utc) - timedelta(hours=72)).isoformat(timespec="seconds")
+# 截止点必须从 NOW 推导，不能用运行时 now()：
+# 两者一旦脱钩（写完 72 小时后），CUTOFF 会晚于所有测试数据，5 个用例全挂。
+# 这不是假设——2026-11-20 实测全套 5 个 MergeTest 集体失败，而代码没改一行。
+CUTOFF = (datetime.fromisoformat(NOW) - timedelta(hours=72)).isoformat(timespec="seconds")
 
 MINI_YAML = """\
 defaults:
