@@ -3,7 +3,7 @@
 > 面向 Agent 的实施规格。目标：将「总览」与「流失分析」从混合演示数据的展示页，改造成以 Steam 公开数据为证据、口径透明、可追溯、可降级的运营分析页面。
 >
 > 适用仓库：aggressive0/liusheng-player-retention  
-> 当前基线：main 分支静态前端 \`front/static_html/\`，远端数据位于 \`data\` 分支。  
+> 当前基线：main 分支静态前端 `front/static_html/`，远端数据位于 `data` 分支。  
 > 本文只定义重构方案，不代表所有接口或数据字段已经在当前版本实现。实施时必须先对照实际 JSON 样本与代码，不得臆造字段。
 
 ---
@@ -14,8 +14,8 @@
 
 **必须完成**
 - 清除总览、流失分析页面中未标识的模拟数值与模拟业务结论。
-- 复用现有 \`RealData\` 数据加载层，形成唯一、可测试的数据入口。
-- 优先消费现有 \`data\` 分支文件，不为已有数据重复造接口。
+- 复用现有 `RealData` 数据加载层，形成唯一、可测试的数据入口。
+- 优先消费现有 `data` 分支文件，不为已有数据重复造接口。
 - 为每个真实指标显示数据来源、更新时间、统计窗口、样本量或覆盖率。
 - 对缺失、低样本、过期、部分可用数据显示明确状态；不以 0 或 mock 值填充。
 - 保留现有深色空间科技视觉、总览中心地球与页面整体信息架构，重点调整数据语义和模块内容。
@@ -33,29 +33,29 @@
 
 当前代码审阅发现以下风险，开始改 UI 前先处理：
 
-1. \`front/static_html/js/realdata.js\` 的 REMOTE 仍指向旧仓库 \`aggressive0/My-web\`。新仓库数据已经迁移至 \`aggressive0/liusheng-player-retention\` 的 \`data\` 分支。确认采集工作流确实发布到新仓库后，将远端地址改为：
-   \`\`\`js
+1. `front/static_html/js/realdata.js` 的 REMOTE 仍指向旧仓库 `aggressive0/My-web`。新仓库数据已经迁移至 `aggressive0/liusheng-player-retention` 的 `data` 分支。确认采集工作流确实发布到新仓库后，将远端地址改为：
+   ```js
    var REMOTE = 'https://raw.githubusercontent.com/aggressive0/liusheng-player-retention/data/';
-   \`\`\`
+   ```
    若生产数据源仍由旧仓库维护，则不要盲目改地址；先检查两个仓库的采集工作流、最新提交和文件内容，并在本文件的实施记录中说明最终数据源。
 
-2. \`front/static_html/js/dashboard-data.js\` 文件头明确声明为 Mock，内部仍包含硬编码 KPI、区域、玩家点位、热点、迁移弧线、风险人数、召回率和留存 cohort。总览页面若继续调用这些方法，就会出现「部分真实、部分 mock」混合口径。
+2. `front/static_html/js/dashboard-data.js` 文件头明确声明为 Mock，内部仍包含硬编码 KPI、区域、玩家点位、热点、迁移弧线、风险人数、召回率和留存 cohort。总览页面若继续调用这些方法，就会出现「部分真实、部分 mock」混合口径。
 
-3. \`index.html\` 和 \`analysis.html\` 的 HTML 注释、底部口径说明与 README 存在历史遗留描述。需同步更新，不能只改屏幕上可见的数字。
+3. `index.html` 和 `analysis.html` 的 HTML 注释、底部口径说明与 README 存在历史遗留描述。需同步更新，不能只改屏幕上可见的数字。
 
-4. \`analysis.html\` 已经使用 \`RealData.load()\` 读取情感、成就、主题数据，但顶部 KPI 和玩家分群仍是演示内容。当前情感图表将不同游戏的日数据合并，必须增加游戏筛选或明确标为全样本汇总，不能在用户选择单款游戏时仍显示跨游戏聚合值。
+4. `analysis.html` 已经使用 `RealData.load()` 读取情感、成就、主题数据，但顶部 KPI 和玩家分群仍是演示内容。当前情感图表将不同游戏的日数据合并，必须增加游戏筛选或明确标为全样本汇总，不能在用户选择单款游戏时仍显示跨游戏聚合值。
 
-5. \`RealData.load()\` 当前缓存按文件名缓存结果，没有按筛选条件缓存的需求；同一数据文件加载后在页面生命周期内复用即可。不要把游戏筛选逻辑塞进网络层。
+5. `RealData.load()` 当前缓存按文件名缓存结果，没有按筛选条件缓存的需求；同一数据文件加载后在页面生命周期内复用即可。不要把游戏筛选逻辑塞进网络层。
 
-6. 页面中存在 \`实时\` 字样，但 GitHub Raw 的 data 分支是批次发布快照，不是实时流。统一用 \`LIVE DATA\`（远端最新发布数据）与 \`SNAPSHOT\`（仓库内静态快照）区分来源，并展示更新时间；文案不得暗示秒级实时。
+6. 页面中存在 `实时` 字样，但 GitHub Raw 的 data 分支是批次发布快照，不是实时流。统一用 `LIVE DATA`（远端最新发布数据）与 `SNAPSHOT`（仓库内静态快照）区分来源，并展示更新时间；文案不得暗示秒级实时。
 
 ### 0.3 修改约束
 
-- 先检查 \`main\`、\`dev\` 当前差异，遵循仓库现有分支策略；默认在 \`dev\` 开发，不直接改部署分支 \`main\`。
+- 先检查 `main`、`dev` 当前差异，遵循仓库现有分支策略；默认在 `dev` 开发，不直接改部署分支 `main`。
 - 不要重置、强推或覆盖其他 Agent 的提交。
-- 不要删除 \`data\` 分支数据文件或修改采集工作流来迁就前端。
+- 不要删除 `data` 分支数据文件或修改采集工作流来迁就前端。
 - 不要把静态快照复制成手写常量。
-- 现有 \`tests/smoke.mjs\` 与 CI smoke workflow 必须保持通过；需要时增加针对数据口径的测试。
+- 现有 `tests/smoke.mjs` 与 CI smoke workflow 必须保持通过；需要时增加针对数据口径的测试。
 - 完成后更新 README 中关于数据来源、页面现状、限制与接口的说明，清除互相矛盾的旧描述。
 
 ---
@@ -89,10 +89,10 @@
 
 ### 1.3 每个数据面板的通用来源条
 
-每个真实数据模块必须具备一个来源条（可复用 \`css/realdata.css\`）：
+每个真实数据模块必须具备一个来源条（可复用 `css/realdata.css`）：
 
-- 来源标记：\`LIVE DATA\` / \`SNAPSHOT\` / \`UNAVAILABLE\`
-- 数据更新时间：优先使用数据文件 \`updated_at\`，其次使用记录级更新时间。
+- 来源标记：`LIVE DATA` / `SNAPSHOT` / `UNAVAILABLE`
+- 数据更新时间：优先使用数据文件 `updated_at`，其次使用记录级更新时间。
 - 数据口径：例如「Steam 用户评论 · 最近采集样本」。
 - 样本量：n 条评论、n 个市场点、n 个采样点等。
 - 覆盖情况：日期范围、主题匹配覆盖率、可用游戏数。
@@ -115,10 +115,10 @@
 | error | JSON 解析失败或结构不符合契约 | 错误提示，保留错误诊断信息 |
 
 建议建立通用判断函数：
-- \`hasRows(rows)\`
-- \`isFresh(updatedAt, maxAgeHours)\`
-- \`sampleStatus(n, minN)\`
-- \`safeRate(numerator, denominator)\`
+- `hasRows(rows)`
+- `isFresh(updatedAt, maxAgeHours)`
+- `sampleStatus(n, minN)`
+- `safeRate(numerator, denominator)`
 
 所有除法必须先判断分母；分母为 0 返回 null，不返回 0%。
 
@@ -138,27 +138,27 @@
 
 ### 2.1 当前可消费的数据文件
 
-数据文件位于仓库 \`data\` 分支根目录，前端通过 \`RealData.load(fileName)\` 读取。
+数据文件位于仓库 `data` 分支根目录，前端通过 `RealData.load(fileName)` 读取。
 
 | 文件 | 用途 | 可用字段（以实际 JSON 为准） | 注意事项 |
 |---|---|---|---|
-| \`collection-status.json\` | 采集任务状态、新鲜度 | \`updated_at\`、各任务/游戏的状态、fetched、时间戳 | 先核对具体嵌套结构，不可猜字段路径 |
-| \`steam-ccu.json\` | CCU 时序、窗口摘要 | 游戏注册表、appid、name、series、timestamp、players、latest/high/low/mean/count | 当前在线不是 DAU；时间点不等间隔 |
-| \`steam-funnels.json\` | 全局成就解锁率 | 游戏、achievements、achievement name、percentage、span/first/last（若发布） | 快照型全局比例，不是用户 cohort |
-| \`reviews-daily.json\` | 评论量、投票、时长分层 | 游戏、days、date、n、positive/negative、language、playtime buckets | 各游戏覆盖不一致 |
-| \`reviews-samples.jsonl\` | 真实评论证据 | review_id、appid、review、voted_up、language、timestamp、playtime_at_review 等 | 逐行 JSON；需分页/按需读取，注意 XSS |
-| \`sentiment-daily.json\` | 模型推荐倾向趋势 | games、days、date、n、pos、neg、neu、actual_up、low_conf、mean_p、low_conf_share、totals | 模型输出与实际投票必须分开展示 |
-| \`topics-daily.json\` | 主题候选信号 | games、n_reviews、coverage、topics、label、count、share、trend、sample_ids | 关键词命中；一条评论可命中多个主题 |
-| \`risk-daily.json\` | 游戏级公开信号风险 | games、score、status、components_used、weights_applied、components、date | 缺失分量不当 0；不是流失概率 |
-| \`globe-daily.json\` | 语言市场地图 | language、market、latitude、longitude、review_count、positive_rate、negative_rate、top_topic、risk_score | 坐标是语言市场代表点，不是玩家所在地 |
+| `collection-status.json` | 采集任务状态、新鲜度 | `updated_at`、各任务/游戏的状态、fetched、时间戳 | 先核对具体嵌套结构，不可猜字段路径 |
+| `steam-ccu.json` | CCU 时序、窗口摘要 | 游戏注册表、appid、name、series、timestamp、players、latest/high/low/mean/count | 当前在线不是 DAU；时间点不等间隔 |
+| `steam-funnels.json` | 全局成就解锁率 | 游戏、achievements、achievement name、percentage、span/first/last（若发布） | 快照型全局比例，不是用户 cohort |
+| `reviews-daily.json` | 评论量、投票、时长分层 | 游戏、days、date、n、positive/negative、language、playtime buckets | 各游戏覆盖不一致 |
+| `reviews-samples.jsonl` | 真实评论证据 | review_id、appid、review、voted_up、language、timestamp、playtime_at_review 等 | 逐行 JSON；需分页/按需读取，注意 XSS |
+| `sentiment-daily.json` | 模型推荐倾向趋势 | games、days、date、n、pos、neg、neu、actual_up、low_conf、mean_p、low_conf_share、totals | 模型输出与实际投票必须分开展示 |
+| `topics-daily.json` | 主题候选信号 | games、n_reviews、coverage、topics、label、count、share、trend、sample_ids | 关键词命中；一条评论可命中多个主题 |
+| `risk-daily.json` | 游戏级公开信号风险 | games、score、status、components_used、weights_applied、components、date | 缺失分量不当 0；不是流失概率 |
+| `globe-daily.json` | 语言市场地图 | language、market、latitude、longitude、review_count、positive_rate、negative_rate、top_topic、risk_score | 坐标是语言市场代表点，不是玩家所在地 |
 
-字段名和嵌套层级以 \`data\` 分支实际文件为准。若发现文件结构与本表不一致，先修改数据适配器并添加 fixture 测试，再改组件。
+字段名和嵌套层级以 `data` 分支实际文件为准。若发现文件结构与本表不一致，先修改数据适配器并添加 fixture 测试，再改组件。
 
 ### 2.2 建议前端统一的内部数据模型
 
-不要让 HTML 图表直接消费原始 JSON。通过 \`dashboard-data.js\`（或新增 \`dashboard-realdata.js\`）输出规范化 view model：
+不要让 HTML 图表直接消费原始 JSON。通过 `dashboard-data.js`（或新增 `dashboard-realdata.js`）输出规范化 view model：
 
-\`\`\`js
+```js
 {
   meta: {
     source: 'remote' | 'snapshot',
@@ -176,26 +176,26 @@
   },
   data: {}
 }
-\`\`\`
+```
 
 要求：
 - 原始字段名保留在 adapter 内，组件只读统一字段。
-- 数值缺失用 \`null\`，绝不以 0 替代未知。
-- 百分比统一用 0–100 数值，比例统一命名为 \`RatePct\`。
+- 数值缺失用 `null`，绝不以 0 替代未知。
+- 百分比统一用 0–100 数值，比例统一命名为 `RatePct`。
 - 时间统一为 ISO 字符串或 epoch 毫秒，图表层再格式化。
 - 每个指标可追溯到来源文件和计算口径。
 - 不得把来自不同日期、不同样本集的数据强行拼成一条同口径曲线。
 
 ### 2.3 游戏注册表
 
-以 \`steam-ccu.json\` 或仓库已有游戏配置为游戏列表主来源，避免前端硬编码第二份游戏列表。
+以 `steam-ccu.json` 或仓库已有游戏配置为游戏列表主来源，避免前端硬编码第二份游戏列表。
 
 标准字段：
-- \`appid\`：Steam App ID，字符串或数字统一转换成字符串。
-- \`name\`：游戏名称。
-- \`color\`：展示颜色（仅视觉配置，不参与计算）。
-- \`enabled\`：是否参与默认展示。
-- \`availableMetrics\`：可选，由 adapter 根据数据实际覆盖动态生成。
+- `appid`：Steam App ID，字符串或数字统一转换成字符串。
+- `name`：游戏名称。
+- `color`：展示颜色（仅视觉配置，不参与计算）。
+- `enabled`：是否参与默认展示。
+- `availableMetrics`：可选，由 adapter 根据数据实际覆盖动态生成。
 
 所有文件按 appid 关联，不要只按游戏名称关联。名称可能调整、存在大小写或别名差异。
 
@@ -223,15 +223,15 @@
 | KPI | 数据来源 | 计算规则 | 展示单位 | 边界 |
 |---|---|---|---|---|
 | 样本游戏当前同时在线 | steam-ccu | 对每款游戏取最新有效采样值后求和 | 人 | 标注「样本游戏合计」，不是 Steam 全平台 DAU |
-| Steam 不推荐率 | reviews-daily 或 sentiment actual_up | \`negative / (positive + negative) * 100\`，按选定窗口汇总 | % | 仅统计当前评论样本；必须展示 n |
-| 模型负面倾向率 | sentiment-daily | \`neg / n * 100\`，按 n 加权聚合 | % | 模型弱标签结果；必须与 Steam 投票分开展示 |
+| Steam 不推荐率 | reviews-daily 或 sentiment actual_up | `negative / (positive + negative) * 100`，按选定窗口汇总 | % | 仅统计当前评论样本；必须展示 n |
+| 模型负面倾向率 | sentiment-daily | `neg / n * 100`，按 n 加权聚合 | % | 模型弱标签结果；必须与 Steam 投票分开展示 |
 | 最高可用风险指数 | risk-daily | 只在 status 可用时取最高 score | /100 | 需显示对应游戏与 status；若无可用项显示「暂无足够数据」 |
 
 实现要求：
 - 默认「全部样本游戏」时，CCU 合计只对最新采样时间合理接近的游戏求和。若时间差超过设定容忍窗口（建议 2 小时），标记为「非同步采样合计」并展示参与数。
 - 评论比例必须按总数加权，不得简单平均各游戏百分比。
 - 不推荐率与模型负面倾向率必须是两张不同 KPI 或在同一 KPI 内用双值明确区分，不可互相替代。
-- 最高风险指数只在 status 为 \`ok\` 或项目定义的可展示状态时参与排序；\`insufficient\` 排除，\`low_sample\` 单独标识。
+- 最高风险指数只在 status 为 `ok` 或项目定义的可展示状态时参与排序；`insufficient` 排除，`low_sample` 单独标识。
 - 不展示环比 sparkline，除非数据文件有足够且同口径的历史点。
 - 每张 KPI 下方显示短说明：来源、更新时间、n 或参与游戏数。
 
@@ -240,20 +240,20 @@
 将旧「玩家活跃趋势」改名为「多游戏在线人数趋势（CCU）」。
 
 数据：
-- \`steam-ccu.json\`
+- `steam-ccu.json`
 - 使用真实 timestamp 和 players。
 - 多游戏曲线默认按游戏分色；提供单款游戏筛选。
 - 默认展示原始在线人数；可切换「指数化对比」以观察各游戏相对自身窗口均值的变化。
 
 指数化公式：
-\`\`\`
+```
 index(t) = players(t) / mean(players_in_selected_window) * 100
-\`\`\`
+```
 仅用于节奏对比，不能用于比较不同游戏的绝对人数。
 
 图表配置：
 - ECharts line。
-- xAxis: \`time\`，使用真实时间戳，不等间隔类目轴。
+- xAxis: `time`，使用真实时间戳，不等间隔类目轴。
 - yAxis: 原始人数时标注「同时在线人数」；指数模式标注「相对窗口均值指数（100=均值）」。
 - 不平滑，不跨采样缺口补线（使用 null 或分段数据）。
 - tooltip 展示游戏名、时间、CCU、相对变化（若可算）。
@@ -278,7 +278,7 @@ index(t) = players(t) / mean(players_in_selected_window) * 100
 - 数据状态（正常 / 低样本 / 数据不足）。
 
 排序规则：
-1. 先按数据充分性：\`ok\` → \`low_sample\` → \`insufficient\`。
+1. 先按数据充分性：`ok` → `low_sample` → `insufficient`。
 2. 在同一状态内按风险指数降序。
 3. 不可用风险值不参与数值排序。
 4. 不以评论量直接推断风险高低。
@@ -291,15 +291,15 @@ index(t) = players(t) / mean(players_in_selected_window) * 100
 
 ### 3.5 中央地球：语言市场舆情分布
 
-保留 \`globe-stage.js\` 与 globe.gl 的三维舞台。地球数据必须改为 \`globe-daily.json\`。
+保留 `globe-stage.js` 与 globe.gl 的三维舞台。地球数据必须改为 `globe-daily.json`。
 
 点位字段：
-- \`language\` / \`market\`
-- \`latitude\` / \`longitude\`
-- \`review_count\`
-- \`positive_rate\` / \`negative_rate\`
-- \`top_topic\`
-- \`risk_score\`
+- `language` / `market`
+- `latitude` / `longitude`
+- `review_count`
+- `positive_rate` / `negative_rate`
+- `top_topic`
+- `risk_score`
 
 点位语义：
 - 每个点代表「某语言评论样本市场的代表坐标」。
@@ -328,32 +328,32 @@ index(t) = players(t) / mean(players_in_selected_window) * 100
 命名为「玩家反馈信号」，不要只叫情绪监测。
 
 推荐同一面板展示两组独立序列：
-- Steam 实际推荐率：\`actual_up / (actual_up + actual_down)\`（若数据契约提供实际计数）；
-- 模型正面倾向率：\`pos / n\`；
-- 模型负面倾向率：\`neg / n\`；
+- Steam 实际推荐率：`actual_up / (actual_up + actual_down)`（若数据契约提供实际计数）；
+- 模型正面倾向率：`pos / n`；
+- 模型负面倾向率：`neg / n`；
 - 每日样本量 n；
-- 低置信度比例 \`low_conf_share\`。
+- 低置信度比例 `low_conf_share`。
 
 图表：
 - 推荐率与模型正面倾向率用两条线对照。
 - 可选以柱状/淡色面积展示每日样本量。
 - tooltip 同时展示模型 n、Steam 投票样本量、低置信度率。
-- 不把 \`actual_up\` 当模型预测，也不把 \`pos\` 当 Steam 推荐票。
+- 不把 `actual_up` 当模型预测，也不把 `pos` 当 Steam 推荐票。
 - 当前数据仅覆盖部分游戏、日期，选择游戏后仅显示其真实时间范围。
 - 对于只有 1 天数据的游戏，展示摘要而不绘制趋势。
 
 ### 3.7 右中：规则驱动风险预警
 
 当前演示预警全部替换为由真实数据计算的事件。每条预警必须有：
-- \`id\`（稳定 hash 或规则+appid+date）；
-- \`appid\` / \`gameName\`；
-- \`level\`；
-- \`triggeredAt\`；
-- \`ruleId\`；
-- \`title\`；
-- \`evidence[]\`；
-- \`status\`；
-- \`suggestedAction\`。
+- `id`（稳定 hash 或规则+appid+date）；
+- `appid` / `gameName`；
+- `level`；
+- `triggeredAt`；
+- `ruleId`；
+- `title`；
+- `evidence[]`；
+- `status`；
+- `suggestedAction`。
 
 第一版规则只做可解释规则，不做无依据的 LLM 自由预警：
 
@@ -386,7 +386,7 @@ index(t) = players(t) / mean(players_in_selected_window) * 100
 - 真实评论证据（仅抽样引用）。
 
 输出结构：
-\`\`\`json
+```json
 {
   "summary": "基于公开信号的简短判断",
   "priority": "high | medium | low",
@@ -410,7 +410,7 @@ index(t) = players(t) / mean(players_in_selected_window) * 100
   ],
   "limitations": ["当前未接入账号级召回转化数据"]
 }
-\`\`\`
+```
 
 如果后端 AI 服务不可用：
 - 显示「AI 服务暂不可用」；
@@ -472,7 +472,7 @@ KPI 辅助信息：
 
 ### 4.4 主图：评论推荐倾向趋势
 
-现有 \`trendChart\` 需要改造为按游戏过滤的数据驱动图表。
+现有 `trendChart` 需要改造为按游戏过滤的数据驱动图表。
 
 图表内容：
 - 模型正面倾向率；
@@ -496,7 +496,7 @@ KPI 辅助信息：
 - tooltip 展示日期、各比例、n、low_conf_share；
 - 图例名称必须清晰区分「Steam 实际推荐率」和「模型正面倾向率」。
 
-注意：现有 \`dailyRows()\` 将所有游戏聚合到同一日期，需要改为 \`dailyRows(doc, appid)\`。只有 appid='all' 时才允许汇总，且要按分子/分母重新计算，不可平均各游戏比例。
+注意：现有 `dailyRows()` 将所有游戏聚合到同一日期，需要改为 `dailyRows(doc, appid)`。只有 appid='all' 时才允许汇总，且要按分子/分母重新计算，不可平均各游戏比例。
 
 ### 4.5 成就解锁率梯度
 
@@ -518,7 +518,7 @@ KPI 辅助信息：
 
 替换旧「玩家分群画像」（新手/成长/核心/沉默边缘等无账号证据的分群）。
 
-数据来源：\`reviews-daily.json\` 中评论者 \`playtime_at_review\` 分桶，或从评论样本按实际字段计算。
+数据来源：`reviews-daily.json` 中评论者 `playtime_at_review` 分桶，或从评论样本按实际字段计算。
 
 分桶建议与采集端一致：
 - 少于 1 小时；
@@ -539,11 +539,11 @@ KPI 辅助信息：
 - 把低时长评论者直接称为流失玩家；
 - 用评论者占比推断玩家生命周期占比。
 
-若目前 \`reviews-daily.json\` 只有桶计数，没有按桶拆分投票数据，则先展示样本量分布，不得凭空计算各桶负面率。可在后续 collector 扩展按 playtime bucket 聚合的 positive/negative 计数。
+若目前 `reviews-daily.json` 只有桶计数，没有按桶拆分投票数据，则先展示样本量分布，不得凭空计算各桶负面率。可在后续 collector 扩展按 playtime bucket 聚合的 positive/negative 计数。
 
 ### 4.7 主题候选与热点趋势
 
-保留现有 \`topicRows\`，升级为可筛选、可追溯的「玩家反馈主题候选」。
+保留现有 `topicRows`，升级为可筛选、可追溯的「玩家反馈主题候选」。
 
 每个主题展示：
 - 主题名称；
@@ -557,7 +557,7 @@ KPI 辅助信息：
 规则：
 - coverage 必须和主题占比同时展示。
 - 一条评论可以命中多个主题，因此主题 share 总和可能超过 100%，需要在图例说明。
-- \`base_zero\` 时显示「基期无样本，暂不可比较」，不要显示无穷大或 100% 增长。
+- `base_zero` 时显示「基期无样本，暂不可比较」，不要显示无穷大或 100% 增长。
 - 当前词典是关键词匹配，界面标记「关键词候选」，不声称语义识别已确认。
 - 不要选评论量最大的游戏作为固定代表；必须跟随当前 appid。全部游戏视图则按分子/分母汇总后排序。
 
@@ -569,7 +569,7 @@ KPI 辅助信息：
 - 语言；
 - 来源 review_id（可复制或打开 Steam 评论链接，前提是链接由可信字段构建且编码安全）。
 
-评论文本必须使用 \`textContent\` 或安全模板转义，禁止直接将原始评论字符串拼进 \`innerHTML\`。
+评论文本必须使用 `textContent` 或安全模板转义，禁止直接将原始评论字符串拼进 `innerHTML`。
 
 ### 4.8 页面底部口径说明
 
@@ -593,7 +593,7 @@ KPI 辅助信息：
 
 尽量保持现有静态站零构建形态：
 
-\`\`\`
+```
 front/static_html/
 ├── index.html
 ├── analysis.html
@@ -607,13 +607,13 @@ front/static_html/
 ├── css/
 │   └── realdata.css
 └── json/                           # 离线快照
-\`\`\`
+```
 
 不要求一次性拆完所有 inline script；优先建立 adapter 和数据契约，再迁移脚本。
 
 ### 5.2 建议 adapter API
 
-\`\`\`js
+```js
 DashboardAdapters.loadOverview()
 DashboardAdapters.loadAnalysis(appid, range)
 DashboardAdapters.getGameRegistry()
@@ -626,13 +626,13 @@ DashboardAdapters.getGlobeMarkets(appid)
 DashboardAdapters.getAchievementSnapshot(appid)
 DashboardAdapters.getPlaytimeBuckets(appid, range)
 DashboardAdapters.getReviewEvidence(appid, topicId, limit)
-\`\`\`
+```
 
 以上为建议接口，不要求机械照抄。所有函数应返回 Promise 或明确同步数据结构，并包含 meta。
 
 ### 5.3 统一数据加载
 
-\`RealData.load()\` 应继续负责：
+`RealData.load()` 应继续负责：
 1. 远端 data 分支；
 2. 仓库内快照；
 3. unavailable。
@@ -642,25 +642,25 @@ DashboardAdapters.getReviewEvidence(appid, topicId, limit)
 改进项：
 - REMOTE 地址集中配置，不在页面脚本重复写。
 - fetch 设置超时；JSON 解析错误需要可诊断。
-- 可选支持 \`?refresh=1\` 绕过页面内存缓存，便于调试。
+- 可选支持 `?refresh=1` 绕过页面内存缓存，便于调试。
 - 缓存只缓存原始文件，不缓存 appid/range 筛选结果。
-- \`stamp()\` 不应直接将未经转义的动态文本拼入 HTML。
+- `stamp()` 不应直接将未经转义的动态文本拼入 HTML。
 - stale 阈值按文件类型配置，例如 CCU 允许 3 小时、每日情感/主题/risk 允许 36 小时；最终阈值根据采集计划核对。
 - 来源显示为「远端数据文件」而非不严谨的「实时」。
 
 ### 5.4 适配器纯函数
 
 数据处理尽可能写成纯函数，方便单元测试：
-- \`normalizeGameId(value)\`
-- \`filterByAppid(rows, appid)\`
-- \`aggregateCounts(rows)\`
-- \`calculateRate(num, den)\`
-- \`weightedRate(items, numeratorKey, denominatorKey)\`
-- \`getDateCoverage(rows)\`
-- \`getCcuCoverage(series)\`
-- \`calculateTopicDelta(current, baseline)\`
-- \`deriveRiskAlerts(input, config)\`
-- \`buildOverviewKpis(data)\`
+- `normalizeGameId(value)`
+- `filterByAppid(rows, appid)`
+- `aggregateCounts(rows)`
+- `calculateRate(num, den)`
+- `weightedRate(items, numeratorKey, denominatorKey)`
+- `getDateCoverage(rows)`
+- `getCcuCoverage(series)`
+- `calculateTopicDelta(current, baseline)`
+- `deriveRiskAlerts(input, config)`
+- `buildOverviewKpis(data)`
 
 纯函数必须处理：
 - null / undefined；
@@ -677,9 +677,9 @@ DashboardAdapters.getReviewEvidence(appid, topicId, limit)
 
 风险计算公式当前定义为：
 
-\`\`\`
+```
 risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
-\`\`\`
+```
 
 缺失分量按剩余可用权重重归一化，但页面必须展示：
 - 当前 score；
@@ -694,7 +694,7 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 ### 5.6 安全与隐私
 
 - 所有评论原文、主题名、游戏名均视为外部输入。
-- 动态 DOM 使用 \`textContent\`；必须拼 HTML 时统一 escape。
+- 动态 DOM 使用 `textContent`；必须拼 HTML 时统一 escape。
 - 不将 API key、GitHub token 或模型密钥写进静态 JS。
 - AI 请求走后端代理，前端只访问本项目 API。
 - 日志不要记录完整用户密钥或敏感配置。
@@ -716,9 +716,9 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 | 点击数据来源 | 展示源文件、更新时间、覆盖范围、状态 | 同左 |
 
 跨页状态可以使用 URL query 参数：
-- \`?appid=1203220\`
-- \`?range=7d\`
-- \`?topic=performance\`
+- `?appid=1203220`
+- `?range=7d`
+- `?topic=performance`
 
 不得依赖浏览器 localStorage 保存唯一筛选状态；URL 应可分享、可刷新恢复。
 
@@ -770,7 +770,7 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 
 如需后端 API，建议统一返回：
 
-\`\`\`json
+```json
 {
   "meta": {
     "status": "ready",
@@ -784,21 +784,21 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
   },
   "data": {}
 }
-\`\`\`
+```
 
 接口建议（仅在前端静态文件不足以支持时实施）：
 
 | API | 用途 | 参数 |
 |---|---|---|
-| \`GET /api/dashboard/overview\` | 总览所需聚合数据 | range |
-| \`GET /api/dashboard/games/{appid}/analysis\` | 单游戏分析数据 | appid、start、end |
-| \`GET /api/dashboard/games/{appid}/reviews\` | 评论证据分页 | topic、cursor、limit |
-| \`GET /api/dashboard/alerts\` | 规则预警列表 | appid、range |
-| \`POST /api/ai/operations/insight\` | 生成有证据引用的运营建议 | appid、evidence IDs |
+| `GET /api/dashboard/overview` | 总览所需聚合数据 | range |
+| `GET /api/dashboard/games/{appid}/analysis` | 单游戏分析数据 | appid、start、end |
+| `GET /api/dashboard/games/{appid}/reviews` | 评论证据分页 | topic、cursor、limit |
+| `GET /api/dashboard/alerts` | 规则预警列表 | appid、range |
+| `POST /api/ai/operations/insight` | 生成有证据引用的运营建议 | appid、evidence IDs |
 
 接口要求：
 - 返回结构化状态，不以 404 代表正常无数据。
-- 业务无数据返回 200 + \`status: empty\`。
+- 业务无数据返回 200 + `status: empty`。
 - 服务不可用返回合理 5xx 与可读错误码。
 - 所有聚合都由后端或 adapter 统一计算，前端不重复定义口径。
 - 评论分页不能一次性把整个 JSONL 下载进浏览器；若继续静态托管，建议由采集发布时生成按 appid/topic 索引的轻量 JSON。
@@ -829,7 +829,7 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 
 ### 9.2 页面 smoke 测试
 
-扩展 \`tests/smoke.mjs\`：
+扩展 `tests/smoke.mjs`：
 - 总览 KPI 不出现旧 mock 文案或硬编码模拟值。
 - 总览地球点位来自 globe-daily，而不是 dashboard-data 中 PLAYER_POINTS。
 - 总览无数据时仍能完整渲染。
@@ -861,8 +861,8 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 ### Phase A：数据源与 mock 清理（P0）
 
 - [ ] 核实 data 分支属于当前仓库且工作流持续更新。
-- [ ] 修正或确认 \`RealData.REMOTE\`。
-- [ ] 盘点 \`index.html\`、\`analysis.html\`、\`dashboard-data.js\` 所有 mock 数据引用。
+- [ ] 修正或确认 `RealData.REMOTE`。
+- [ ] 盘点 `index.html`、`analysis.html`、`dashboard-data.js` 所有 mock 数据引用。
 - [ ] 将 dashboard-data.js 改成真实数据 adapter 出口，或新建 dashboard-adapters.js。
 - [ ] 删除/停用虚构玩家点位、区域风险人数、迁移弧线、虚构预警和召回效果。
 - [ ] 所有 mock 若因开发需要保留，必须只存在于独立 fixture/demo 模式，生产页面不可自动调用。
@@ -970,7 +970,7 @@ risk = 0.35*N + 0.30*G + 0.20*C + 0.15*A
 4. 写清本阶段准备修改的文件和预期行为。
 
 每个 Phase 完成后：
-1. 跑 adapter 单元测试与 \`tests/smoke.mjs\`。
+1. 跑 adapter 单元测试与 `tests/smoke.mjs`。
 2. 手动验证有数据、低样本、缺失数据、断网快照四种场景。
 3. 检查是否有旧演示数字残留。
 4. 更新本文末尾实施记录。
