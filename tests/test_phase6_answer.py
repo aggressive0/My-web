@@ -86,7 +86,7 @@ class FakeProvider:
         self.last_metrics = {"done_reason": "stop"}
         self.last_prompt = None
 
-    def generate(self, prompt, system_prompt=None):
+    def generate(self, prompt, system_prompt=None, options=None):
         self.last_prompt = prompt
         if self.raise_on_generate:
             raise RuntimeError("llm down")
@@ -271,7 +271,7 @@ class AnswerServiceTest(unittest.TestCase):
         class DownProvider:
             last_metrics = {}
 
-            def generate(self, prompt, system_prompt=None):
+            def generate(self, prompt, system_prompt=None, options=None):
                 raise LLMUnavailable("无法连接本地模型服务", "ConnectionRefusedError")
 
         result = self.service(hits=DATE_HITS, provider=DownProvider()).answer(

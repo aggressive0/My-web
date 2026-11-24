@@ -155,7 +155,7 @@ class KnowledgeRepository:
         return data
 
     def list_documents(self, app_id=None, status=None, source_type=None,
-                       limit=20, offset=0):
+                       limit=20, offset=0, sort="created_at"):
         where, args = [], []
         if app_id is not None:
             where.append("app_id IS ?")
@@ -170,12 +170,17 @@ class KnowledgeRepository:
         with self.session() as conn:
             total = conn.execute(
                 "SELECT COUNT(*) FROM knowledge_documents" + clause, args).fetchone()[0]
+            # 排序白名单：不接受外部拼串，只有这两个字段可控。
+            # 事件时间线需要按公告日期排，而默认的 created_at 是「导入顺序」，
+            # 两者在批量导入时完全不同（109 篇是一次性灌进去的）。
+            order = "publish_date DESC, id DESC" if sort == "publish_date" \
+                else "created_at DESC, id DESC"
             rows = conn.execute(
                 "SELECT document_id, app_id, scope, title, source_type, source_name,"
                 " source_url, file_name, publish_date, version, status, chunk_count,"
                 " embedding_model, created_at, updated_at"
                 " FROM knowledge_documents" + clause +
-                " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                " ORDER BY " + order + " LIMIT ? OFFSET ?",
                 args + [int(limit), int(offset)]).fetchall()
         return [dict(r) for r in rows], int(total)
 

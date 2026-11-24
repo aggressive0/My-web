@@ -153,6 +153,27 @@ class StoreTest(unittest.TestCase):
     def test_missing_returns_none(self):
         self.assertIsNone(self.store.get("nope"))
 
+    def test_retrieved_evidence_round_trip(self):
+        """知识库命中要能存回来：否则历史详情只剩「模型说了什么」，
+        没法回答「这条策略到底引了哪几篇公告」。"""
+        retrieved = {"query": "版本更新 修复",
+                     "hits": [{"chunk_id": "c1", "title": "NARAKA Update",
+                               "score": 0.61, "excerpt": "Trios mode"}]}
+        sid = self.store.save({"app_id": 1, "summary": "s", "execution_status": "suggested",
+                               "risk_analysis": {}, "recall_actions": [],
+                               "data_evidence": [], "knowledge_evidence": []},
+                              retrieved=retrieved)
+        record = self.store.get(sid)
+        self.assertEqual(record["retrieved"]["query"], "版本更新 修复")
+        self.assertEqual(record["retrieved"]["hits"][0]["chunk_id"], "c1")
+
+    def test_old_rows_without_retrieved_return_empty_list(self):
+        """老记录没有 retrieved_json，不能因此报错。"""
+        sid = self.store.save({"app_id": 1, "summary": "s", "execution_status": "suggested",
+                               "risk_analysis": {}, "recall_actions": [],
+                               "data_evidence": [], "knowledge_evidence": []})
+        self.assertEqual(self.store.get(sid)["retrieved"], [])
+
 
 class FakeRag:
     def __init__(self, hits=None, raise_exc=False):
@@ -177,7 +198,7 @@ class FakeProvider:
         self.raise_exc = raise_exc
         self.last_metrics = {"done_reason": "stop"}
 
-    def generate(self, prompt, system_prompt=None):
+    def generate(self, prompt, system_prompt=None, options=None):
         if self.raise_exc:
             raise RuntimeError("llm down")
         return self.payload

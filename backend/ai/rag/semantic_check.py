@@ -48,17 +48,86 @@ def _normalize(text):
     return " ".join((text or "").split()).lower()
 
 
+_PARTIAL_MIN = 24        # 逐字片段的最短长度
+
+
+def _longest_common(a, b):
+    """最长公共子串长度。用于判断「引用是不是从原文里截出来的」。"""
+    if not a or not b:
+        return 0
+    best = 0
+    prev = [0] * (len(b) + 1)
+    for ca in a:
+        cur = [0] * (len(b) + 1)
+        for j, cb in enumerate(b, start=1):
+            if ca == cb:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
 def verify_quote(quote, cited_hits):
-    """模型引用的句子必须真的出现在它引用的证据里。
+    """模型引用的句子必须能从它引用的证据里找到。
 
     这是把「模型说够了」变成「可核验的断言」的唯一办法。
     实测：不加这一步，同一批题在 3×600 与 5×300 两种输入下，
     模型会把 30 道题全部判成 sufficient（包括明明没有答案的 u01/u02）。
+
+    两种通过方式：
+    1. 整句逐字出现（去掉空白与大小写差异）；
+    2. 存在 ≥24 字符的连续逐字片段——模型常截取半句或去掉标点，
+       按整句比对会把这类**真引用**判成伪造（实测 q06/q23/k05 就这样被误杀）。
+       24 字符足够具体，随机编造撞上的概率可忽略。
     """
     needle = _normalize(quote)
-    if len(needle) < 6:
+    # 6 个字符太松："the servers" 这种到处都有的短语也能通过，
+    # 等于只要模型随便挑一句常见表达就算「引用了原文」。
+    if len(needle) < 12:
         return False
-    return any(needle in _normalize(hit.get("content")) for hit in cited_hits)
+    for hit in cited_hits:
+        haystack = _normalize(hit.get("content"))
+        if needle in haystack:
+            return True
+        if _longest_common(needle, haystack) >= _PARTIAL_MIN:
+            return True
+    return False
+
+
+_NEGATION = (
+    "没有提到", "未提及", "没有给出", "未包含", "不包含", "无法确认", "没有明确",
+    "未明确", "无法确定", "并不包含", "缺少", "仅提到", "只提到", "仅包含", "未提供",
+    "no mention", "not mentioned", "does not mention", "doesn't mention",
+    "does not specify", "doesn't specify", "no evidence", "cannot be determined",
+    "not explicitly", "no explicit", "without mentioning",
+    # 实测 u01：reason 写「but the question asks for ... However, the evidence only
+    # mentions banned players」却仍判 sufficient——它是在用转折句说「答非所问」。
+    "only mentions", "only mentions", "only provides", "does not provide",
+    "doesn't provide", "but the question asks", "does not answer", "doesn't answer",
+)
+
+
+def contradicts_verdict(verdict, document):
+    """模型自相矛盾时把它拦下来。
+
+    实测 q23：reason 里写着「证据没有明确提到电台名称」，verdict 却是 sufficient。
+    引文校验过不了它——那句话确实存在，只是不回答问题。
+    这里只认**明确的否定表述**，不做情感分析，避免把「没有变化」这类
+    正常陈述误判成否定。
+    """
+    if verdict not in (VERDICT_SUFFICIENT, VERDICT_CONFLICTING):
+        return None
+    blob = " ".join([
+        str(document.get("reason") or ""),
+        " ".join(str(x) for x in (document.get("missing") or [])),
+    ]).lower()
+    if any(token in blob for token in _NEGATION):
+        return "reason_or_missing_says_absent"
+    # 「判充分」却说还缺东西，本身就是矛盾
+    if document.get("missing"):
+        return "missing_not_empty"
+    return None
 
 
 def build_prompt(question, hits, snippet=300):
@@ -88,9 +157,13 @@ class SemanticChecker:
 
         labels = {"E%d" % (i + 1): hit for i, hit in enumerate(used)}
         try:
+            # temperature=0：这是判定调用，不是创作。实测同一题在默认温度下
+            # 会来回翻转（u01 有时 insufficient、有时 sufficient），
+            # 而拒答结论必须可重复，否则「复现一次」就成了碰运气。
             text = self.provider.generate(
                 build_prompt(question, used, snippet=self.snippet),
-                system_prompt=SYSTEM_PROMPT)
+                system_prompt=SYSTEM_PROMPT,
+                options={"temperature": 0})
             document = json.loads((text or "").strip())
         except Exception as exc:
             logger.warning("语义复核调用失败：%r", exc)
@@ -129,6 +202,18 @@ class SemanticChecker:
                         "reason": "semantic_quote_unverified",
                         "missing": ["可逐字引用的直接证据"],
                         "evidence_labels": cited, "available": True}
+
+        contradiction = contradicts_verdict(verdict, document)
+        if contradiction:
+            logger.warning("语义复核自相矛盾（%s）：verdict=%s reason=%r",
+                           contradiction, verdict, str(document.get("reason") or "")[:120])
+            return {"verdict": VERDICT_INSUFFICIENT,
+                    "reason": "semantic_self_contradiction",
+                    # 保留模型原话：判据是关键词匹配，必须能回看它到底说了什么，
+                    # 否则「为什么这题被拦」只能靠猜。
+                    "original_reason": str(document.get("reason") or "")[:200],
+                    "missing": ["证据未直接回答问题"],
+                    "evidence_labels": cited, "available": True}
 
         return {
             "verdict": verdict,

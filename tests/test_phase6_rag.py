@@ -231,6 +231,18 @@ class RepositoryTest(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(rows[0]["document_id"], "d1")
 
+    def test_sort_by_publish_date(self):
+        """事件时间线要按公告日期排，而不是导入顺序——批量导入时两者完全不同。"""
+        self.repo.begin_document("d_old", 1, "game_specific", "旧公告", "announcement",
+                                 "内容旧", "h_old", publish_date="2026-09-01")
+        self.repo.begin_document("d_new", 1, "game_specific", "新公告", "announcement",
+                                 "内容新", "h_new", publish_date="2026-11-05")
+        rows, _ = self.repo.list_documents(app_id=1, sort="publish_date")
+        self.assertEqual([r["document_id"] for r in rows], ["d_new", "d_old"])
+        # 未知排序值回落到默认，不报错、不拼串
+        fallback, _ = self.repo.list_documents(app_id=1, sort="; DROP TABLE")
+        self.assertEqual(len(fallback), 2)
+
     def test_global_document_has_null_app(self):
         self.repo.begin_document("d_g", None, "global", "通用", "faq", "内容", "hg")
         rows, _ = self.repo.list_documents()

@@ -85,8 +85,13 @@ class BaseLLMProvider(ABC):
         self.last_metrics = {}
 
     @abstractmethod
-    def generate(self, prompt, system_prompt="", response_schema=None):
-        """返回文本。失败抛 LLMError 子类。"""
+    def generate(self, prompt, system_prompt="", response_schema=None, options=None):
+        """返回文本。失败抛 LLMError 子类。
+
+        `options` 是**按调用覆盖**的生成参数（如 {"temperature": 0}）。
+        存在理由：判定类调用要求可重复，生成类调用允许有温度。
+        把 temperature 写进全局配置会让两者被迫共用同一个值。
+        """
 
     @abstractmethod
     def health(self):

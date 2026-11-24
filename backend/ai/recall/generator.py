@@ -190,6 +190,16 @@ class StrategyGenerator:
 
         allowed = [h.get("chunk_id") for h in hits if h.get("chunk_id")]
         base["knowledge_hits"] = len(hits)
+        # 把「模型看到的材料」原样带回并落库：前端要展示 RAG 命中了哪几篇、
+        # 相似度多少、原文片段是什么。只给一个数量，等于让用户相信而不核对。
+        base["retrieved_evidence"] = [
+            {"chunk_id": h.get("chunk_id"), "document_id": h.get("document_id"),
+             "title": h.get("title") or "", "score": round(float(h.get("score") or 0), 4),
+             "publish_date": h.get("publish_date") or "",
+             "source_url": h.get("source_url") or "",
+             "excerpt": (h.get("content") or "")[:180]}
+            for h in hits
+        ]
 
         if self.provider is None:
             return dict(base, status=STATUS_FAILED, strategy=None,
@@ -234,8 +244,11 @@ class StrategyGenerator:
         payload = strategy.model_dump()
         strategy_id = None
         if persist and self.store is not None:
-            strategy_id = self.store.save(payload, model=type(self.provider).__name__,
-                                          game_name=game_name)
+            strategy_id = self.store.save(
+                payload, model=type(self.provider).__name__, game_name=game_name,
+                # 查询词与命中一起存：只看命中、不知道「为什么是这几篇」，没法复核
+                retrieved={"query": query,
+                           "hits": base.get("retrieved_evidence") or []})
 
         return dict(base, status=STATUS_GENERATED, strategy=payload,
                     strategy_id=strategy_id,

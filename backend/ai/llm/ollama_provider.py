@@ -96,7 +96,7 @@ class OllamaProvider(BaseLLMProvider):
                 (doc.get("eval_count") or 0) / (eval_ms / 1e9), 1)
 
     # ------------------------------------------------------------------ 接口
-    def generate(self, prompt, system_prompt="", response_schema=None):
+    def generate(self, prompt, system_prompt="", response_schema=None, options=None):
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -123,6 +123,10 @@ class OllamaProvider(BaseLLMProvider):
                 "num_predict": self.config.max_output_tokens,
             },
         }
+        # 按调用覆盖：判定类调用用 temperature=0 换取可重复性，
+        # 生成类调用仍走配置值，两者不互相绑架。
+        if options:
+            payload["options"].update(options)
 
         started = time.time()
         try:

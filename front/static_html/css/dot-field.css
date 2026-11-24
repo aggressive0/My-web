@@ -1,0 +1,14 @@
+/* =========================================================================
+   背景点阵画布（NEXUS 公共样式）
+   固定铺满视口，四周轻微收边避免硬边；不接收指针事件。
+   点由 js/dot-field.js 绘制，颜色/密度在该文件顶部常量里改。
+   ========================================================================= */
+.dot-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.72;
+  mask-image: radial-gradient(ellipse 86% 74% at 50% 38%, #000 42%, transparent 96%);
+  -webkit-mask-image: radial-gradient(ellipse 86% 74% at 50% 38%, #000 42%, transparent 96%);
+}

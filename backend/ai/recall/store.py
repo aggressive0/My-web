@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS recall_strategies (
     action_count            INTEGER DEFAULT 0,
     model                   TEXT,
     payload_json            TEXT NOT NULL,
+    -- 本次生成实际检索到的知识库命中（标题/分数/片段/查询词）。
+    -- 与 payload_json 分开存：前者是「模型看到的材料」，后者是「模型说的话」，
+    -- 混在一起就没法回答「这条策略到底引了哪几篇公告」。
+    retrieved_json          TEXT,
     created_at              TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_recall_strategies_app
@@ -57,9 +61,15 @@ class RecallStrategyStore:
     def init_schema(self):
         with self.session() as conn:
             conn.executescript(SCHEMA)
+            # 老库补列：CREATE TABLE IF NOT EXISTS 不会给已存在的表加字段，
+            # 而线上已经有 14 条历史记录，不能靠删库重建。
+            columns = {row[1] for row in conn.execute(
+                "PRAGMA table_info(recall_strategies)")}
+            if "retrieved_json" not in columns:
+                conn.execute("ALTER TABLE recall_strategies ADD COLUMN retrieved_json TEXT")
         return self.db_path
 
-    def save(self, strategy, model=None, game_name=None):
+    def save(self, strategy, model=None, game_name=None, retrieved=None):
         """strategy 必须是已通过 Schema 与证据校验的字典。"""
         strategy_id = "strategy_" + uuid.uuid4().hex[:12]
         created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -68,8 +78,8 @@ class RecallStrategyStore:
                 """INSERT INTO recall_strategies(
                      strategy_id, app_id, game_name, execution_status, risk_level,
                      summary, data_evidence_count, knowledge_evidence_count,
-                     action_count, model, payload_json, created_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     action_count, model, payload_json, retrieved_json, created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (strategy_id, strategy.get("app_id"), game_name,
                  strategy.get("execution_status") or "suggested",
                  (strategy.get("risk_analysis") or {}).get("risk_level"),
@@ -77,7 +87,8 @@ class RecallStrategyStore:
                  len(strategy.get("data_evidence") or []),
                  len(strategy.get("knowledge_evidence") or []),
                  len(strategy.get("recall_actions") or []),
-                 model, json.dumps(strategy, ensure_ascii=False), created_at))
+                 model, json.dumps(strategy, ensure_ascii=False),
+                 json.dumps(retrieved or [], ensure_ascii=False), created_at))
         return strategy_id
 
     def get(self, strategy_id):
@@ -88,6 +99,7 @@ class RecallStrategyStore:
             return None
         data = dict(row)
         data["strategy"] = json.loads(data.pop("payload_json"))
+        data["retrieved"] = json.loads(data.pop("retrieved_json", None) or "[]")
         return data
 
     def list(self, app_id=None, limit=20, offset=0):

@@ -82,7 +82,34 @@ Phase 1–5 已完成并上线；Phase 6.1（模型接入）**已在本机真实
 - [verified] 回归 **395 项 OK**
 - [verified] 前端已接入（`front/static_html/solution.html`）：右侧「AI 生成方案」面板内嵌真实 AI 区块——游戏下拉（取 `/api/games`）、生成按钮、状态行、风险等级/指标数、知识证据、数据指标、限制说明、历史列表（点击载入详情）；生成后同时刷新上方方案卡（`planId/planTitle/planDesc/stepsTrack`），来源标记在「示例 / 本地模型生成」之间切换
 - [reported] 删除了前端**浏览器直连 SiliconFlow 并要求粘贴 API Key** 的旧实现（密钥存 localStorage、请求绕过后端），改为统一走 `/api/recall/*`——与 writing-block §12.1「前端必须通过 Flask API 获取真实数据」一致
+- [verified] Phase E（选做）完成（2026-11-24）：接入 **Steam 官方公告事件时间线** —— 后端 `list_documents` 增加 `sort=publish_date`（白名单，未知值回落，含 SQL 拼接防注入测试）；分析页新增「公告时间线」弹层（日期+标题+原文链接，永劫无间 20 条，全站 103 条）；弹层常驻「时间相邻≠因果」口径
+- [reported] Phase E 明确未接入：SteamSpy（第三方估算，无稳定链路）、Reddit/Twitch（需新采集流程，授权未确认），理由与口径已写入 `docs/REAL_DATA_DASHBOARD_REFACTOR.md` 与 README 数据源清单
+- [verified] Phase D 完成（2026-11-24）：新增 `js/url-state.js`（`appid/range/topic` 纯函数解析，非法值丢弃，10 项单测）+ 总览排行点击带 appid 跳分析页 + 市场点信息卡带 `appid`&`top_topic` 跳转 + 预警可展开完整触发依据 + 底部改为「数据新鲜度」逐源显示更新时间（超 36h 标可能过期）；分析页换游戏时 `replaceState` 回写 URL；冒烟 **92 项**
+- [reported] Phase D 限制：`range` 只在总览生效（分析页暂无范围控件），跨页保留 range 需先加控件
+- [verified] Phase C 完成（2026-11-24）：分析页新增统一 `#gamePick`，`js/analysis-phasec.js` 驱动 KPI / 情感趋势 / 成就 / 时长分层 / 主题五块；修复 sentiment 跨 6 款游戏聚合的问题（按 appid 过滤）；「玩家分群画像」虚构画像替换为 `reviews-daily.json` 的真实 `playtime` 分桶；成就图更名「成就完成率（非留存）」并注明不是 D1/D7/D30；删除 1.26M 活跃玩家、18.6% 流失率、14 天流失定义等无依据口径
+- [verified] 排行写入冲突已消除：`#regionList` 只能由 `renderGameRanks()` 写，旧 `renderRegions` 改为委托；实测切换 7d 前后均稳定 5 行、无报错
+- [verified] Phase A 完成（2026-11-24）：`js/dashboard-adapters.js` 纯函数解释层（13 项单测）+ `dashboard-data.js` 改为空壳（全部演示集合清空、kpis/series 返回 unavailable）+ `RealData.REMOTE` 改指新仓库；删除跑马灯动态流、决策链虚构结论、区域流失率、行动建议「挽回 12.8%」；断网验收 0 旧 mock 标记、0 JS 报错
+- [verified] Phase B 完成（2026-11-24）：新增 `js/index-phaseb.js` —— 规则预警（风险指数 ≥40 / CCU 24h 跌幅 ≤-5% / 负向 ≥25%）、下一步动作（只给方向不给效果百分比）、决策链（算不出写「不可估计」）；总览 KPI / 在线曲线 / 情感 / 风险 / 地球市场此前已接真实数据；`README.md` 数据说明与「已接真实数据」表已同步
+- [verified] 回归：`tests/adapters.test.mjs` 13 项全过、`tests/smoke.mjs` **91 项 0 失败**、Phase A 断网验收通过；`docs/REAL_DATA_DASHBOARD_REFACTOR.md` Phase A/B 全部勾选并写入实施记录
+- [reported] 已知限制：规则阈值（-5% / 25% / 40 / 60）为启发式默认值未回测；总览存在两套排行实现（页面既有「负面占比排行」与绑定层「风险指数排行」），当前保留前者、绑定层不写 `#regionList`；Phase C 未开始
+- [verified] 召回策略页二次重做（2026-11-24 晚）：改用 **Tailwind 编译产物**（`src/input.css` → `css/app.css`，20 KB）+ **Bento 网格** + 玻璃拟态（`backdrop-blur` + 1px 描边 + 极轻阴影）+ 噪点/网格底 + 三团低透明度渐变网格；Three.js（**本地** `libs/three.min.js`，非 CDN）做粒子场 + 线框球氛围，指针视差、`prefers-reduced-motion` 与 <900px 时不启用
+- [verified] 截图自检（Playwright + Chromium，已装）：修掉三个只有看图才能发现的问题——① `canvas` 是替换元素，`fixed inset-0` 不会拉满（实测仍 300×150），必须显式 `h-screen w-screen`；② `three.min.js` 是 `defer`，内联脚本在解析期执行时 `window.THREE` 为 undefined，3D 静默不启动，改到 `load` 后初始化；③ KPI 卡未绑定数据源，一直显示「—」
+- [reported] 视觉取舍：3D 初版压在标题上（违反「不抢主体」），已把球体移到右上、粒子压到 0.42 不透明度并用径向遮罩限制在右上角；移动端导航改为第二行横向滚动，避免窄屏完全消失
+- [verified] 构建命令（改样式后必须重跑，否则新 class 不会生成）：`cd front/static_html && npx tailwindcss@3 -c tailwind.config.js -i src/input.css -o css/app.css --minify`
+- [verified] 截图入口（临时目录已装 playwright，不影响仓库）：`npx playwright@1.49.1 screenshot --viewport-size="1440,900" --wait-for-timeout=3000 http://127.0.0.1:8080/solution.html out.png`
+- [verified] 召回策略页重设计（2026-11-24）：视觉从「近黑 + 荧光青/紫」改为「墨绿黑 + 记分牌琥珀」，`--display` 用 Bahnschrift 窄体；中栏从装饰性的 RAG 链路图换成 **AI 对话主区域**（`/api/knowledge/answer`，如实显示 answered / insufficient_evidence / route_to_sql 等 9 种状态与引用），证据链压缩进右栏独立面板；左栏两块加「示例」角标；底部历史策略与右栏共用同一份数据
+- [verified] 对话模块冒烟已覆盖：`tests/solution-ai.smoke.mjs` 新增 4 项（提交处理器、用户消息入列、AI 回复入列、命中 `/api/knowledge/answer`），共 23 项全过；实机 `/answer` 返回 answered + 5 条引用
+- [reported] 视觉一致性：只改本页 token；`ops-nav.css` 未动，本页通过覆盖 `--ops-cyan/--ops-blue` 让导航跟随琥珀色，其余三页仍为原配色。**未做浏览器截图验证**（本机无 Playwright），布局观感需人工确认
+- [verified] 仓库已重命名 `My-web` → `liusheng-player-retention`，本地 `origin` 已同步为 https://github.com/aggressive0/liusheng-player-retention.git
+- [verified] 设计技能已安装到 `~/.workbuddy/skills`：`frontend-design`、`design-taste-frontend`、`impeccable`（+ `impeccable-uxui`，因同名 slug 冲突）、`ui-ux-pro-max`、`js-rendered-page-extraction`（本地已有）
 - [verified] 页面校验（无浏览器自动化条件下的三层）：页面 200 且含新 ID；内联脚本 `node --check` 通过；脚本引用的 35 个 ID 全部存在于 HTML，依赖符号（`svg/ICONS/state/byId/fmt/toast`）均已定义；接口契约逐字段核对（`games[].appid|name`、`history.items[].{strategy_id,summary,created_at,action_count,risk_level}`、`detail.strategy.{summary,risk_analysis,data_evidence,knowledge_evidence,recall_actions,limitations}`）
+- [verified] 策略页三处改进：① 刷新后自动载入该游戏最近一次策略（此前刷新即丢失，用户以为没生成，反复点导致一次演示堆出 14 条记录）；② 知识库命中落库并展示——`recall_strategies.retrieved_json` 存「检索查询 + 命中标题/分数/日期/片段」，详情接口返回 `retrieved`，老记录返回 `[]` 时前端显示「未保存」而不是「没检索到」；③ 中栏装饰节点改为真实链路数字（动态指标 → 知识库命中 → 模型引用 → 召回措施）
+- [verified] 生成后调用 `loadHistory(false)`：否则自动载入会用旧记录覆盖刚生成的结果（冒烟测试实测 planId 从 s2 退回 s1）
+- [verified] 回归 **420 项 OK**，前端冒烟 19 项通过
+- [verified] 第二层语义复核稳定性专项：新增 `scripts/eval_semantic_stability.py`（同候选重复 3 次，只测采样波动）；三处修改后 **翻转率 2/36 → 0/36**、u01 由 S,S,S 变为 I,I,I、自相矛盾拦截 9 次；但误拦仍有 3 道（q06 引文校验不过、q23/k03 被矛盾判据误伤）
+- [reported] **语义层改为默认关闭**（`RAG_SEMANTIC_CHECK=false`）：程序层已做到 5/5 拒答 + 0 误拦，开启语义层后拒答仍 5/5 但多拦 3 道可答题——「只增加误拦、不增加拦截」。代码与测试保留，可用环境变量临时开启
+- [verified] 供判定类调用使用的 `options` 覆盖参数（`generate(..., options={"temperature": 0})`），Ollama 与 SiliconFlow 均已支持；生成类调用不受影响
+- [verified] 修 `tests/test_phase1.py` 的时间炸弹：`NOW` 硬编码 2026-11-16、`CUTOFF` 用运行时 `now-72h`，2026-11-20 起 5 个 MergeTest 集体失败（代码没改）。已改为从 NOW 推导
 - [verified] u01/u02 闭环（主语约束 `subject_scope`）：关键信息必须与问题主语在 120 字符内共现，中英映射用「已知主语」小词典；实测拒答准确率 **0.600 → 1.000（5/5）**、误拦率保持 **0.000（0/31）**、Recall/MRR 不变、v3 题集**不达标题清零**
 - [reported] 主语约束的边界：它是词典不是语义理解。第一版只对原句生效（活跃用户/多少人在玩/技术支持三种改写全漏），扩表后 6 种问法全部拦住；但词表外的说法（如「这游戏还有多少活人」）仍会漏，需第二层语义复核兜底（该层在 4B 上不稳定）
 - [verified] 检索深度标定为 **50**（`RAG_TOP_K`；`/answer` 的 `top_k` 默认改为跟随配置，不再写死 10）：同 31 道可答题，top_k=10→50 时 MRR 0.856→0.861、**误拦率 0.032→0.000**、Recall 不变；`q23` 的正确答案在 50 深度下排第 7（top_k=10 时完全不出现，因 HNSW 近似搜索）
@@ -100,6 +127,38 @@ Phase 1–5 已完成并上线；Phase 6.1（模型接入）**已在本机真实
 - [verified] Task 6 现状核对：无 Nginx/Gunicorn/Docker 中间层（Flask dev server 直连）；超时单一来源 `OLLAMA_TIMEOUT=300`；截断→422、非法 JSON→200+`json_valid=false`、超时→504 均已由测试覆盖；输出侧五个错误码（`INVALID_JSON/SCHEMA_MISMATCH/APP_ID_MISMATCH/EVIDENCE_INVALID/LLM_TRUNCATED`）统一映射 422，不再落到 503
 - [verified] Task 7 完成（metrics 落库）：新增 `backend/ai/schema.sql` 的 `llm_call_logs`（20 字段）+ `backend/ai/call_log.py`（记录/统计/按 30 天清理）；`/api/ai/llm/ping` 成功/截断/失败三条路径都留痕；新增 `GET /api/ai/metrics?days&limit`；预热脚本也记 `purpose=warmup`；实机 3 条真实记录 stats `calls=3/failures=0/avg_eval_tokens=14.3/avg_tokens_per_s=81.6`
 - [verified] 测试隔离：`tests/test_phase6.py` 用 `setUpModule` 把日志重定向到临时目录——此前跑一次测试就往开发库写假调用（实测 8 条 `wall_ms=1ms`），metrics 直接失去参考价值；修复后同一套测试前后行数不变（8→8）
+- [verified] 召回策略页第三次重做（2026-11-24 晚）：结构改为「信号条 + 8/4 双栏工作台（右栏桌面 sticky）+ 证据链 + 历史表」；**删除全部假 KPI**（原「可召回人群 24,190」），四条信号全部来自 `/api/games` 的 `collection.last_ccu_players` 与 `/api/ai/health` 的向量块/模型状态，失败即显示「— / 不可达」；右栏策略卡与左栏对话共用同一份 `/api/recall/*` 数据
+- [verified] 新增可核验交互：Ctrl K 命令面板（动作 / 跳转 / 历史 / 直接提问，↑↓ + Enter）、措施手风琴（目标/对象/类型/预期/衡量）、命中详情字段化弹窗（相似度=1−cosine / 发布日期 / chunk_id / 文档 + 原文链接）、排序 + Enter 载入历史
+- [verified] 生成流程修掉两个真实缺陷：① 计时器在响应到达后仍 tick，把「已生成并落库」覆盖回「生成中」；② 生成期间旧策略内容仍留在卡里，看起来像本次结果——现改为隐藏旧结论 + 骨架屏 `planLoading`，失败时恢复上一份可看结论并如实标 reason/detail
+- [verified] `[hidden]` 被组件 `display:flex` 压过（`.empty-block`）导致空态区块在已有策略时仍然显示，已加 `[hidden]{display:none!important}` 修正
+- [verified] 状态自检（Playwright 1.49.1 + Chromium 1148）：1440/1280/1024/834/390 无横向溢出、无 console error；`prefers-reduced-motion` 下 canvas 移除且 `.reveal` opacity=1；首 Tab 聚焦跳转链接；WebGL canvas 1440×760 实际有 context
+- [verified] 冒烟 `node tests/solution-ai.smoke.mjs` 23 项全过；`node tests/smoke.mjs` 91 项通过 89 项，**2 项失败均在本轮未改动的 `validation.html`**（`无未捕获异常` / `#segRows > * ≥ 1`），与本页无关
+- [reported] 未引入 shadcn/ui + Radix：本页是静态 HTML + Flask，`AGENTS.md` §3.1 明确不为此迁移技术栈；组件层用 Tailwind + CSS 变量复刻同一套 token 与状态（Button / Card / Input / Modal / Toast / Command palette），不是「没做」，是「按约束做了等价物」
+- [verified] 召回页改为与总览页同一视觉系统（2026-11-24 深夜，用户要求「导航与其他页面一致、风格参考总览、突出重点 AI 召回助手」）：导航直接复制 `index.html` 的 `.ops-nav` 标记 + `ops-nav.css`（品牌/四板块胶囊/时间范围/LIVE/时钟），页面改用 `--bg:#05090F`、`line:rgba(90,140,200,.18)`、面板 `linear-gradient(180deg,#0D1626,#060B15)` + 顶部青紫 1px 高光、`p-title` 左侧 3px 竖条——与总览的 `.panel / .kpi` 同源；原墨绿黑+黄铜主题整体废弃
+- [verified] 删除整块 Hero（Recall Strategy / 让每一次召回都有出处 / 指标取自 SQLite 那段）与 Verifiable by design 边界模块（`grep` 命中数 0）；页面改为「4 张 KPI 卡 → 主区域 AI 助手 → 本次策略 / 证据链 / 知识命中 / 动态指标 / 历史表」，助手是首屏唯一带 `panel--focus` 青色外描边、字号最大、占 8/12 且高度随视口伸缩的面板
+- [verified] 四张 KPI 全部真实且与总览同款卡（图标块 + mono 数字 + 元信息）：最近采集 CCU / 知识库向量块 / 生成模型 / 历史策略；原来的「可召回人群 24,190」假数据与「示例」角标已彻底移除
+- [verified] 导航时间范围不再是死控件：默认「全部历史」，`rangechange` 只作用于历史策略表格（`state.range` → 按 `created_at` 过滤），历史面板显示当前范围；默认 all 保证冒烟测试不受未来日期影响
+- [verified] 修了一个跨页缺陷（改的是共享 `ops-nav.css`，只加 ≤520px 媒体查询）：窄屏 `.ops-meta` 只有 92px 宽、而范围按钮 102px + LIVE 38px 会向左溢出压住四个板块；现在 ≤520px 收起 LIVE、时钟与范围文案，只留日历图标，四板块间距不再被挤
+- [verified] `lg:row-span-3` 修好策略栏 sticky：只用 `position:sticky` 时其网格区域高度等于自身 682px，没有可滑动余量，滚到证据链就跟着走；跨 3 行后区域 1095px，卡片稳定停在导航下 74px
+- [verified] 回归：`solution-ai.smoke.mjs` 23/23；`smoke.mjs` **91/91 全过**（此前 2 项 validation 失败由并行改动修掉）；1440/1280/1024/834/390 无横向溢出、无 console error；1024 起 KPI 保持四列（断点从 1180 下调到 900，避免 1024 就掉成 2×2）
+- [verified] 按用户要求删除「历史策略」与「证据链」两个模块（2026-11-24 晚）：`#history` 表格与 `#chain` 四格证据链整段移除，`grep` 确认 `strategyGrid / aiQuery / chain* / historyScope / RANGE_*` 零残留；页面改为「4 KPI → AI 助手 + 本次策略 → 知识命中 + 动态指标（整行两栏）→ 页脚」，总高 1210px
+- [verified] 删除历史表后「最近一次策略」自动载入仍保留：`loadLatestStrategy()` 用 `limit=1` 拉最新一条并载入详情，失败时状态行如实报错；不再渲染列表、排序与时间范围筛选
+- [reported] 第四张 KPI 由「历史策略 11 份」换成 **知识库文档 103 篇**（新拉 `GET /api/knowledge/documents?limit=1` 的 `total`，真实值），避免 KPI 里留着刚被删掉的模块；四卡恢复为 CCU / 文档 / 向量块 / 模型
+- [reported] 导航的时间范围控件在本页 **隐藏**（`.ops-nav .ops-range-wrap{display:none}`，只作用于本页）：它唯一的作用对象是刚删除的历史表，留着就是死控件。若以后需要恢复筛选，删掉这条规则并接回 `rangechange` 即可
+- [verified] 测试同步：`tests/solution-ai.smoke.mjs` 删除「历史卡片已渲染 / 历史计数」两项，检索查询词断言从 `#aiQuery` 改为命中面板新增的 `#hitsQuery`（保留「为什么是这几篇」的可追溯性）；现 **21 项全过**，全站 `smoke.mjs` **90 项 0 失败**
+- [verified] 背景换成 **Canvas 点阵**（2026-11-24 晚，用户要求仿 traedemos.com 首页的绿色动态网）：抓 `/_next/static/chunks/app/[language]/page-*.js` 反查出参考实现——交错网格 + 每点独立相位/速度的三角波脉动（alpha 0.25→0.8）+ **8% 绿色高亮 `#32F08C`**，鼠标进入 Hero 时 `speedScale` 0.5→1.5；参数 gap 10 / radius 1.6 / DPR≤2 / ResizeObserver / IntersectionObserver 暂停
+- [verified] 本页实现（无第三方依赖，`libs/three.min.js` 已从本页移除）：gap 21、绿点 7%、交错网格、32fps 封顶；「进入 Hero 加速」改成 **150px 指针唤醒**——附近点变绿变大、54px 内连出细线、指针移动时全局能量 1→0 衰减
+- [verified] 性能做了两轮实测：初版 `arc()` + 每帧新建数组 → headless CPU 2 秒均值 **35.5%**；改 alpha 8 桶 + 预分配 `Int32Array`（不产生 GC）+ `rect()` 批量 fill + 32fps 后降到 **15.0%**；`visibilitychange` 暂停、DPR 上限 1.4、`<820px` 与 `prefers-reduced-motion` 直接不加载
+- [reported] 主面板 `.panel--focus` 改为半透明（0.45/0.62）且**去掉 backdrop-blur**：10px 模糊会把 2px 的点糊成噪点，只有不模糊才能看见点阵；窄屏与 reduced-motion 下用媒体查询恢复实心玻璃，避免「没有可透内容却比别的面板虚」
+- [reported] GitHub 可复用组件调研：React Bits `DotGrid`（`DavidHDev/react-bits`，cursor proximity 140px，React 专用）、Vanta.js `DOTS`（three.js，鼠标交互）、tsParticles/particles.js（连线网络，与本效果不同）。本项目是静态 HTML，未引入任何库，按参考算法原生重写
+- [verified] 点阵配色改为页面主强调色 **#35D9F2**（`--cyan`），唤醒点提亮到 `#7FEBFF`；body 里原来那团绿色径向光同步换成青色。理由是页面 CTA、导航选中、面板竖条、助手描边全是青，绿色只在第 4 张 KPI 上出现过一次，做背景不成立
+- [verified] 顺带把背景开销压下来（同一台机器 AMD 610M 有头 Chromium 实测）：初版 arc+每帧新建数组 35.5% → 8 桶 + 预分配 Int32 + `fillRect` + 32fps 15% → 自适应帧率（激活 30fps / 静息 15fps）+ 间距 21→25 **9.1%**；`performance` 计数器实测静息确为 15 帧/秒、2250 次 fillRect/帧。软件渲染（headless SwiftShader）下同口径约 13.5%，说明余下开销主要是整屏 canvas 合成，不是绘制
+- [reported] 密度取舍：间距从 21 调到 25（约 2250 个点 @1440×900），视觉上仍是一层细网，但省 14% 绘制；再稀就变成"散点"，不叫网了
+- [verified] 点阵抽成公共组件（2026-11-24 晚）：`js/dot-field.js`（引擎，自动找 `#bgDots`）+ `css/dot-field.css`（画布定位/遮罩），策略页与流失分析页共用；策略页内联的那份已删，`app.css` 里重复的 `.dot-field` 也删了
+- [verified] 流失分析页接入：`<canvas id="bgDots" class="dot-field">` + 两个引用；但该页原本 `.page` 是 1500px 满宽（`analytics-spatial.css` 的 `body:has(#trendChart) .page` 规则），1440 屏两侧只剩 10px，点阵等于看不见——因此在页尾样式里加同权重覆盖把页面收到 **1340px**（1440 屏两侧各 50px，1080p 各 290px），并去掉了共享样式里的径向收边（那个遮罩会把两侧外框抹没），改成只淡出底部
+- [verified] 分析页面板不透明度同步下调：`.panel` .94/.96 → **.82/.88**，`.kpi-card` .96/.98 → **.84/.90**，点阵才能透成质感而不是死板色块；`≤820px` 与 `prefers-reduced-motion` 下用媒体查询恢复原不透明度（点阵不跑时不该显得发灰）
+- [verified] 回归：`solution-ai.smoke.mjs` 21/21；全站 `smoke.mjs` **92 项 0 失败**；1920/1440/390 两页均无横向溢出、无 console error；390 窄屏 `#bgDots` 已被移除（canvas:null）
+- [pitfall] `tests/smoke.mjs` 检测到 8099 端口已被占用时会「复用已有服务」，但拼 URL 少了一个斜杠（`http://127.0.0.1:8099analysis.html`）直接 `Protocol error: Cannot navigate to invalid URL`。本轮是我之前跑测试留下的 `python -m http.server 8099` 没退，杀掉即可。**Ban：跑全站冒烟前先 `netstat -ano | grep 8099`，有残留先杀掉，别以为是页面坏了**
 
 
 # 4. Current blocker

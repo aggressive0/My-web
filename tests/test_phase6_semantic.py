@@ -36,9 +36,11 @@ class FakeProvider:
         self.raise_exc = raise_exc
         self.last_metrics = {"done_reason": "stop"}
         self.prompts = []
+        self.last_options = None
 
-    def generate(self, prompt, system_prompt=None):
+    def generate(self, prompt, system_prompt=None, options=None):
         self.prompts.append(prompt)
+        self.last_options = options
         if self.raise_exc:
             raise RuntimeError("model down")
         return self.payload
@@ -108,6 +110,20 @@ class QuoteVerificationTest(unittest.TestCase):
         self.assertTrue(verify_quote("each   stage has 4 challenge quests.", hits))
         self.assertFalse(verify_quote("每个阶段有 4 个挑战任务", hits))
 
+    def test_partial_verbatim_segment_is_accepted(self):
+        """模型截半句或去掉标点也算真引用——整句比对会把它们误杀。"""
+        from ai.rag.semantic_check import verify_quote
+        hits = [{"content": "The servers will be suspended for maintenance from Nov 4th, "
+                            "2026 23:00 (UTC) to Nov 5th, 2026 04:00 (UTC)."}]
+        self.assertTrue(verify_quote("suspended for maintenance from Nov 4th", hits))
+        self.assertTrue(verify_quote("servers will be suspended for maintenance", hits))
+
+    def test_short_fragment_is_not_enough(self):
+        """太短的片段不算——「the servers」这种到处都有。"""
+        from ai.rag.semantic_check import verify_quote
+        hits = [{"content": "The servers will be suspended for maintenance."}]
+        self.assertFalse(verify_quote("the servers", hits))
+
     def test_too_short_quote_is_rejected(self):
         from ai.rag.semantic_check import verify_quote
         self.assertFalse(verify_quote("ok", [{"content": "ok"}]))
@@ -119,6 +135,49 @@ class QuoteVerificationTest(unittest.TestCase):
         result = SemanticChecker(provider).check("问题", HITS)
         self.assertEqual(result["verdict"], VERDICT_INSUFFICIENT)
         self.assertEqual(result["reason"], "semantic_quote_unverified")
+
+
+class DeterminismTest(unittest.TestCase):
+    """判定类调用必须是可重复的：temperature=0 + 自相矛盾拦截。"""
+
+    def test_temperature_is_forced_to_zero(self):
+        provider = FakeProvider('{"verdict": "insufficient", "evidence_ids": ["E1"],'
+                                ' "missing": ["x"], "reason": "没有"}')
+        SemanticChecker(provider).check("问题", HITS)
+        self.assertEqual(provider.last_options, {"temperature": 0})
+
+    def test_contradictory_reason_downgrades_sufficient(self):
+        """实测 q23：reason 说「没有明确提到」、verdict 却是 sufficient。"""
+        provider = FakeProvider('{"verdict": "sufficient", "quote": "fair environment",'
+                                ' "evidence_ids": ["E1"], "missing": [],'
+                                ' "reason": "证据没有明确提到电台名称"}')
+        result = SemanticChecker(provider).check("电台叫什么？", HITS)
+        self.assertEqual(result["verdict"], VERDICT_INSUFFICIENT)
+        self.assertEqual(result["reason"], "semantic_self_contradiction")
+
+    def test_turn_of_phrase_contradiction_is_caught(self):
+        """实测 u01：reason 是「……但问题问的是注册玩家，证据只提到被封禁玩家」。"""
+        provider = FakeProvider(
+            '{"verdict": "sufficient", "quote": "fair environment", "evidence_ids": ["E1"],'
+            ' "missing": [], "reason": "The evidence only mentions banned players,'
+            ' but the question asks for registered players."}')
+        result = SemanticChecker(provider).check("有多少注册玩家？", HITS)
+        self.assertEqual(result["verdict"], VERDICT_INSUFFICIENT)
+        self.assertEqual(result["reason"], "semantic_self_contradiction")
+
+    def test_non_empty_missing_with_sufficient_is_contradiction(self):
+        provider = FakeProvider('{"verdict": "sufficient", "quote": "fair environment",'
+                                ' "evidence_ids": ["E1"], "missing": ["注册玩家总数"],'
+                                ' "reason": "ok"}')
+        result = SemanticChecker(provider).check("有多少注册玩家？", HITS)
+        self.assertEqual(result["verdict"], VERDICT_INSUFFICIENT)
+
+    def test_normal_sufficient_is_not_flagged(self):
+        provider = FakeProvider('{"verdict": "sufficient", "quote": "fair environment",'
+                                ' "evidence_ids": ["E1"], "missing": [],'
+                                ' "reason": "E1 直接给出了环境承诺"}')
+        self.assertEqual(SemanticChecker(provider).check("环境如何？", HITS)["verdict"],
+                         VERDICT_SUFFICIENT)
 
 
 class FakeRag:

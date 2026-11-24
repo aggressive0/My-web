@@ -125,11 +125,15 @@ def list_documents():
         app_id = _as_int(request.args.get("app_id"), "app_id")
         limit = min(_as_int(request.args.get("limit"), "limit", 20) or 20, _MAX_PAGE)
         offset = max(_as_int(request.args.get("offset"), "offset", 0) or 0, 0)
+        # sort=publish_date 供事件时间线使用（按公告日期而非导入顺序）
+        sort = request.args.get("sort") or "created_at"
+        if sort not in ("created_at", "publish_date"):
+            return _error("INVALID_ARGUMENT", "sort 只支持 created_at / publish_date")
         data = get_service().list_documents(
             app_id=app_id,
             status=request.args.get("status"),
             source_type=request.args.get("source_type"),
-            limit=limit, offset=offset)
+            limit=limit, offset=offset, sort=sort)
     except KnowledgeError as e:
         return _error(e.code, str(e))
     except Exception as e:
@@ -218,10 +222,12 @@ def answer():
             cfg = AIConfig()
             if cfg.enabled:
                 provider = create_llm_provider(cfg)
-                # 第二层复核与生成共用一个 provider；不可用时 checker 为 None，
-                # evidence.layer 会如实标成 program，而不是假装复核过
-                from ai.rag.semantic_check import SemanticChecker
-                checker = SemanticChecker(provider)
+                # 第二层复核默认关闭（RAG_SEMANTIC_CHECK=false）：实测它只增加误拦。
+                # 关闭时 checker 为 None，evidence.layer 会如实标成 program，
+                # 而不是假装复核过。
+                if cfg.semantic_check:
+                    from ai.rag.semantic_check import SemanticChecker
+                    checker = SemanticChecker(provider)
         except Exception as exc:                 # 生成不可用不该拖垮路由与拒答
             current_app.logger.warning("answer 的 LLM 初始化失败：%r", exc)
 

@@ -1,6 +1,7 @@
 /**
  * 无浏览器条件下的 DOM 冒烟：桩化 document/window/fetch，执行 solution.html 的内联脚本，
- * 断言「游戏下拉被填充」「历史列表被填充」「点击生成后方案卡被真实数据覆盖」。
+ * 断言「游戏下拉被填充」「最近一次策略自动载入」「点击生成后方案卡被真实数据覆盖」。
+ * 注：历史策略表与证据链模块已按需求移除，相关断言同步删除。
  */
 import fs from 'node:fs';
 
@@ -36,6 +37,13 @@ function makeEl(id) {
     },
     removeAttribute(name) { delete el.dataset[name]; },
     querySelectorAll() { return []; },
+    remove() { el._removed = true; },
+    // 对话渲染会查 .chat-text，桩里必须返回一个元素而不是 null
+    querySelector(sel) {
+      if (!el._q) el._q = {};
+      if (!el._q[sel]) el._q[sel] = makeEl(sel);
+      return el._q[sel];
+    },
     appendChild(c) { el.children.push(c); return c; },
     setAttribute() {},
     getAttribute() { return null; },
@@ -66,6 +74,13 @@ const window = {
 };
 
 /* ---------------- fetch 桩 ---------------- */
+const RETRIEVED = {
+  query: '版本更新 维护 修复 trios',
+  hits: [{ chunk_id: 'c1', document_id: 'd1', title: 'NARAKA Update – Sep 16',
+           score: 0.6123, publish_date: '2026-09-16',
+           excerpt: 'Newly added Quick Matchmaking · Trios mode.' }],
+};
+
 const STRATEGY = {
   app_id: 1203220, execution_status: 'suggested',
   summary: '在线人数下降 3.28%，建议先沟通再评估活动',
@@ -93,11 +108,19 @@ const fetch = async (url, opts) => {
     payload = { data: { total: 1, items: [{ strategy_id: 's1', summary: '历史摘要',
                                             created_at: '2026-11-18T12:51:42+00:00',
                                             action_count: 3, risk_level: 'medium' }] } };
+  } else if (url.includes('/api/knowledge/answer')) {
+    payload = { data: { status: 'answered', intent: 'kb_factual_qa',
+                        answer: '11 月 5 日更新调整了 Vanquisher’s Trials。',
+                        citations: [{ label: 'E1', title: 'NARAKA Update – Nov 5',
+                                      chunk_id: 'doc_a#0000' }],
+                        evidence: { missing_elements: [] }, reason: '' } };
   } else if (url.includes('/api/recall/generate')) {
-    payload = { data: { status: 'generated', strategy_id: 's2', strategy: STRATEGY } };
+    payload = { data: { status: 'generated', strategy_id: 's2', strategy: STRATEGY,
+                        knowledge_query: RETRIEVED.query,
+                        retrieved_evidence: RETRIEVED.hits } };
   } else if (/\/api\/recall\/s/.test(url)) {
     payload = { data: { strategy_id: 's1', created_at: '2026-11-18T12:51:42+00:00',
-                        strategy: STRATEGY } };
+                        strategy: STRATEGY, retrieved: RETRIEVED } };
   } else {
     payload = { data: {} };
   }
@@ -122,9 +145,11 @@ const check = (label, ok, extra) => {
 console.log('页面加载阶段：');
 check('游戏下拉已填充', ($('aiGame').innerHTML || '').includes('永劫无间'));
 check('默认选中 1203220', String($('aiGame').value) === '1203220', $('aiGame').value);
-check('历史列表已渲染', ($('aiHistory').innerHTML || '').includes('历史摘要'));
-check('历史计数 = 1 条', ($('aiHistoryCount').textContent || '').includes('1'));
-check('来源标记 = 示例', String($('aiSourceTag').dataset.kind) === 'demo');
+// 刷新后必须自动恢复最近一次结果，否则用户以为丢了会重复生成
+check('自动载入最近策略', ($('planTitle').textContent || '').includes('在线人数下降 3.28%'));
+check('自动载入后标记为真实', String($('aiSourceTag').dataset.kind) === 'real');
+check('知识库命中已渲染', ($('aiRetrieved').innerHTML || '').includes('NARAKA Update'));
+check('检索查询词已显示', ($('hitsQuery').textContent || '').includes('版本更新'));
 check('调用了 /api/games', calls.some(c => c.url.includes('/api/games')));
 
 console.log('\n点击「生成策略」：');
@@ -135,7 +160,7 @@ await new Promise(r => setTimeout(r, 60));
 
 check('方案卡标题 = 真实摘要', ($('planTitle').textContent || '').includes('在线人数下降 3.28%'));
 check('方案 ID 带 strategy_id', ($('planId').textContent || '').includes('s2'));
-check('策略详情 3 条措施', ($('stepsTrack').innerHTML.match(/class="step"/g) || []).length === 3);
+check('策略详情 3 条措施', ($('stepsTrack').innerHTML.match(/data-action="1"/g) || []).length === 3);
 check('知识证据已渲染', ($('aiEvidence').innerHTML || '').includes('Trios'));
 check('数据指标已渲染', ($('aiMetrics').innerHTML || '').includes('ccu_latest'));
 check('限制说明已渲染', ($('aiLimits').innerHTML || '').includes('群体级'));
@@ -143,6 +168,16 @@ check('结果区块已显示', $('aiResult').hidden === false);
 check('来源标记 = 本地模型生成', String($('aiSourceTag').dataset.kind) === 'real');
 check('状态行标记为成功', String($('aiStatus').dataset.state) === 'ok', $('aiStatus').textContent);
 check('调用了 generate 接口', calls.some(c => c.url.includes('/api/recall/generate')));
+
+console.log('\n对话模块：');
+$('chatInput').value = '最近一次更新改了什么？';
+const submit = listeners.get('chatForm:submit');
+check('已注册提交处理器', typeof submit === 'function');
+await submit({ preventDefault() {} });
+await new Promise(r => setTimeout(r, 80));
+check('用户消息已入列', $('chatLog').children.length >= 1, 'children=' + $('chatLog').children.length);
+check('AI 回复已入列', $('chatLog').children.length >= 2);
+check('调用了 /api/knowledge/answer', calls.some(c => c.url.includes('/api/knowledge/answer')));
 
 console.log('\n生成失败路径：');
 const failFetch = async (url, opts) => {

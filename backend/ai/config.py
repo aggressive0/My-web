@@ -187,6 +187,13 @@ class AIConfig:
                                      or "https://api.siliconflow.cn/v1").rstrip("/")
         self.siliconflow_model = os.environ.get("SILICONFLOW_MODEL") or ""
 
+        # 第二层语义复核开关，默认关闭。
+        # 实测（36 题 × 3 轮，temperature=0）：程序层已能 5/5 拒答且 0 误拦；
+        # 打开语义层后拒答仍是 5/5，却把 q06/q23/k03 三道可答题判成证据不足。
+        # 也就是说它当前**只增加误拦、不增加拦截**，所以默认关。
+        # 等引文校验/矛盾判据把误杀降下来，再改默认值。
+        self.semantic_check = _bool("RAG_SEMANTIC_CHECK", False)
+
         # 生成参数
         self.max_output_tokens = _env_int_alias(
             "LLM_MAX_OUTPUT_TOKENS", "LLM_MAX_TOKENS", 3072, self.deprecations)
@@ -259,6 +266,7 @@ class AIConfig:
             "enable_thinking": self.enable_thinking,
             "keep_alive": self.keep_alive,
             "max_evidence": self.max_evidence,
+            "semantic_check": self.semantic_check,
             "deprecations": list(self.deprecations),
             "rag": self.rag.public_view(),
         }

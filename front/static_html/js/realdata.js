@@ -19,7 +19,10 @@
 window.RealData = (function () {
     'use strict';
 
-    var REMOTE = 'https://raw.githubusercontent.com/aggressive0/My-web/data/';
+    // 仓库已重命名为 liusheng-player-retention；data 分支在其上持续更新
+    // （2026-11-24 核对：collection-status.json updated_at = 2026-11-24T04:51Z）。
+    // 旧地址 My-web 只是 GitHub 的重定向目标，不应继续作为数据源。
+    var REMOTE = 'https://raw.githubusercontent.com/aggressive0/liusheng-player-retention/data/';
     var SNAPSHOT = 'json/';
 
     /* 每个数据文件的「人话」说明，用于状态条与 aria-label */

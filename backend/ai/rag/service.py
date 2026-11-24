@@ -211,10 +211,10 @@ class KnowledgeService:
         return self.retriever.search(app_id, query, top_k=top_k, threshold=threshold)
 
     def list_documents(self, app_id=None, status=None, source_type=None,
-                       limit=20, offset=0):
+                       limit=20, offset=0, sort="created_at"):
         rows, total = self.repository.list_documents(
             app_id=app_id, status=status, source_type=source_type,
-            limit=limit, offset=offset)
+            limit=limit, offset=offset, sort=sort)
         return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
     def get_document(self, document_id, with_content=True):
